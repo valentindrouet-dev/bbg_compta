@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  opacity: 0.5;
+}
+
+/* Tableaux denses type tableur */
+.sheet th, .sheet td {
+  border: 1px solid theme(--color-gray-200);
+  padding: 0.3rem 0.5rem;
+  white-space: nowrap;
+}
+.sheet th {
+  background: theme(--color-gray-50);
+  font-weight: 600;
+}

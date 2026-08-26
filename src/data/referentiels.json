@@ -1,0 +1,83 @@
+{
+ "categoriesDepenses": [
+  "Charges Financières",
+  "Communication Globale",
+  "Google Workspace",
+  "Tenue Comptable",
+  "Location Imprimante",
+  "Matériel Prototypes + Papeterie",
+  "RC Pro",
+  "Téléphone + Internet",
+  "Equipements Divers",
+  "Nourriture ARTFX",
+  "Budget Jeux",
+  "Déplacements",
+  "Logements Festivals",
+  "Nourriture Festivals",
+  "Entrées Festivals",
+  "Tarifs Exposants Festivals",
+  "Logiciels Créatifs & IA",
+  "Autres",
+  "Informatique",
+  "Equipements et Jeux",
+  "Mobilier",
+  "Travaux",
+  "Administratif",
+  "Communication",
+  "Imprévus (10%)",
+  "Retraite TNS",
+  "URSSAF"
+ ],
+ "categoriesJeux": [
+  "Avances Droit d'Auteur",
+  "Développement Graphique EDIT",
+  "Illustrations EDIT"
+ ],
+ "categoriesProduits": [
+  "workshops",
+  "notes de frais",
+  "remboursement",
+  "ventes jeu 1",
+  "ventes jeu 2",
+  "ventes jeu 3",
+  "ventes jeu 4"
+ ],
+ "types": [
+  "charges",
+  "immo",
+  "produit",
+  "capital"
+ ],
+ "planComptable": [
+  "201 - Frais d'établissement",
+  "203 – Frais de recherche & développement",
+  "2135 – Agencements, installations",
+  "2154 – Installations techniques",
+  "2181 - Installations Générales",
+  "2182 - Matériel de Transport",
+  "2183 – Matériel de bureau et informatique",
+  "2184 - Mobilier",
+  "6061 - Carburants",
+  "6063 – Fournitures non stockables",
+  "623 - Publicité, salons",
+  "6251 - Déplacements",
+  "6256 – Missions",
+  "626 - Télécom,  IT",
+  "627 - Services bancaires",
+  "651 - Redevances / licences",
+  "6163 – Assurances responsabilité civile",
+  "616 - Prime d'Assurance",
+  "646 – Cotisations sociales personnelles de l’exploitant",
+  "6226 - Honoraires"
+ ],
+ "paiements": [
+  "CB BBG",
+  "CB VAL"
+ ],
+ "tauxTVA": [
+  0,
+  5.5,
+  10,
+  20
+ ]
+}

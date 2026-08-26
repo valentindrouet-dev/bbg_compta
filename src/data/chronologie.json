@@ -1,0 +1,610 @@
+[
+ {
+  "id": "chr-002",
+  "projet": "ARTFX",
+  "action": "Tournages M5",
+  "debut": "2025-09-04",
+  "fin": "2025-10-08",
+  "detail": ""
+ },
+ {
+  "id": "chr-003",
+  "projet": "ARTFX",
+  "action": "WS M1",
+  "debut": "2025-10-13",
+  "fin": "2025-10-15",
+  "detail": ""
+ },
+ {
+  "id": "chr-004",
+  "projet": "ARTFX",
+  "action": "WS M2",
+  "debut": "2025-11-04",
+  "fin": "2025-11-12",
+  "detail": ""
+ },
+ {
+  "id": "chr-005",
+  "projet": "ARTFX",
+  "action": "WS M1",
+  "debut": "2025-12-01",
+  "fin": "2025-12-04",
+  "detail": ""
+ },
+ {
+  "id": "chr-006",
+  "projet": "ARTFX",
+  "action": "WS M3 - M4",
+  "debut": "2026-01-12",
+  "fin": "2026-01-28",
+  "detail": ""
+ },
+ {
+  "id": "chr-007",
+  "projet": "ARTFX",
+  "action": "Projet Test",
+  "debut": "2026-03-23",
+  "fin": "2026-04-17",
+  "detail": ""
+ },
+ {
+  "id": "chr-008",
+  "projet": "EDIT",
+  "action": "Développement & Playtests",
+  "debut": "2025-10-01",
+  "fin": "2026-06-30",
+  "detail": ""
+ },
+ {
+  "id": "chr-009",
+  "projet": "EDIT",
+  "action": "Illustrations",
+  "debut": "2026-04-01",
+  "fin": "2026-07-31",
+  "detail": ""
+ },
+ {
+  "id": "chr-010",
+  "projet": "EDIT",
+  "action": "Prototypage",
+  "debut": "2026-07-01",
+  "fin": "2026-09-30",
+  "detail": ""
+ },
+ {
+  "id": "chr-011",
+  "projet": "EDIT",
+  "action": "Communication",
+  "debut": "2026-08-01",
+  "fin": "2027-06-30",
+  "detail": ""
+ },
+ {
+  "id": "chr-012",
+  "projet": "EDIT - Tirage 1",
+  "action": "Tirage",
+  "debut": "2026-10-01",
+  "fin": "2026-11-30",
+  "detail": ""
+ },
+ {
+  "id": "chr-013",
+  "projet": "EDIT - Tirage 1",
+  "action": "🚢  Transport",
+  "debut": "2026-12-01",
+  "fin": "2027-01-31",
+  "detail": ""
+ },
+ {
+  "id": "chr-014",
+  "projet": "EDIT - Tirage 1",
+  "action": "Sortie",
+  "debut": "2027-02-20",
+  "fin": "",
+  "detail": ""
+ },
+ {
+  "id": "chr-015",
+  "projet": "EDIT - Tirage 1",
+  "action": "Ventes",
+  "debut": "2027-02-20",
+  "fin": "2028-06-01",
+  "detail": ""
+ },
+ {
+  "id": "chr-016",
+  "projet": "Jeu 1",
+  "action": "Sourcing",
+  "debut": "2025-08-01",
+  "fin": "2025-12-31",
+  "detail": ""
+ },
+ {
+  "id": "chr-017",
+  "projet": "Jeu 1",
+  "action": "Contrat",
+  "debut": "2026-01-01",
+  "fin": "2026-01-31",
+  "detail": ""
+ },
+ {
+  "id": "chr-018",
+  "projet": "Jeu 1",
+  "action": "Développement & Playtests",
+  "debut": "2026-02-01",
+  "fin": "2026-06-30",
+  "detail": ""
+ },
+ {
+  "id": "chr-019",
+  "projet": "Jeu 1",
+  "action": "Illustrations",
+  "debut": "2026-07-01",
+  "fin": "2026-10-31",
+  "detail": ""
+ },
+ {
+  "id": "chr-020",
+  "projet": "Jeu 1",
+  "action": "Prototypage",
+  "debut": "2026-11-01",
+  "fin": "2027-02-28",
+  "detail": ""
+ },
+ {
+  "id": "chr-021",
+  "projet": "Jeu 1 - Tirage 1",
+  "action": "Communication",
+  "debut": "2027-02-01",
+  "fin": "2027-09-30",
+  "detail": ""
+ },
+ {
+  "id": "chr-022",
+  "projet": "Jeu 1 - Tirage 1",
+  "action": "Tirage",
+  "debut": "2027-03-01",
+  "fin": "2027-03-31",
+  "detail": ""
+ },
+ {
+  "id": "chr-023",
+  "projet": "Jeu 1 - Tirage 1",
+  "action": "🚢  Transport",
+  "debut": "2027-04-01",
+  "fin": "2027-05-31",
+  "detail": ""
+ },
+ {
+  "id": "chr-024",
+  "projet": "Jeu 1 - Tirage 1",
+  "action": "Sortie",
+  "debut": "2027-06-01",
+  "fin": "2027-06-30",
+  "detail": ""
+ },
+ {
+  "id": "chr-025",
+  "projet": "Jeu 1 - Tirage 1",
+  "action": "Ventes",
+  "debut": "2027-06-01",
+  "fin": "2028-09-30",
+  "detail": ""
+ },
+ {
+  "id": "chr-026",
+  "projet": "Jeu 1 - Tirage 2",
+  "action": "Communication",
+  "debut": "2028-05-01",
+  "fin": "2028-12-31",
+  "detail": ""
+ },
+ {
+  "id": "chr-027",
+  "projet": "Jeu 1 - Tirage 2",
+  "action": "Tirage",
+  "debut": "2028-06-01",
+  "fin": "2028-06-30",
+  "detail": ""
+ },
+ {
+  "id": "chr-028",
+  "projet": "Jeu 1 - Tirage 2",
+  "action": "🚢  Transport",
+  "debut": "2028-07-01",
+  "fin": "2028-08-31",
+  "detail": ""
+ },
+ {
+  "id": "chr-029",
+  "projet": "Jeu 1 - Tirage 2",
+  "action": "Sortie",
+  "debut": "2028-09-01",
+  "fin": "2028-09-30",
+  "detail": ""
+ },
+ {
+  "id": "chr-030",
+  "projet": "Jeu 1 - Tirage 2",
+  "action": "Ventes",
+  "debut": "2028-09-01",
+  "fin": "2029-09-01",
+  "detail": ""
+ },
+ {
+  "id": "chr-031",
+  "projet": "Jeu 1 - Tirage 3",
+  "action": "Communication",
+  "debut": "2029-05-01",
+  "fin": "2029-12-31",
+  "detail": ""
+ },
+ {
+  "id": "chr-032",
+  "projet": "Jeu 1 - Tirage 3",
+  "action": "Tirage",
+  "debut": "2029-06-01",
+  "fin": "2029-06-30",
+  "detail": ""
+ },
+ {
+  "id": "chr-033",
+  "projet": "Jeu 1 - Tirage 3",
+  "action": "🚢  Transport",
+  "debut": "2029-07-01",
+  "fin": "2029-08-31",
+  "detail": ""
+ },
+ {
+  "id": "chr-034",
+  "projet": "Jeu 1 - Tirage 3",
+  "action": "Sortie",
+  "debut": "2029-09-01",
+  "fin": "2029-09-30",
+  "detail": ""
+ },
+ {
+  "id": "chr-035",
+  "projet": "Jeu 1 - Tirage 3",
+  "action": "Ventes",
+  "debut": "2029-09-01",
+  "fin": "2030-09-30",
+  "detail": ""
+ },
+ {
+  "id": "chr-036",
+  "projet": "Jeu 2",
+  "action": "Sourcing",
+  "debut": "2026-02-01",
+  "fin": "2026-12-31",
+  "detail": ""
+ },
+ {
+  "id": "chr-037",
+  "projet": "Jeu 2",
+  "action": "Contrat",
+  "debut": "2027-01-01",
+  "fin": "2027-01-31",
+  "detail": ""
+ },
+ {
+  "id": "chr-038",
+  "projet": "Jeu 2",
+  "action": "Développement & Playtests",
+  "debut": "2027-02-01",
+  "fin": "2027-07-31",
+  "detail": ""
+ },
+ {
+  "id": "chr-039",
+  "projet": "Jeu 2",
+  "action": "Illustrations",
+  "debut": "2027-08-01",
+  "fin": "2027-10-31",
+  "detail": ""
+ },
+ {
+  "id": "chr-040",
+  "projet": "Jeu 2",
+  "action": "Prototypage",
+  "debut": "2027-11-01",
+  "fin": "2028-04-30",
+  "detail": ""
+ },
+ {
+  "id": "chr-041",
+  "projet": "Jeu 2 - Tirage 1",
+  "action": "Communication",
+  "debut": "2028-04-01",
+  "fin": "2028-11-30",
+  "detail": ""
+ },
+ {
+  "id": "chr-042",
+  "projet": "Jeu 2 - Tirage 1",
+  "action": "Tirage",
+  "debut": "2028-05-01",
+  "fin": "2028-05-31",
+  "detail": ""
+ },
+ {
+  "id": "chr-043",
+  "projet": "Jeu 2 - Tirage 1",
+  "action": "🚢  Transport",
+  "debut": "2028-06-01",
+  "fin": "2028-07-31",
+  "detail": ""
+ },
+ {
+  "id": "chr-044",
+  "projet": "Jeu 2 - Tirage 1",
+  "action": "Sortie",
+  "debut": "2028-08-01",
+  "fin": "2028-08-31",
+  "detail": ""
+ },
+ {
+  "id": "chr-045",
+  "projet": "Jeu 2 - Tirage 1",
+  "action": "Ventes",
+  "debut": "2028-08-01",
+  "fin": "2029-09-01",
+  "detail": ""
+ },
+ {
+  "id": "chr-046",
+  "projet": "Jeu 2 - Tirage 2",
+  "action": "Communication",
+  "debut": "2029-02-01",
+  "fin": "2029-02-28",
+  "detail": ""
+ },
+ {
+  "id": "chr-047",
+  "projet": "Jeu 2 - Tirage 2",
+  "action": "Tirage",
+  "debut": "2029-03-01",
+  "fin": "2029-03-31",
+  "detail": ""
+ },
+ {
+  "id": "chr-048",
+  "projet": "Jeu 2 - Tirage 2",
+  "action": "🚢  Transport",
+  "debut": "2029-04-01",
+  "fin": "2029-05-31",
+  "detail": ""
+ },
+ {
+  "id": "chr-049",
+  "projet": "Jeu 2 - Tirage 2",
+  "action": "Sortie",
+  "debut": "2029-06-01",
+  "fin": "2029-06-30",
+  "detail": ""
+ },
+ {
+  "id": "chr-050",
+  "projet": "Jeu 2 - Tirage 2",
+  "action": "Ventes",
+  "debut": "2029-06-01",
+  "fin": "2030-08-31",
+  "detail": ""
+ },
+ {
+  "id": "chr-051",
+  "projet": "Jeu 3",
+  "action": "Sourcing",
+  "debut": "2027-02-01",
+  "fin": "2027-12-31",
+  "detail": ""
+ },
+ {
+  "id": "chr-052",
+  "projet": "Jeu 3",
+  "action": "Contrat",
+  "debut": "2028-01-01",
+  "fin": "2028-01-31",
+  "detail": ""
+ },
+ {
+  "id": "chr-053",
+  "projet": "Jeu 3",
+  "action": "Développement & Playtests",
+  "debut": "2028-02-01",
+  "fin": "2028-09-30",
+  "detail": ""
+ },
+ {
+  "id": "chr-054",
+  "projet": "Jeu 3",
+  "action": "Illustrations",
+  "debut": "2028-10-01",
+  "fin": "2029-01-31",
+  "detail": ""
+ },
+ {
+  "id": "chr-055",
+  "projet": "Jeu 3",
+  "action": "Prototypage",
+  "debut": "2029-02-01",
+  "fin": "2029-08-31",
+  "detail": ""
+ },
+ {
+  "id": "chr-056",
+  "projet": "Jeu 3 - Tirage 1",
+  "action": "Communication",
+  "debut": "2029-06-01",
+  "fin": "2030-03-31",
+  "detail": ""
+ },
+ {
+  "id": "chr-057",
+  "projet": "Jeu 3 - Tirage 1",
+  "action": "Tirage",
+  "debut": "2029-10-01",
+  "fin": "2029-10-31",
+  "detail": ""
+ },
+ {
+  "id": "chr-058",
+  "projet": "Jeu 3 - Tirage 1",
+  "action": "🚢  Transport",
+  "debut": "2029-11-01",
+  "fin": "2029-12-31",
+  "detail": ""
+ },
+ {
+  "id": "chr-059",
+  "projet": "Jeu 3 - Tirage 1",
+  "action": "Sortie",
+  "debut": "2030-01-01",
+  "fin": "2030-01-31",
+  "detail": ""
+ },
+ {
+  "id": "chr-060",
+  "projet": "Jeu 3 - Tirage 1",
+  "action": "Ventes",
+  "debut": "2030-01-01",
+  "fin": "2030-09-30",
+  "detail": ""
+ },
+ {
+  "id": "chr-061",
+  "projet": "Jeu KS",
+  "action": "Développement & Playtests",
+  "debut": "2026-01-01",
+  "fin": "2026-12-31",
+  "detail": ""
+ },
+ {
+  "id": "chr-062",
+  "projet": "Jeu KS",
+  "action": "Illustrations",
+  "debut": "2027-01-01",
+  "fin": "2027-03-31",
+  "detail": ""
+ },
+ {
+  "id": "chr-063",
+  "projet": "Jeu KS",
+  "action": "Communication KS",
+  "debut": "2027-03-01",
+  "fin": "2027-10-31",
+  "detail": ""
+ },
+ {
+  "id": "chr-064",
+  "projet": "Jeu KS",
+  "action": "Prototypage",
+  "debut": "2027-04-01",
+  "fin": "2027-09-30",
+  "detail": ""
+ },
+ {
+  "id": "chr-065",
+  "projet": "Jeu KS",
+  "action": "Kickstarter",
+  "debut": "2027-10-01",
+  "fin": "2027-10-31",
+  "detail": ""
+ },
+ {
+  "id": "chr-066",
+  "projet": "Jeu KS",
+  "action": "Développement & Playtests & Illustrations & Prototypage",
+  "debut": "2027-10-01",
+  "fin": "2028-09-30",
+  "detail": ""
+ },
+ {
+  "id": "chr-067",
+  "projet": "Jeu KS - Tirage 1",
+  "action": "Tirage",
+  "debut": "2028-10-01",
+  "fin": "2028-10-31",
+  "detail": ""
+ },
+ {
+  "id": "chr-068",
+  "projet": "Jeu KS - Tirage 1",
+  "action": "Communication",
+  "debut": "2028-10-01",
+  "fin": "2029-05-31",
+  "detail": ""
+ },
+ {
+  "id": "chr-069",
+  "projet": "Jeu KS - Tirage 1",
+  "action": "🚢  Transport + Expédition",
+  "debut": "2028-11-01",
+  "fin": "2029-03-31",
+  "detail": ""
+ },
+ {
+  "id": "chr-070",
+  "projet": "Jeu KS - Tirage 1",
+  "action": "Sortie",
+  "debut": "2029-04-01",
+  "fin": "2029-04-30",
+  "detail": ""
+ },
+ {
+  "id": "chr-071",
+  "projet": "Jeu KS - Tirage 1",
+  "action": "Ventes",
+  "debut": "2029-04-01",
+  "fin": "2030-02-28",
+  "detail": ""
+ },
+ {
+  "id": "chr-072",
+  "projet": "Jeu KS - Tirage 2",
+  "action": "Tirage",
+  "debut": "2029-10-01",
+  "fin": "2029-10-31",
+  "detail": ""
+ },
+ {
+  "id": "chr-073",
+  "projet": "Jeu KS - Tirage 2",
+  "action": "Communication",
+  "debut": "2029-10-01",
+  "fin": "2030-05-31",
+  "detail": ""
+ },
+ {
+  "id": "chr-074",
+  "projet": "Jeu KS - Tirage 2",
+  "action": "🚢  Transport",
+  "debut": "2029-11-01",
+  "fin": "2029-12-31",
+  "detail": ""
+ },
+ {
+  "id": "chr-075",
+  "projet": "Jeu KS - Tirage 2",
+  "action": "Sortie",
+  "debut": "2030-01-01",
+  "fin": "2030-01-31",
+  "detail": ""
+ },
+ {
+  "id": "chr-076",
+  "projet": "Jeu KS - Tirage 2",
+  "action": "Ventes",
+  "debut": "2030-01-01",
+  "fin": "2030-09-30",
+  "detail": ""
+ },
+ {
+  "id": "chr-077",
+  "projet": "Perso",
+  "action": "Vacances Costa Rica",
+  "debut": "2025-10-24",
+  "fin": "2025-11-02",
+  "detail": ""
+ }
+]
