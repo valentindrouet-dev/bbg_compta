@@ -62,5 +62,8 @@ localStorage) + Recharts (graphiques) + SheetJS / jsPDF (exports).
 ## Déploiement (GitHub Pages)
 
 Le build est commité dans `docs/`. Pour publier :
-**Settings → Pages → Deploy from a branch → `main` / dossier `/docs`**.
-Le site sera servi sur `https://valentindrouet-dev.github.io/bbg_compta/`.
+**Settings → Pages → Deploy from a branch → choisir la branche, et surtout le
+dossier `/docs`** (⚠️ pas `/ (root)` : la racine contient l'`index.html` source,
+qui donnerait une page d'erreur). Le site est servi sur
+`https://valentindrouet-dev.github.io/bbg_compta/` et se redéploie
+automatiquement à chaque push sur la branche configurée.

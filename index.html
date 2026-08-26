@@ -8,6 +8,26 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // Cet index.html est celui du mode développement (il charge du TypeScript).
+      // S'il est servi tel quel par GitHub Pages, c'est que Pages pointe sur le
+      // dossier racine au lieu de /docs : on l'explique au lieu d'une page blanche.
+      // Dans le build, la balise main.tsx est réécrite vers le bundle : ce guard
+      // ne trouve alors plus main.tsx et reste totalement inerte en production.
+      document.addEventListener('DOMContentLoaded', function () {
+        var dev = document.querySelector('script[src*="main.tsx"]');
+        var root = document.getElementById('root');
+        if (dev && location.hostname.endsWith('github.io') && root && !root.children.length) {
+          root.innerHTML =
+            '<div style="font-family:system-ui,sans-serif;max-width:640px;margin:80px auto;padding:0 24px;color:#1f2937">' +
+            '<h1 style="font-size:22px">⚙️ Mauvais dossier configuré dans GitHub Pages</h1>' +
+            '<p>Cette page est la version <b>source</b> du site, pas la version construite.</p>' +
+            '<p>Pour corriger : <b>Settings → Pages → Build and deployment</b>, garder la même branche ' +
+            'mais choisir le dossier <b>/docs</b> (au lieu de <b>/ (root)</b>), puis Save. ' +
+            'Le site sera en ligne une à deux minutes après.</p></div>';
+        }
+      });
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
