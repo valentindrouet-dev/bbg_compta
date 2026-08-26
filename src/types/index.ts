@@ -18,7 +18,10 @@ export interface JournalEntry {
   /** Compte du plan comptable, ex. « 6063 – Fournitures non stockables ». */
   compta?: string;
   motsCles?: string;
+  /** Nom du justificatif (texte libre, repris des tableurs). */
   facture?: string;
+  /** Identifiant du fichier joint dans IndexedDB, si un justificatif est attaché. */
+  factureFileId?: string;
   /** Mois comptable de rattachement : 'pre-immat' ou 'yyyy-mm'. */
   mois: string;
   /** Durée d'amortissement en années (uniquement type === 'immo'). */

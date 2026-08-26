@@ -7,21 +7,31 @@ export const MOIS_NOMS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin',
 
 export const EXERCICES = ['2025-26', '2026-27', '2027-28', '2028-29', '2029-30'] as const;
 
-/** Mois comptables d'un exercice, dans l'ordre (sept -> août). */
+/** Premier exercice : le seul à porter la pré-immatriculation et septembre 2025. */
+export const PREMIER_EXERCICE = '2025-26';
+
+/**
+ * Mois comptables d'un exercice, dans l'ordre.
+ * L'exercice BBG court d'octobre au 30 septembre suivant (12 mois).
+ * Le premier exercice (2025-26) compte en plus la période de
+ * pré-immatriculation et septembre 2025, soit 14 onglets.
+ */
 export function moisExercice(exercice: string): string[] {
   const y = parseInt(exercice.slice(0, 4), 10);
   const mois: string[] = [];
-  for (let m = 9; m <= 12; m++) mois.push(`${y}-${String(m).padStart(2, '0')}`);
-  for (let m = 1; m <= 8; m++) mois.push(`${y + 1}-${String(m).padStart(2, '0')}`);
-  if (exercice === '2025-26') return [PRE_IMMAT, ...mois];
+  for (let m = 10; m <= 12; m++) mois.push(`${y}-${String(m).padStart(2, '0')}`);
+  for (let m = 1; m <= 9; m++) mois.push(`${y + 1}-${String(m).padStart(2, '0')}`);
+  if (exercice === PREMIER_EXERCICE) return [PRE_IMMAT, `${y}-09`, ...mois];
   return mois;
 }
 
-/** Exercice de rattachement d'un mois comptable. */
+/** Exercice de rattachement d'un mois comptable (octobre ouvre l'exercice). */
 export function exerciceDuMois(mois: string): string {
-  if (mois === PRE_IMMAT) return '2025-26';
+  if (mois === PRE_IMMAT) return PREMIER_EXERCICE;
+  // Mois supplémentaires de la première année : rattachés à 2025-26.
+  if (mois === '2025-09') return PREMIER_EXERCICE;
   const [y, m] = mois.split('-').map(Number);
-  const startYear = m >= 9 ? y : y - 1;
+  const startYear = m >= 10 ? y : y - 1;
   return `${startYear}-${String((startYear + 1) % 100).padStart(2, '0')}`;
 }
 

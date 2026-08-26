@@ -1,8 +1,9 @@
 import {
   Coins, LayoutDashboard, NotebookPen, Table2, Building2, Wallet, Percent,
-  UserRound, Target, GitCompareArrows, Landmark, CalendarRange, FileDown, Settings,
+  UserRound, Target, GitCompareArrows, Landmark, CalendarRange, FileDown, Settings, Store,
 } from 'lucide-react';
 import type { Page } from '../../App';
+import { APP_VERSION } from '../../version';
 
 interface SidebarProps {
   page: Page;
@@ -22,6 +23,7 @@ const NAV: { section: string; items: { page: Page; label: string; icon: typeof C
       { page: 'immos', label: 'Immobilisations', icon: Building2 },
       { page: 'treso', label: 'Trésorerie', icon: Wallet },
       { page: 'tva', label: 'TVA', icon: Percent },
+      { page: 'fournisseurs', label: 'Fournisseurs', icon: Store },
       { page: 'rembours', label: 'Remboursements Val', icon: UserRound },
     ],
   },
@@ -54,7 +56,14 @@ export function Sidebar({ page, onNavigate }: SidebarProps) {
           <Coins size={22} style={{ color: 'var(--bbg-yellow)' }} />
           <span className="font-bold text-lg">BBG Compta</span>
         </div>
-        <p className="text-xs mt-1" style={{ color: 'var(--bbg-purple-light)' }}>Comptabilité &amp; prévisionnel</p>
+        <p className="text-xs mt-1">
+          <span
+            className="inline-block px-1.5 py-0.5 rounded font-mono font-semibold tracking-tight"
+            style={{ backgroundColor: 'var(--bbg-yellow)', color: 'var(--bbg-purple-darker)' }}
+          >
+            v{APP_VERSION}
+          </span>
+        </p>
       </div>
 
       <nav className="flex-1 overflow-auto py-1">

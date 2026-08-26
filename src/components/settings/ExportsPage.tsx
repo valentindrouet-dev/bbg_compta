@@ -52,10 +52,11 @@ export function ExportsPage() {
 
         <Card title={<span className="inline-flex items-center gap-2"><FileJson size={18} className="text-amber-600" /> Sauvegarde complète</span>}>
           <p className="text-sm text-[#5c5280] mb-3">
-            Fichier JSON contenant <b>toutes</b> les données (journal, budgets, référentiels, chronologie…).
+            Fichier JSON contenant <b>toutes</b> les données (journal, budgets, référentiels, chronologie)
+            <b> et les justificatifs joints</b>.
             À conserver précieusement : c'est ta sauvegarde. Elle se restaure depuis l'onglet Paramètres.
           </p>
-          <Btn onClick={() => exportBackup(state)}>Télécharger la sauvegarde</Btn>
+          <Btn onClick={() => { void exportBackup(state); }}>Télécharger la sauvegarde</Btn>
         </Card>
       </div>
     </div>

@@ -13,6 +13,19 @@ function uid(): string {
   return crypto.randomUUID();
 }
 
+/** Mise en forme d'une colonne du journal (gras, italique, couleur, alignement). */
+export interface ColFormat {
+  bold?: boolean;
+  italic?: boolean;
+  color?: string;
+  align?: 'left' | 'center' | 'right';
+}
+
+/** Clés dont la modification est enregistrée dans l'historique d'annulation. */
+const DATA_KEYS = ['entries', 'finances', 'referentiels', 'budgets', 'chronologie', 'tresoPrev', 'journalFormats'] as const;
+type DataKey = typeof DATA_KEYS[number];
+type Snapshot = Pick<AppState, DataKey>;
+
 export interface AppState {
   entries: JournalEntry[];
   finances: FinanceEntry[];
@@ -20,6 +33,16 @@ export interface AppState {
   budgets: Record<string, BudgetExercice>;
   chronologie: ChronoEvent[];
   tresoPrev: TresoPrevLine[];
+  /** Mise en forme par colonne du journal, indexée par clé de colonne. */
+  journalFormats: Record<string, ColFormat>;
+
+  // Historique (non persisté) : profondeur disponible pour annuler / rétablir.
+  undoDepth: number;
+  redoDepth: number;
+  undo: () => void;
+  redo: () => void;
+  setColFormat: (col: string, patch: ColFormat) => void;
+  resetColFormat: (col: string) => void;
 
   addEntry: (e: Omit<JournalEntry, 'id'>) => string;
   updateEntry: (id: string, patch: Partial<JournalEntry>) => void;
@@ -62,13 +85,78 @@ function seedState() {
     budgets: structuredClone(seedBudgets) as unknown as Record<string, BudgetExercice>,
     chronologie: structuredClone(seedChronologie) as ChronoEvent[],
     tresoPrev: structuredClone(seedTresorerie.previsionnel) as TresoPrevLine[],
+    journalFormats: {} as Record<string, ColFormat>,
   };
+}
+
+// ----- Historique d'annulation (Cmd+Z / Ctrl+Z) --------------------------
+// Les piles vivent hors du state : elles ne sont ni persistées ni sérialisées.
+const MAX_HISTORIQUE = 100;
+let past: Snapshot[] = [];
+let future: Snapshot[] = [];
+let suspendHistory = false;
+
+function snapshot(s: AppState): Snapshot {
+  return {
+    entries: s.entries, finances: s.finances, referentiels: s.referentiels,
+    budgets: s.budgets, chronologie: s.chronologie, tresoPrev: s.tresoPrev,
+    journalFormats: s.journalFormats,
+  };
+}
+function donneesModifiees(a: Snapshot, b: Snapshot): boolean {
+  return DATA_KEYS.some(k => a[k] !== b[k]);
 }
 
 export const useStore = create<AppState>()(
   persist(
-    (set) => ({
+    (setRaw, get) => {
+      /** set « historisé » : mémorise l'état d'avant si les données changent. */
+      const set: typeof setRaw = (partial, replace) => {
+        if (suspendHistory) { setRaw(partial as never, replace as never); return; }
+        const avant = snapshot(get());
+        setRaw(partial as never, replace as never);
+        const apres = snapshot(get());
+        if (donneesModifiees(avant, apres)) {
+          past.push(avant);
+          if (past.length > MAX_HISTORIQUE) past.shift();
+          future = [];
+          setRaw({ undoDepth: past.length, redoDepth: 0 } as never);
+        }
+      };
+
+      return {
       ...seedState(),
+      undoDepth: 0,
+      redoDepth: 0,
+
+      undo: () => {
+        if (!past.length) return;
+        const courant = snapshot(get());
+        const precedent = past.pop()!;
+        future.push(courant);
+        suspendHistory = true;
+        setRaw(precedent as never);
+        suspendHistory = false;
+        setRaw({ undoDepth: past.length, redoDepth: future.length } as never);
+      },
+      redo: () => {
+        if (!future.length) return;
+        const courant = snapshot(get());
+        const suivant = future.pop()!;
+        past.push(courant);
+        suspendHistory = true;
+        setRaw(suivant as never);
+        suspendHistory = false;
+        setRaw({ undoDepth: past.length, redoDepth: future.length } as never);
+      },
+      setColFormat: (col, patch) => set(s => ({
+        journalFormats: { ...s.journalFormats, [col]: { ...s.journalFormats[col], ...patch } },
+      })),
+      resetColFormat: (col) => set(s => {
+        const next = { ...s.journalFormats };
+        delete next[col];
+        return { journalFormats: next };
+      }),
 
       addEntry: (e) => {
         const id = uid();
@@ -196,10 +284,18 @@ export const useStore = create<AppState>()(
 
       restoreAll: (data) => set(() => ({ ...data })),
       resetToSeed: () => set(() => seedState()),
-    }),
+      };
+    },
     {
       name: 'bbg-compta-v1',
       version: 1,
+      // Seules les données sont persistées : l'historique repart à zéro
+      // à chaque ouverture, et les actions ne sont jamais sérialisées.
+      partialize: (s) => ({
+        entries: s.entries, finances: s.finances, referentiels: s.referentiels,
+        budgets: s.budgets, chronologie: s.chronologie, tresoPrev: s.tresoPrev,
+        journalFormats: s.journalFormats,
+      }) as unknown as AppState,
     },
   ),
 );

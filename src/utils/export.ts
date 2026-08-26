@@ -6,6 +6,7 @@ import type { JournalEntry } from '../types';
 import { labelMois, formatDateFR, compareMois, moisCourant, moisExercice } from './dates';
 import { r2 } from './money';
 import { syntheseExercice, immoInfos, tableauTVA, tableauTreso, moisTresorerie } from './calc';
+import { exporterFichiers, importerFichiers, type FichierSerialise } from './files';
 
 function download(name: string, blob: Blob) {
   const url = URL.createObjectURL(blob);
@@ -253,10 +254,13 @@ export function exportPDF(state: AppState, exercice: string) {
 
 // ---------------------------------------------------------------- Sauvegarde -
 
-export function exportBackup(state: AppState) {
+export async function exportBackup(state: AppState, avecFichiers = true) {
+  // Les justificatifs vivent dans IndexedDB : on les embarque en base64 pour
+  // que la sauvegarde soit vraiment complète (et restaurable sur une autre machine).
+  const fichiers = avecFichiers ? await exporterFichiers() : [];
   const data = {
     format: 'bbg-compta-backup',
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     entries: state.entries,
     finances: state.finances,
@@ -264,21 +268,30 @@ export function exportBackup(state: AppState) {
     budgets: state.budgets,
     chronologie: state.chronologie,
     tresoPrev: state.tresoPrev,
+    journalFormats: state.journalFormats,
+    fichiers,
   };
   download(`BBG_Compta_sauvegarde_${today()}.json`,
     new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' }));
 }
 
-export async function importBackup(file: File): Promise<Parameters<AppState['restoreAll']>[0]> {
+export async function importBackup(file: File): Promise<{
+  data: Parameters<AppState['restoreAll']>[0]; nbFichiers: number;
+}> {
   const text = await file.text();
   const data = JSON.parse(text);
   if (data.format !== 'bbg-compta-backup') throw new Error('Ce fichier n\'est pas une sauvegarde BBG Compta.');
+  const fichiers: FichierSerialise[] = data.fichiers ?? [];
+  const nbFichiers = fichiers.length ? await importerFichiers(fichiers) : 0;
   return {
-    entries: data.entries ?? [],
-    finances: data.finances ?? [],
-    referentiels: data.referentiels,
-    budgets: data.budgets,
-    chronologie: data.chronologie ?? [],
-    tresoPrev: data.tresoPrev ?? [],
+    data: {
+      entries: data.entries ?? [],
+      finances: data.finances ?? [],
+      referentiels: data.referentiels,
+      budgets: data.budgets,
+      chronologie: data.chronologie ?? [],
+      tresoPrev: data.tresoPrev ?? [],
+    },
+    nbFichiers,
   };
 }

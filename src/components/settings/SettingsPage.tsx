@@ -14,9 +14,10 @@ export function SettingsPage() {
 
   async function handleImport(file: File) {
     try {
-      const data = await importBackup(file);
+      const { data, nbFichiers } = await importBackup(file);
       restoreAll(data);
-      setMessage(`Sauvegarde restaurée : ${data.entries?.length ?? 0} écritures.`);
+      setMessage(`Sauvegarde restaurée : ${data.entries?.length ?? 0} écritures`
+        + (nbFichiers ? ` et ${nbFichiers} justificatif${nbFichiers > 1 ? 's' : ''}.` : '.'));
     } catch (err) {
       setMessage(`Erreur : ${err instanceof Error ? err.message : 'fichier invalide'}`);
     }
@@ -35,7 +36,7 @@ export function SettingsPage() {
       <div className="space-y-4">
         <Card title="Sauvegarde & restauration">
           <div className="flex flex-wrap items-center gap-3">
-            <Btn variant="primary" onClick={() => exportBackup(state)}>Télécharger une sauvegarde</Btn>
+            <Btn variant="primary" onClick={() => { void exportBackup(state); }}>Télécharger une sauvegarde</Btn>
             <Btn onClick={() => fileRef.current?.click()}>
               <span className="inline-flex items-center gap-1"><Upload size={14} /> Restaurer une sauvegarde…</span>
             </Btn>
@@ -53,8 +54,9 @@ export function SettingsPage() {
             </Btn>
           </div>
           <p className="text-xs text-[#9a92b5] mt-3">
-            Les données vivent dans le stockage local de ce navigateur ({entries.length} écritures actuellement).
-            Fais une sauvegarde régulière, et avant de changer de navigateur ou de machine.
+            Les données vivent dans le stockage local de ce navigateur ({entries.length} écritures actuellement)
+            et les justificatifs dans sa base de fichiers. La sauvegarde JSON embarque les deux :
+            fais-en une régulièrement, et avant de changer de navigateur ou de machine.
           </p>
         </Card>
 

@@ -154,23 +154,28 @@ export function sortBy<T>(list: T[], sort: SortState, accessors: Record<string, 
   });
 }
 
-export function ThSort({ label, k, sort, onToggle, className = '' }: {
-  label: string; k: string; sort: SortState; onToggle: (k: string) => void; className?: string;
+export function ThSort({ label, k, sort, onToggle, className = '', extra }: {
+  label: string; k: string; sort: SortState; onToggle: (k: string) => void;
+  className?: string;
+  /** Contenu additionnel à droite du libellé (menu de mise en forme). */
+  extra?: ReactNode;
 }) {
   const active = sort.key === k;
   return (
     <th
-      className={`cursor-pointer select-none ${className}`}
-      style={active ? { backgroundColor: 'var(--bbg-purple-dark)' } : undefined}
+      className={`cursor-pointer select-none ${active ? 'sorted' : ''} ${className}`}
       onClick={() => onToggle(k)}
       title="Trier sur cette colonne"
     >
-      <span className={`inline-flex items-center gap-1 ${className.includes('num') ? 'justify-end w-full' : ''}`}>
+      <span className={`inline-flex items-center gap-1 w-full truncate ${className.includes('num') ? 'justify-end' : ''}`}>
         {label}
         {active
-          ? (sort.dir === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)
-          : <ArrowUpDown size={12} style={{ opacity: 0.45 }} />}
+          ? (sort.dir === 'asc' ? <ArrowUp size={12} className="shrink-0" /> : <ArrowDown size={12} className="shrink-0" />)
+          : <ArrowUpDown size={12} className="shrink-0" style={{ opacity: 0.45 }} />}
       </span>
+      {/* Le menu de mise en forme flotte au-dessus de l'en-tête : il n'ampute
+          pas la place du libellé, et n'apparaît qu'au survol de la colonne. */}
+      {extra && <span className="th-tools">{extra}</span>}
     </th>
   );
 }

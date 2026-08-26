@@ -123,3 +123,32 @@ input[type="number"]::-webkit-outer-spin-button { opacity: 0.5; }
   background: var(--bbg-yellow-light);
   border-color: var(--bbg-yellow-dark);
 }
+
+/* En-tête de colonne active pour le tri */
+.sheet th.sorted { background: var(--bbg-purple-dark); }
+
+/* Blocs colorés du journal, comme les sections du tableur */
+.sheet-jeux th            { background: var(--bbg-yellow-dark); border-color: #5f4800; }
+.sheet-jeux th.sorted     { background: #5f4800; }
+.sheet-jeux tfoot td      { background: var(--bbg-yellow); border-color: var(--bbg-yellow-dark); }
+.sheet-produits th        { background: var(--bbg-green-dark); border-color: #2a5716; }
+.sheet-produits th.sorted { background: #2a5716; }
+.sheet-produits tfoot td  { background: var(--bbg-green); border-color: var(--bbg-green-dark); }
+
+/* Bouton de date (affichage « 26 août ») */
+.sheet button.w-full { font-size: inherit; font-family: inherit; }
+
+/* Menu de mise en forme : superposé à droite de l'en-tête, visible au survol */
+.sheet th { position: sticky; }
+.sheet th .th-tools {
+  position: absolute;
+  right: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  opacity: 0;
+  transition: opacity .12s;
+  background: inherit;
+  padding-left: 2px;
+}
+.sheet th:hover .th-tools { opacity: 1; }

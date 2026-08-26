@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import {
   Plus, Copy, Trash2, AlertTriangle, Search, ClipboardPaste, X, CopyPlus,
 } from 'lucide-react';
@@ -10,6 +10,8 @@ import {
 import { euros, r2, tvaDepuisTTC } from '../../utils/money';
 import { sumTTH, sumParCategorie } from '../../utils/calc';
 import { PageHeader, Card, MonthTabs, Btn, useSort, sortBy, ThSort, type SortState } from '../ui';
+import { DateCell, MoneyCell, AutoCompleteCell, FactureCell, ColFormatMenu, colStyle } from './cells';
+import type { ColFormat } from '../../store';
 
 type SectionKind = 'depenses' | 'jeux' | 'produits';
 
@@ -75,6 +77,16 @@ export function JournalPage() {
   const depenses = tri(duMois.filter(e => e.type !== 'produit' && !refs.categoriesJeux.includes(e.categorie)));
   const jeux = tri(duMois.filter(e => e.type !== 'produit' && refs.categoriesJeux.includes(e.categorie)));
   const produits = tri(duMois.filter(e => e.type === 'produit'));
+
+  // Tous les fournisseurs déjà saisis, dédoublonnés et triés — sert à la complétion.
+  const fournisseurs = useMemo(() => {
+    const noms = new Map<string, string>();
+    for (const e of entries) {
+      const n = e.fournisseur.trim();
+      if (n) noms.set(n.toLowerCase(), n);
+    }
+    return [...noms.values()].sort((a, b) => a.localeCompare(b, 'fr'));
+  }, [entries]);
 
   const nbParMois = useMemo(() => {
     const m = new Map<string, number>();
@@ -195,13 +207,13 @@ export function JournalPage() {
       <div className="space-y-5 mt-4">
         <Section kind="depenses" title="Dépenses" mois={mois} rows={depenses}
           sort={sort} onSort={toggle} selected={selected} onToggleRow={toggleRow} onToggleAll={toggleAll}
-          clip={clip} onCopy={setClip} onPaste={pasteInto} />
+          clip={clip} onCopy={setClip} onPaste={pasteInto} fournisseurs={fournisseurs} />
         <Section kind="jeux" title="Dépenses Jeux (développement & droits)" mois={mois} rows={jeux}
           sort={sort} onSort={toggle} selected={selected} onToggleRow={toggleRow} onToggleAll={toggleAll}
-          clip={clip} onCopy={setClip} onPaste={pasteInto} />
+          clip={clip} onCopy={setClip} onPaste={pasteInto} fournisseurs={fournisseurs} />
         <Section kind="produits" title="Produits (revenus)" mois={mois} rows={produits}
           sort={sort} onSort={toggle} selected={selected} onToggleRow={toggleRow} onToggleAll={toggleAll}
-          clip={clip} onCopy={setClip} onPaste={pasteInto} />
+          clip={clip} onCopy={setClip} onPaste={pasteInto} fournisseurs={fournisseurs} />
       </div>
     </div>
   );
@@ -227,17 +239,28 @@ function BatchSelect({ label, options, labelOf, onPick }: {
 // ---------------------------------------------------------------- Section ---
 
 function Section({
-  kind, title, mois, rows, sort, onSort, selected, onToggleRow, onToggleAll, clip, onCopy, onPaste,
+  kind, title, mois, rows, sort, onSort, selected, onToggleRow, onToggleAll, clip, onCopy, onPaste, fournisseurs,
 }: {
   kind: SectionKind; title: string; mois: string; rows: JournalEntry[];
   sort: SortState; onSort: (k: string) => void;
   selected: Set<string>; onToggleRow: (id: string) => void; onToggleAll: (ids: string[], on: boolean) => void;
   clip: JournalEntry | null; onCopy: (e: JournalEntry | null) => void;
   onPaste: (targetId: string, source: JournalEntry) => void;
+  fournisseurs: string[];
 }) {
   const refs = useStore(s => s.referentiels);
   const addEntry = useStore(s => s.addEntry);
   const pasteInto = useStore(s => s.pasteInto);
+  const formats = useStore(s => s.journalFormats);
+  const setColFormat = useStore(s => s.setColFormat);
+  const resetColFormat = useStore(s => s.resetColFormat);
+  const fmtMenu = (col: string) => (
+    <ColFormatMenu
+      col={col} format={formats[col]}
+      onChange={(patch: ColFormat) => setColFormat(col, patch)}
+      onReset={() => resetColFormat(col)}
+    />
+  );
   const tot = sumTTH(rows);
   const parCat = sumParCategorie(rows);
   const isProduits = kind === 'produits';
@@ -249,6 +272,8 @@ function Section({
 
   const ids = rows.map(r => r.id);
   const allSelected = ids.length > 0 && ids.every(id => selected.has(id));
+  // Année du mois affiché : l'année n'est rappelée que sur les dates qui en sortent.
+  const anneeRef = mois === PRE_IMMAT ? 2025 : Number(mois.slice(0, 4));
 
   function defaultDate(): string {
     if (mois === PRE_IMMAT) return '2025-08-01';
@@ -295,7 +320,10 @@ function Section({
         <p className="text-sm italic" style={{ color: '#9a92b5' }}>Aucune écriture ce mois-ci.</p>
       ) : (
         <div className="overflow-x-auto -mx-4 px-4">
-          <table className="sheet text-[13px]" style={{ tableLayout: 'fixed', minWidth: 1150 }}>
+          <table
+            className={`sheet text-[13px] ${kind === 'jeux' ? 'sheet-jeux' : kind === 'produits' ? 'sheet-produits' : ''}`}
+            style={{ tableLayout: 'fixed', minWidth: 1150 }}
+          >
             <colgroup>
               {cols.map((w, i) => <col key={i} style={{ width: `${w}%` }} />)}
             </colgroup>
@@ -309,19 +337,19 @@ function Section({
                     style={{ width: 'auto' }}
                   />
                 </th>
-                <ThSort label="Date" k="date" sort={sort} onToggle={onSort} />
-                <ThSort label="Fournisseur" k="fournisseur" sort={sort} onToggle={onSort} />
-                <ThSort label="Description" k="description" sort={sort} onToggle={onSort} />
-                <ThSort label="Catégorie" k="categorie" sort={sort} onToggle={onSort} />
-                <ThSort label="TTC" k="ttc" sort={sort} onToggle={onSort} className="num" />
+                <ThSort label="Date" k="date" sort={sort} onToggle={onSort} extra={fmtMenu('date')} />
+                <ThSort label="Fournisseur" k="fournisseur" sort={sort} onToggle={onSort} extra={fmtMenu('fournisseur')} />
+                <ThSort label="Description" k="description" sort={sort} onToggle={onSort} extra={fmtMenu('description')} />
+                <ThSort label="Catégorie" k="categorie" sort={sort} onToggle={onSort} extra={fmtMenu('categorie')} />
+                <ThSort label="TTC" k="ttc" sort={sort} onToggle={onSort} className="num" extra={fmtMenu('ttc')} />
                 <th>Taux</th>
-                <ThSort label="TVA" k="tva" sort={sort} onToggle={onSort} className="num" />
-                <ThSort label="HT" k="ht" sort={sort} onToggle={onSort} className="num" />
-                <ThSort label="Paiement" k="paiement" sort={sort} onToggle={onSort} />
-                {!isProduits && <ThSort label="Type" k="type" sort={sort} onToggle={onSort} />}
-                <ThSort label="Compta" k="compta" sort={sort} onToggle={onSort} />
-                <ThSort label="Mots clés" k="motsCles" sort={sort} onToggle={onSort} />
-                <ThSort label="Facture" k="facture" sort={sort} onToggle={onSort} />
+                <ThSort label="TVA" k="tva" sort={sort} onToggle={onSort} className="num" extra={fmtMenu('tva')} />
+                <ThSort label="HT" k="ht" sort={sort} onToggle={onSort} className="num" extra={fmtMenu('ht')} />
+                <ThSort label="Paiement" k="paiement" sort={sort} onToggle={onSort} extra={fmtMenu('paiement')} />
+                {!isProduits && <ThSort label="Type" k="type" sort={sort} onToggle={onSort} extra={fmtMenu('type')} />}
+                <ThSort label="Compta" k="compta" sort={sort} onToggle={onSort} extra={fmtMenu('compta')} />
+                <ThSort label="Mots clés" k="motsCles" sort={sort} onToggle={onSort} extra={fmtMenu('motsCles')} />
+                <ThSort label="Facture" k="facture" sort={sort} onToggle={onSort} extra={fmtMenu('facture')} />
                 <th></th>
               </tr>
             </thead>
@@ -332,6 +360,7 @@ function Section({
                   isSelected={selected.has(e.id)} onToggleRow={onToggleRow}
                   clip={clip} onCopy={onCopy}
                   onPasteHere={() => clip && pasteInto(e.id, clip)}
+                  fournisseurs={fournisseurs} formats={formats} anneeRef={anneeRef}
                 />
               ))}
             </tbody>
@@ -381,10 +410,11 @@ function tauxImplique(e: JournalEntry): number | 'manuel' {
   return 'manuel';
 }
 
-function Row({ e, kind, categories, isSelected, onToggleRow, clip, onCopy, onPasteHere }: {
+function Row({ e, kind, categories, isSelected, onToggleRow, clip, onCopy, onPasteHere, fournisseurs, formats, anneeRef }: {
   e: JournalEntry; kind: SectionKind; categories: string[];
   isSelected: boolean; onToggleRow: (id: string) => void;
   clip: JournalEntry | null; onCopy: (e: JournalEntry | null) => void; onPasteHere: () => void;
+  fournisseurs: string[]; formats: Record<string, ColFormat>; anneeRef: number;
 }) {
   const update = useStore(s => s.updateEntry);
   const remove = useStore(s => s.removeEntry);
@@ -426,9 +456,9 @@ function Row({ e, kind, categories, isSelected, onToggleRow, clip, onCopy, onPas
       </td>
       <td>
         <div className="flex items-center gap-0.5">
-          <input
-            type="date" value={e.date}
-            onChange={ev => ev.target.value && update(e.id, { date: ev.target.value })}
+          <DateCell
+            value={e.date} anneeRef={anneeRef} style={colStyle(formats.date)}
+            onCommit={v => update(e.id, { date: v })}
           />
           {dateHorsMois && (
             <span title={`Date hors du mois comptable (${e.mois})`} className="shrink-0">
@@ -437,27 +467,36 @@ function Row({ e, kind, categories, isSelected, onToggleRow, clip, onCopy, onPas
           )}
         </div>
       </td>
-      <td><TextCell value={e.fournisseur} onCommit={v => update(e.id, { fournisseur: v })} /></td>
-      <td><TextCell value={e.description} onCommit={v => update(e.id, { description: v })} /></td>
       <td>
-        <select className={pillCat} value={e.categorie} onChange={ev => update(e.id, { categorie: ev.target.value })}>
+        <AutoCompleteCell
+          value={e.fournisseur} options={fournisseurs} style={colStyle(formats.fournisseur)}
+          onCommit={v => update(e.id, { fournisseur: v })}
+        />
+      </td>
+      <td><TextCell value={e.description} onCommit={v => update(e.id, { description: v })} style={colStyle(formats.description)} /></td>
+      <td>
+        <select className={pillCat} style={colStyle(formats.categorie)}
+          value={e.categorie} onChange={ev => update(e.id, { categorie: ev.target.value })}>
           {!categories.includes(e.categorie) && e.categorie && <option value={e.categorie}>{e.categorie}</option>}
           {categories.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
       </td>
-      <td><MoneyCell value={e.ttc} onCommit={setTTC} /></td>
+      <td><MoneyCell value={e.ttc} onCommit={setTTC} style={colStyle(formats.ttc)} /></td>
       <td>
         <select value={String(taux)} onChange={ev => setTaux(ev.target.value)}>
           {TAUX_CHOICES.map(t => <option key={t} value={t}>{String(t).replace('.', ',')} %</option>)}
           <option value="manuel">manuel</option>
         </select>
       </td>
-      <td><MoneyCell value={e.tva} onCommit={setTVA} disabled={taux !== 'manuel'} /></td>
-      <td className="text-right tabular-nums font-semibold pr-1.5" style={{ color: 'var(--bbg-purple-darker)' }}>
+      <td><MoneyCell value={e.tva} onCommit={setTVA} disabled={taux !== 'manuel'} style={colStyle(formats.tva)} /></td>
+      <td
+        className="text-right tabular-nums font-semibold pr-1.5"
+        style={{ color: 'var(--bbg-purple-darker)', ...colStyle(formats.ht) }}
+      >
         {euros(e.ht)}
       </td>
       <td>
-        <select value={e.paiement} onChange={ev => update(e.id, { paiement: ev.target.value })}>
+        <select style={colStyle(formats.paiement)} value={e.paiement} onChange={ev => update(e.id, { paiement: ev.target.value })}>
           {!refs.paiements.includes(e.paiement) && e.paiement && <option value={e.paiement}>{e.paiement}</option>}
           {refs.paiements.map(p => <option key={p} value={p}>{p}</option>)}
         </select>
@@ -466,7 +505,7 @@ function Row({ e, kind, categories, isSelected, onToggleRow, clip, onCopy, onPas
         <td>
           <div className="flex items-center gap-0.5">
             <select
-              className="pill-orange" value={e.type}
+              className="pill-orange" style={colStyle(formats.type)} value={e.type}
               onChange={ev => update(e.id, { type: ev.target.value as JournalEntry['type'] })}
             >
               <option value="charges">charges</option>
@@ -485,14 +524,24 @@ function Row({ e, kind, categories, isSelected, onToggleRow, clip, onCopy, onPas
         </td>
       )}
       <td>
-        <select className="pill-orange" value={e.compta ?? ''} onChange={ev => update(e.id, { compta: ev.target.value })}>
+        <select className="pill-orange" style={colStyle(formats.compta)} value={e.compta ?? ''} onChange={ev => update(e.id, { compta: ev.target.value })}>
           <option value=""></option>
           {e.compta && !refs.planComptable.includes(e.compta) && <option value={e.compta}>{e.compta}</option>}
           {refs.planComptable.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
       </td>
-      <td><TextCell value={e.motsCles ?? ''} onCommit={v => update(e.id, { motsCles: v })} /></td>
-      <td><TextCell value={e.facture ?? ''} onCommit={v => update(e.id, { facture: v })} /></td>
+      <td><TextCell value={e.motsCles ?? ''} onCommit={v => update(e.id, { motsCles: v })} style={colStyle(formats.motsCles)} /></td>
+      <td>
+        <FactureCell
+          nom={e.facture ?? ''} fileId={e.factureFileId} style={colStyle(formats.facture)}
+          onNom={v => update(e.id, { facture: v })}
+          onFileId={(id, nom) => update(e.id, {
+            factureFileId: id,
+            // Le nom du fichier joint remplace le libellé s'il était vide.
+            facture: id && nom && !e.facture ? nom : e.facture,
+          })}
+        />
+      </td>
       <td>
         <div className="flex items-center justify-center gap-1">
           {clip ? (
@@ -527,39 +576,15 @@ function Row({ e, kind, categories, isSelected, onToggleRow, clip, onCopy, onPas
   );
 }
 
-function MoneyCell({ value, onCommit, disabled }: {
-  value: number; onCommit: (v: number | null) => void; disabled?: boolean;
+function TextCell({ value, onCommit, style }: {
+  value: string; onCommit: (v: string) => void; style?: CSSProperties;
 }) {
-  const [text, setText] = useState<string | null>(null);
-  const shown = text ?? String(r2(value)).replace('.', ',');
-  return (
-    <input
-      className="num" inputMode="decimal" disabled={disabled}
-      value={shown}
-      onChange={ev => setText(ev.target.value)}
-      onFocus={ev => ev.target.select()}
-      onBlur={() => {
-        if (text !== null) {
-          const t = text.trim().replace(/\s/g, '').replace(',', '.').replace('€', '');
-          const n = Number(t);
-          onCommit(t === '' ? 0 : Number.isFinite(n) ? n : null);
-          setText(null);
-        }
-      }}
-      onKeyDown={ev => {
-        if (ev.key === 'Enter') (ev.target as HTMLInputElement).blur();
-        if (ev.key === 'Escape') setText(null);
-      }}
-    />
-  );
-}
-
-function TextCell({ value, onCommit }: { value: string; onCommit: (v: string) => void }) {
   const [text, setText] = useState<string | null>(null);
   return (
     <input
       value={text ?? value}
       title={value}
+      style={style}
       onChange={ev => setText(ev.target.value)}
       onBlur={() => { if (text !== null) { onCommit(text); setText(null); } }}
       onKeyDown={ev => { if (ev.key === 'Enter') (ev.target as HTMLInputElement).blur(); }}
