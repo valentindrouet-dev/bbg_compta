@@ -30,7 +30,7 @@ const NAV: { section: string; items: { page: Page; label: string; icon: typeof C
   {
     section: 'Prévisionnel 2025-30',
     items: [
-      { page: 'budgets', label: 'Budgets annuels', icon: Target },
+      { page: 'budgets', label: 'Prévisionnel', icon: Target },
       { page: 'reelprevu', label: 'Réel vs Prévu', icon: GitCompareArrows },
       { page: 'tresoprev', label: 'Trésorerie prév.', icon: Landmark },
       { page: 'chrono', label: 'Chronologie', icon: CalendarRange },

@@ -7,7 +7,7 @@ import { useStore } from '../../store';
 import { labelMois, formatDateFR, compareMois, EXERCICES } from '../../utils/dates';
 import { euros, euros0, r2, pourcent } from '../../utils/money';
 import { bilanJeux } from '../../utils/calc';
-import { rollupBudget, total, type BudgetLineFull } from '../../utils/budget';
+
 import { PageHeader, Card, StatCard, Btn, useSort, sortBy, ThSort } from '../ui';
 
 const C_REEL = '#e69138';
@@ -21,7 +21,7 @@ const kEuros = (v: number) => Math.abs(v) >= 1000
 export function JeuxPage() {
   const entries = useStore(s => s.entries);
   const refs = useStore(s => s.referentiels);
-  const budgets = useStore(s => s.budgets);
+  const previsionnels = useStore(s => s.previsionnels);
   const addJeu = useStore(s => s.addJeu);
   const renameJeu = useStore(s => s.renameJeu);
   const removeJeu = useStore(s => s.removeJeu);
@@ -37,27 +37,27 @@ export function JeuxPage() {
     [entries, refs.categoriesJeux],
   );
 
-  /** Coûts de développement prévus, par groupe de budget, tous exercices confondus. */
-  const prevuParGroupe = useMemo(() => {
+  /**
+   * Prévu par jeu : on additionne les lignes « jeux » du prévisionnel dont le
+   * libellé mentionne le jeu (« EDIT — Contrat d'Illustrations », « Illustrations EDIT »…).
+   */
+  const prevuParJeu = useMemo(() => {
     const m = new Map<string, number>();
     for (const ex of EXERCICES) {
-      const b = budgets[ex];
-      if (!b) continue;
-      const roll = rollupBudget(b.lignes as BudgetLineFull[], b.moisLabels.length);
-      for (const [groupe, vals] of roll.coutsDevParGroupe) {
-        m.set(groupe, r2((m.get(groupe) ?? 0) + total(vals)));
+      for (const l of previsionnels[ex] ?? []) {
+        if (l.section !== 'jeux' || l.unite) continue;
+        const somme = l.valeurs.reduce<number>((s, v) => s + (v ?? 0), 0);
+        if (!somme) continue;
+        const hay = l.categorie.toUpperCase();
+        for (const j of jeux) {
+          if (hay.includes(j.toUpperCase())) m.set(j, r2((m.get(j) ?? 0) + somme));
+        }
       }
     }
     return m;
-  }, [budgets]);
+  }, [previsionnels, jeux]);
 
-  /** Le budget d'un jeu : correspondance par nom (EDIT ↔ EDIT), sinon rien. */
-  const prevuDe = (jeu: string) => {
-    for (const [groupe, v] of prevuParGroupe) {
-      if (groupe.toUpperCase() === jeu.toUpperCase()) return v;
-    }
-    return null;
-  };
+  const prevuDe = (jeu: string) => prevuParJeu.get(jeu) ?? null;
 
   const totalDepense = r2(bilans.reduce((s, b) => s + b.ht, 0));
   const jeuActif = actif ? bilans.find(b => b.jeu === actif) : null;
@@ -88,8 +88,8 @@ export function JeuxPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
         <StatCard label="Jeux suivis" value={String(bilans.length)} />
         <StatCard label="Total dépensé (HT)" value={euros0(totalDepense)} tone="accent" />
-        <StatCard label="Total prévu au budget (HT)"
-          value={euros0(r2([...prevuParGroupe.values()].reduce((s, v) => s + v, 0)))} />
+        <StatCard label="Total prévu au prévisionnel (HT)"
+          value={euros0(r2([...prevuParJeu.values()].reduce((s, v) => s + v, 0)))} />
         <StatCard label="Écritures jeux"
           value={String(bilans.reduce((s, b) => s + b.nb, 0))} />
       </div>

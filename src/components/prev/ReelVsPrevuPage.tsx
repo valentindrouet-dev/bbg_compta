@@ -1,248 +1,176 @@
 import { useMemo, useState } from 'react';
 import { useStore } from '../../store';
-import type { BudgetLine } from '../../types';
-import { PRE_IMMAT } from '../../utils/dates';
+import type { PrevLigne, PrevSection } from '../../types';
+import { EXERCICES, labelMois, moisExercice } from '../../utils/dates';
 import { euros, euros0, r2, pourcent } from '../../utils/money';
-import { immoInfos, dotationDuMois } from '../../utils/calc';
-import { rollupBudget, total, type BudgetLineFull } from '../../utils/budget';
+import { reelParCategorie, reelParCategorieEtMois, SECTIONS } from '../../utils/previsionnel';
 import { PageHeader, Card, StatCard } from '../ui';
 
-const MOIS_NUM: Record<string, number> = {
-  'janvier': 1, 'février': 2, 'mars': 3, 'avril': 4, 'mai': 5, 'juin': 6,
-  'juillet': 7, 'août': 8, 'septembre': 9, 'octobre': 10, 'novembre': 11, 'décembre': 12,
-};
-
-/** Mois comptable (yyyy-mm) correspondant à chaque colonne du budget. */
-function moisDesColonnes(exercice: string, labels: string[]): string[] {
-  const y0 = parseInt(exercice.slice(0, 4), 10);
-  const first = MOIS_NUM[labels[0]?.toLowerCase().replace(' +1', '')] ?? 9;
-  let y = y0, m = first;
-  return labels.map(() => {
-    const key = `${y}-${String(m).padStart(2, '0')}`;
-    m++; if (m > 12) { m = 1; y++; }
-    return key;
-  });
-}
-
-function normalize(s: string): string {
-  return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
-}
-
-/** Correspondances spéciales catégorie réelle -> libellé budget. */
-const SPECIAL: Record<string, string> = {
-  'urssaf': 'cotisations tns',
-  'retraite tns': 'cotisations tns',
-  'tenue comptable': 'tenue comptable',
-};
-
-function matchLine(categorie: string, lines: BudgetLine[]): BudgetLine[] {
-  const cat = normalize(categorie);
-  const target = SPECIAL[cat] ?? cat;
-  return lines.filter(l => {
-    const lab = normalize(l.label);
-    return lab.includes(target) || target.includes(lab);
-  });
-}
+const DEPENSES: PrevSection[] = ['charges', 'jeux', 'immos'];
 
 export function ReelVsPrevuPage() {
   const entries = useStore(s => s.entries);
-  const budgets = useStore(s => s.budgets);
+  const refs = useStore(s => s.referentiels);
+  const previsionnels = useStore(s => s.previsionnels);
   const [exercice, setExercice] = useState('2025-26');
-  const budget = budgets[exercice];
 
-  const data = useMemo(() => {
-    if (!budget) return null;
-    const lignes = budget.lignes as BudgetLineFull[];
-    const nMois = budget.moisLabels.length;
-    const roll = rollupBudget(lignes, nMois);
-    const moisCols = moisDesColonnes(exercice, budget.moisLabels);
-    const immos = immoInfos(entries);
+  const moisList = moisExercice(exercice);
+  const lignes: PrevLigne[] = previsionnels[exercice] ?? [];
+  const reel = useMemo(() => reelParCategorie(entries, exercice), [entries, exercice]);
+  const reelMois = useMemo(() => reelParCategorieEtMois(entries, exercice), [entries, exercice]);
 
-    const inCol = (colIdx: number) => (moisKey: string) =>
-      moisKey === moisCols[colIdx] || (colIdx === 0 && exercice === '2025-26' && moisKey === PRE_IMMAT);
+  /** Prévu mois par mois, pour un ensemble de sections. */
+  const prevuMensuel = (sections: PrevSection[]) => moisList.map((_, i) =>
+    r2(lignes.filter(l => !l.unite && sections.includes(l.section))
+      .reduce((s, l) => s + (l.valeurs[i] ?? 0), 0)));
 
-    const caReel: number[] = [];
-    const depReel: number[] = [];
-    const dotReel: number[] = [];
-    for (let i = 0; i < nMois; i++) {
-      const test = inCol(i);
-      const du = entries.filter(e => test(e.mois));
-      caReel.push(r2(du.filter(e => e.type === 'produit').reduce((s, e) => s + e.ht, 0)));
-      depReel.push(r2(du.filter(e => e.type === 'charges').reduce((s, e) => s + e.ht, 0)));
-      let dot = dotationDuMois(immos, moisCols[i]);
-      if (i === 0 && exercice === '2025-26') dot = r2(dot + dotationDuMois(immos, PRE_IMMAT));
-      dotReel.push(dot);
-    }
-    const depPrevu = roll.coutsDevTotal.map((v, i) =>
-      v + roll.chargesExternesTotal[i] + roll.personnel[i] + roll.taxes[i]);
-    const resReel = caReel.map((v, i) => r2(v - depReel[i] - dotReel[i]));
-    const resPrevu = roll.resultatCourant;
+  /** Réel mois par mois, pour les catégories d'un ensemble de sections. */
+  const reelMensuel = (garde: (cat: string) => boolean) => moisList.map(m =>
+    r2([...reelMois.entries()].filter(([c]) => garde(c))
+      .reduce((s, [, parMois]) => s + (parMois.get(m) ?? 0), 0)));
 
-    // ---- comparaison annuelle par catégorie ----
-    const catsReel = new Map<string, number>();
-    for (const e of entries) {
-      if (e.type !== 'charges') continue;
-      if (!moisCols.includes(e.mois) && !(exercice === '2025-26' && e.mois === PRE_IMMAT)) continue;
-      catsReel.set(e.categorie, (catsReel.get(e.categorie) ?? 0) + e.ht);
-    }
-    const lignesDepenses = lignes.filter(l =>
-      (l.section === 'charges_externes' || l.section === 'couts_dev' || l.section === 'personnel' || l.section === 'resultat')
-      && l.kind === 'montant');
-    const usedLineIds = new Set<string>();
-    interface CatRow { label: string; reel: number; prevu: number | null }
-    const catRows: CatRow[] = [];
-    const byTarget = new Map<string, CatRow>();
-    for (const [cat, reel] of [...catsReel.entries()].sort((a, b) => b[1] - a[1])) {
-      const matched = matchLine(cat, lignesDepenses);
-      matched.forEach(l => usedLineIds.add(l.id));
-      const target = SPECIAL[normalize(cat)];
-      if (target && byTarget.has(target)) {
-        const row = byTarget.get(target)!;
-        row.label += ` + ${cat}`;
-        row.reel = r2(row.reel + reel);
-        continue;
-      }
-      const prevu = matched.length
-        ? r2(matched.reduce((s, l) => s + l.valeurs.reduce<number>((a, v) => a + (v ?? 0), 0), 0))
-        : null;
-      const row: CatRow = { label: cat, reel: r2(reel), prevu };
-      if (target) byTarget.set(target, row);
-      catRows.push(row);
-    }
-    const nonConsommees = lignesDepenses.filter(l =>
-      !usedLineIds.has(l.id) && l.valeurs.some(v => (v ?? 0) !== 0));
+  const estProduit = (c: string) => refs.categoriesProduits.includes(c);
 
-    return { roll, nMois, moisCols, caReel, depReel, dotReel, resReel, depPrevu, resPrevu, catRows, nonConsommees };
-  }, [budget, entries, exercice]);
+  const caPrevu = prevuMensuel(['produits']);
+  const caReel = reelMensuel(estProduit);
+  const depPrevu = prevuMensuel(DEPENSES);
+  const depReel = reelMensuel(c => !estProduit(c));
+  const resPrevu = caPrevu.map((v, i) => r2(v - depPrevu[i]));
+  const resReel = caReel.map((v, i) => r2(v - depReel[i]));
 
-  if (!budget || !data) return <div className="p-6">Aucun budget pour cet exercice.</div>;
+  const somme = (a: number[]) => r2(a.reduce((s, v) => s + v, 0));
 
-  const caReelTot = total(data.caReel);
-  const caPrevuTot = total(data.roll.ca);
-  const depReelTot = total(data.depReel);
-  const depPrevuTot = total(data.depPrevu);
+  /** Comparaison par catégorie : prévu, réel, écart. */
+  const parCategorie = useMemo(() => {
+    const cats = new Set<string>([...lignes.filter(l => !l.unite).map(l => l.categorie), ...reel.keys()]);
+    return [...cats].map(cat => {
+      const prevu = r2(lignes.filter(l => l.categorie === cat && !l.unite)
+        .reduce((s, l) => s + l.valeurs.reduce<number>((a, v) => a + (v ?? 0), 0), 0));
+      const r = reel.get(cat) ?? 0;
+      const section = lignes.find(l => l.categorie === cat)?.section
+        ?? (estProduit(cat) ? 'produits' : refs.categoriesJeux.includes(cat) ? 'jeux' : 'charges');
+      return { cat, prevu, reel: r, ecart: r2(r - prevu), section: section as PrevSection };
+    }).sort((a, b) => Math.abs(b.ecart) - Math.abs(a.ecart));
+  }, [lignes, reel, refs]);
 
   return (
     <div className="p-4 w-full">
       <PageHeader
         title="Réel vs Prévu"
-        subtitle="Le réalisé vient du journal, le prévu des budgets annuels — plus aucun IMPORTRANGE à maintenir"
+        subtitle="Le réalisé vient du journal, le prévu du prévisionnel — mêmes catégories de part et d'autre"
         actions={
           <select
-            className="border border-[#c9c0e4] rounded-md px-2 py-1.5 text-sm bg-white"
+            className="border rounded-md px-2 py-1.5 text-sm bg-white font-medium"
+            style={{ borderColor: 'var(--bbg-border)', color: 'var(--bbg-purple-darker)' }}
             value={exercice}
             onChange={ev => setExercice(ev.target.value)}
           >
-            {Object.keys(budgets).map(ex => <option key={ex} value={ex}>Exercice {ex}</option>)}
+            {EXERCICES.map(ex => <option key={ex} value={ex}>Exercice {ex}</option>)}
           </select>
         }
       />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        <StatCard label="CA réel / prévu (HT)" value={`${euros0(caReelTot)} / ${euros0(caPrevuTot)}`}
-          sub={caPrevuTot ? `${pourcent(caReelTot / caPrevuTot)} du prévu` : undefined}
-          tone={caReelTot >= caPrevuTot ? 'good' : 'neutral'} />
-        <StatCard label="Dépenses réelles / prévues (HT)" value={`${euros0(depReelTot)} / ${euros0(depPrevuTot)}`}
-          sub={depPrevuTot ? `${pourcent(depReelTot / depPrevuTot)} du budget consommé` : undefined}
-          tone={depReelTot <= depPrevuTot ? 'good' : 'bad'} />
-        <StatCard label="Résultat réel (approx.)" value={euros0(total(data.resReel))}
-          tone={total(data.resReel) >= 0 ? 'good' : 'bad'} sub="CA − charges − dotations" />
-        <StatCard label="Résultat courant prévu" value={euros0(total(data.resPrevu))}
-          tone={total(data.resPrevu) >= 0 ? 'good' : 'bad'} />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+        <StatCard label="Produits réel / prévu" value={`${euros0(somme(caReel))} / ${euros0(somme(caPrevu))}`}
+          tone={somme(caReel) >= somme(caPrevu) ? 'good' : 'neutral'}
+          sub={somme(caPrevu) ? `${pourcent(somme(caReel) / somme(caPrevu))} du prévu` : undefined} />
+        <StatCard label="Dépenses réel / prévu" value={`${euros0(somme(depReel))} / ${euros0(somme(depPrevu))}`}
+          tone={somme(depReel) <= somme(depPrevu) ? 'good' : 'bad'}
+          sub={somme(depPrevu) ? `${pourcent(somme(depReel) / somme(depPrevu))} consommé` : undefined} />
+        <StatCard label="Résultat réel" value={euros0(somme(resReel))}
+          tone={somme(resReel) >= 0 ? 'good' : 'bad'} />
+        <StatCard label="Résultat prévu" value={euros0(somme(resPrevu))}
+          tone={somme(resPrevu) >= 0 ? 'good' : 'bad'} />
       </div>
 
-      <Card title="Comparaison mensuelle (HT)" className="mb-6">
+      <Card title="Comparaison mensuelle (HT)" className="mb-5">
         <div className="overflow-x-auto -mx-4 px-4">
-          <table className="sheet text-xs border-collapse">
+          <table className="sheet text-xs" style={{ minWidth: 1000 }}>
             <thead>
               <tr>
-                <th className="text-left min-w-44"></th>
-                {budget.moisLabels.map((m, i) => <th key={i} className="text-right min-w-20">{m}</th>)}
-                <th className="text-right bg-[#efeafa] min-w-24">Total</th>
+                <th className="text-left" style={{ minWidth: 200 }}></th>
+                {moisList.map(m => <th key={m} className="num" style={{ minWidth: 74 }}>{labelMois(m)}</th>)}
+                <th className="num" style={{ minWidth: 96 }}>Total</th>
               </tr>
             </thead>
             <tbody>
-              <CompareRows label="Chiffre d'affaires" prevu={data.roll.ca} reel={data.caReel} sensPositif />
-              <CompareRows label="Dépenses (charges + jeux + personnel)" prevu={data.depPrevu} reel={data.depReel} />
-              <CompareRows label="Dotations amortissements" prevu={data.roll.dotations} reel={data.dotReel} />
-              <CompareRows label="Résultat" prevu={data.resPrevu} reel={data.resReel} sensPositif />
+              <Comparaison label="Produits" prevu={caPrevu} reel={caReel} sensPositif />
+              <Comparaison label="Dépenses" prevu={depPrevu} reel={depReel} />
+              <Comparaison label="Résultat" prevu={resPrevu} reel={resReel} sensPositif />
             </tbody>
           </table>
         </div>
-        {exercice === '2025-26' && (
-          <p className="text-xs text-[#9a92b5] mt-2">Le réel de la période pré-immatriculation (mai → août 2025) est inclus dans la colonne Septembre, comme les « Frais de lancement » du budget.</p>
-        )}
       </Card>
 
-      <Card title="Consommation annuelle par catégorie (HT)">
+      <Card title="Écarts par catégorie (HT)">
         <div className="overflow-x-auto -mx-4 px-4">
-          <table className="sheet text-sm border-collapse w-full">
+          <table className="sheet text-sm">
             <thead>
-              <tr className="text-left text-[#5c5280]">
-                <th>Catégorie (réel)</th>
-                <th className="text-right">Réel</th>
-                <th className="text-right">Prévu (budget)</th>
-                <th className="text-right">Écart</th>
-                <th className="text-right">Consommé</th>
+              <tr>
+                <th className="text-left">Catégorie</th>
+                <th>Bloc</th>
+                <th className="num">Prévu</th>
+                <th className="num">Réel</th>
+                <th className="num">Écart</th>
+                <th className="num">Consommé</th>
               </tr>
             </thead>
             <tbody>
-              {data.catRows.map(row => {
-                const ecart = row.prevu != null ? r2(row.reel - row.prevu) : null;
-                return (
-                  <tr key={row.label} className="hover:bg-[#f4f1fb]">
-                    <td>{row.label}</td>
-                    <td className="text-right tabular-nums font-medium">{euros(row.reel)}</td>
-                    <td className="text-right tabular-nums">{row.prevu != null ? euros(row.prevu) : <span className="text-[#9a92b5]">non budgété</span>}</td>
-                    <td className={`text-right tabular-nums ${ecart == null ? '' : ecart > 0 ? 'text-[#b7332e]' : 'text-[#38761d]'}`}>
-                      {ecart != null ? euros(ecart) : '—'}
-                    </td>
-                    <td className="text-right tabular-nums text-[#6f6690]">
-                      {row.prevu ? pourcent(row.reel / row.prevu) : '—'}
-                    </td>
-                  </tr>
-                );
-              })}
+              {parCategorie.map(l => (
+                <tr key={l.cat}>
+                  <td className="font-medium">{l.cat}</td>
+                  <td style={{ color: '#6f6690' }}>{SECTIONS.find(s => s.cle === l.section)?.titre ?? l.section}</td>
+                  <td className="text-right tabular-nums">{l.prevu ? euros(l.prevu) : <span style={{ color: '#9a92b5' }}>non budgété</span>}</td>
+                  <td className="text-right tabular-nums font-medium">{l.reel ? euros(l.reel) : '·'}</td>
+                  <td className="text-right tabular-nums"
+                    style={{ color: l.section === 'produits' ? (l.ecart >= 0 ? '#38761d' : '#b7332e') : (l.ecart > 0 ? '#b7332e' : '#38761d') }}>
+                    {l.prevu || l.reel ? euros(l.ecart) : '·'}
+                  </td>
+                  <td className="text-right tabular-nums" style={{ color: '#6f6690' }}>
+                    {l.prevu ? pourcent(l.reel / l.prevu) : '—'}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
-        {data.nonConsommees.length > 0 && (
-          <p className="text-xs text-[#9a92b5] mt-3">
-            Lignes budgétées sans dépense correspondante :{' '}
-            {data.nonConsommees.map(l => `${l.label} (${euros0(l.valeurs.reduce<number>((s, v) => s + (v ?? 0), 0))})`).join(' · ')}
-          </p>
-        )}
+        <p className="text-xs mt-2" style={{ color: '#9a92b5' }}>
+          Un écart positif sur une dépense signifie qu'elle dépasse le prévisionnel ; sur un produit,
+          qu'il fait mieux que prévu. Les lignes « non budgété » remontent aussi dans les alarmes du Prévisionnel.
+        </p>
       </Card>
     </div>
   );
 }
 
-function CompareRows({ label, prevu, reel, sensPositif }: {
+function Comparaison({ label, prevu, reel, sensPositif }: {
   label: string; prevu: number[]; reel: number[]; sensPositif?: boolean;
 }) {
   const ecart = reel.map((v, i) => r2(v - prevu[i]));
+  const somme = (a: number[]) => r2(a.reduce((s, v) => s + v, 0));
   const bon = (v: number) => (sensPositif ? v >= 0 : v <= 0);
   return (
     <>
-      <tr className="bg-[#f4f1fb] font-semibold">
+      <tr className="band-soft">
         <td>{label} — prévu</td>
-        {prevu.map((v, i) => <td key={i} className="text-right tabular-nums text-[#6f6690]">{v ? euros0(r2(v)) : '·'}</td>)}
-        <td className="text-right tabular-nums bg-[#efeafa]">{euros(total(prevu))}</td>
+        {prevu.map((v, i) => <td key={i} className="text-right tabular-nums" style={{ color: '#6f6690' }}>{v ? euros0(v) : '·'}</td>)}
+        <td className="text-right tabular-nums">{euros(somme(prevu))}</td>
       </tr>
       <tr>
         <td className="pl-4">réel</td>
         {reel.map((v, i) => <td key={i} className="text-right tabular-nums font-medium">{v ? euros0(v) : '·'}</td>)}
-        <td className="text-right tabular-nums bg-[#efeafa] font-semibold">{euros(total(reel))}</td>
+        <td className="text-right tabular-nums font-semibold">{euros(somme(reel))}</td>
       </tr>
-      <tr className="border-b-2 border-[#ddd6ef]">
-        <td className="pl-4 text-[#6f6690] italic">écart</td>
+      <tr style={{ borderBottom: '2px solid var(--bbg-border)' }}>
+        <td className="pl-4 italic" style={{ color: '#6f6690' }}>écart</td>
         {ecart.map((v, i) => (
-          <td key={i} className={`text-right tabular-nums ${v === 0 ? 'text-[#c9c0e4]' : bon(v) ? 'text-[#38761d]' : 'text-[#b7332e]'}`}>
+          <td key={i} className="text-right tabular-nums"
+            style={{ color: v === 0 ? '#c9c0e4' : bon(v) ? '#38761d' : '#b7332e' }}>
             {v ? euros0(v) : '·'}
           </td>
         ))}
-        <td className={`text-right tabular-nums bg-[#efeafa] ${bon(total(ecart)) ? 'text-[#38761d]' : 'text-[#b7332e]'}`}>
-          {euros(total(ecart))}
+        <td className="text-right tabular-nums" style={{ color: bon(somme(ecart)) ? '#38761d' : '#b7332e' }}>
+          {euros(somme(ecart))}
         </td>
       </tr>
     </>

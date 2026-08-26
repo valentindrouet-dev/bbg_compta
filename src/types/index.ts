@@ -65,6 +65,24 @@ export interface BudgetExercice {
   lignes: BudgetLine[];
 }
 
+/** Bloc d'affichage d'une ligne prévisionnelle, calqué sur la synthèse annuelle. */
+export type PrevSection = 'produits' | 'charges' | 'jeux' | 'immos' | 'indicateurs';
+
+/**
+ * Ligne du prévisionnel : une catégorie (celles de la synthèse) et ses montants
+ * mensuels. Une ligne dont la catégorie n'existe pas déclenche une alarme.
+ */
+export interface PrevLigne {
+  id: string;
+  categorie: string;
+  section: PrevSection;
+  /** Absent = montant en euros ; sinon indicateur non monétaire. */
+  unite?: 'heures' | 'jours' | 'pourcentage' | 'volume';
+  /** Une valeur par mois de l'exercice, dans l'ordre de moisExercice(). */
+  valeurs: (number | null)[];
+  note?: string;
+}
+
 export interface ChronoEvent {
   id: string;
   projet: string;

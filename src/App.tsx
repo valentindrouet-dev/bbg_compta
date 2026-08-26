@@ -11,7 +11,7 @@ import { TVAPage } from './components/journal/TVAPage';
 import { RemboursPage } from './components/journal/RemboursPage';
 import { FournisseursPage } from './components/journal/FournisseursPage';
 import { JeuxPage } from './components/journal/JeuxPage';
-import { BudgetPage } from './components/prev/BudgetPage';
+import { PrevisionnelPage } from './components/prev/PrevisionnelPage';
 import { ReelVsPrevuPage } from './components/prev/ReelVsPrevuPage';
 import { TresoPrevPage } from './components/prev/TresoPrevPage';
 import { ChronoPage } from './components/prev/ChronoPage';
@@ -62,7 +62,7 @@ export default function App() {
         {page === 'rembours' && <RemboursPage />}
         {page === 'fournisseurs' && <FournisseursPage />}
         {page === 'jeux' && <JeuxPage />}
-        {page === 'budgets' && <BudgetPage />}
+        {page === 'budgets' && <PrevisionnelPage />}
         {page === 'reelprevu' && <ReelVsPrevuPage />}
         {page === 'tresoprev' && <TresoPrevPage />}
         {page === 'chrono' && <ChronoPage />}

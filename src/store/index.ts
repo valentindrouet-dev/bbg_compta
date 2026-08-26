@@ -2,7 +2,10 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type {
   JournalEntry, FinanceEntry, BudgetExercice, ChronoEvent, TresoPrevLine, Referentiels, CategorieMeta,
+  PrevLigne, PrevSection,
 } from '../types';
+import { migrerBudgets, sectionDeCategorie } from '../utils/previsionnel';
+import { moisExercice } from '../utils/dates';
 import seedJournal from '../data/journal.json';
 import seedReferentiels from '../data/referentiels.json';
 import seedBudgets from '../data/budgets.json';
@@ -39,7 +42,7 @@ export interface ColFormat {
 export type CatKind = 'categoriesDepenses' | 'categoriesJeux' | 'categoriesProduits';
 
 /** Clés dont la modification est enregistrée dans l'historique d'annulation. */
-const DATA_KEYS = ['entries', 'finances', 'referentiels', 'budgets', 'chronologie', 'tresoPrev', 'journalFormats'] as const;
+const DATA_KEYS = ['entries', 'finances', 'referentiels', 'budgets', 'previsionnels', 'chronologie', 'tresoPrev', 'journalFormats'] as const;
 type DataKey = typeof DATA_KEYS[number];
 type Snapshot = Pick<AppState, DataKey>;
 
@@ -48,9 +51,11 @@ export interface AppState {
   finances: FinanceEntry[];
   referentiels: Referentiels;
   budgets: Record<string, BudgetExercice>;
+  /** Prévisionnel par exercice, aligné sur les catégories de la synthèse. */
+  previsionnels: Record<string, PrevLigne[]>;
   chronologie: ChronoEvent[];
   tresoPrev: TresoPrevLine[];
-  /** Mise en forme par colonne du journal, indexée par clé de colonne. */
+  /** Mise en forme par colonne des tableaux, indexée par « table:colonne ». */
   journalFormats: Record<string, ColFormat>;
 
   // Historique (non persisté) : profondeur disponible pour annuler / rétablir.
@@ -81,6 +86,14 @@ export interface AppState {
   addBudgetLine: (exercice: string, ligne: Omit<BudgetExercice['lignes'][number], 'id'>) => void;
   removeBudgetLine: (exercice: string, ligneId: string) => void;
 
+  // ----- Prévisionnel -----
+  setPrevCell: (exercice: string, ligneId: string, moisIdx: number, value: number | null) => void;
+  addPrevLigne: (exercice: string, categorie: string, section?: PrevSection) => void;
+  updatePrevLigne: (exercice: string, ligneId: string, patch: Partial<PrevLigne>) => void;
+  removePrevLigne: (exercice: string, ligneId: string) => void;
+  /** Recopie une valeur sur tous les mois restants de l'exercice. */
+  etalerPrevLigne: (exercice: string, ligneId: string, montant: number) => void;
+
   addChrono: (c: Omit<ChronoEvent, 'id'>) => void;
   updateChrono: (id: string, patch: Partial<ChronoEvent>) => void;
   removeChrono: (id: string) => void;
@@ -103,7 +116,7 @@ export interface AppState {
   addPaiement: (name: string) => void;
   addComptePlanComptable: (name: string) => void;
 
-  restoreAll: (data: Partial<Pick<AppState, 'entries' | 'finances' | 'referentiels' | 'budgets' | 'chronologie' | 'tresoPrev'>>) => void;
+  restoreAll: (data: Partial<Pick<AppState, 'entries' | 'finances' | 'referentiels' | 'budgets' | 'previsionnels' | 'chronologie' | 'tresoPrev'>>) => void;
   resetToSeed: () => void;
 }
 
@@ -117,6 +130,8 @@ function seedState() {
     finances: structuredClone(seedTresorerie.mouvementsFinanciers) as FinanceEntry[],
     referentiels: refs,
     budgets: structuredClone(seedBudgets) as unknown as Record<string, BudgetExercice>,
+    previsionnels: migrerBudgets(
+      structuredClone(seedBudgets) as unknown as Record<string, BudgetExercice>, refs),
     chronologie: structuredClone(seedChronologie) as ChronoEvent[],
     tresoPrev: structuredClone(seedTresorerie.previsionnel) as TresoPrevLine[],
     journalFormats: {} as Record<string, ColFormat>,
@@ -133,7 +148,8 @@ let suspendHistory = false;
 function snapshot(s: AppState): Snapshot {
   return {
     entries: s.entries, finances: s.finances, referentiels: s.referentiels,
-    budgets: s.budgets, chronologie: s.chronologie, tresoPrev: s.tresoPrev,
+    budgets: s.budgets, previsionnels: s.previsionnels,
+    chronologie: s.chronologie, tresoPrev: s.tresoPrev,
     journalFormats: s.journalFormats,
   };
 }
@@ -292,6 +308,47 @@ export const useStore = create<AppState>()(
         };
       }),
 
+      setPrevCell: (exercice, ligneId, moisIdx, value) => set(s => ({
+        previsionnels: {
+          ...s.previsionnels,
+          [exercice]: (s.previsionnels[exercice] ?? []).map(l => l.id === ligneId
+            ? { ...l, valeurs: l.valeurs.map((v, i) => i === moisIdx ? value : v) }
+            : l),
+        },
+      })),
+      addPrevLigne: (exercice, categorie, section) => set(s => {
+        const nMois = moisExercice(exercice).length;
+        const ligne: PrevLigne = {
+          id: uid(),
+          categorie,
+          section: section ?? sectionDeCategorie(categorie, s.referentiels),
+          valeurs: new Array<number | null>(nMois).fill(null),
+        };
+        return {
+          previsionnels: { ...s.previsionnels, [exercice]: [...(s.previsionnels[exercice] ?? []), ligne] },
+        };
+      }),
+      updatePrevLigne: (exercice, ligneId, patch) => set(s => ({
+        previsionnels: {
+          ...s.previsionnels,
+          [exercice]: (s.previsionnels[exercice] ?? []).map(l => l.id === ligneId ? { ...l, ...patch } : l),
+        },
+      })),
+      removePrevLigne: (exercice, ligneId) => set(s => ({
+        previsionnels: {
+          ...s.previsionnels,
+          [exercice]: (s.previsionnels[exercice] ?? []).filter(l => l.id !== ligneId),
+        },
+      })),
+      etalerPrevLigne: (exercice, ligneId, montant) => set(s => ({
+        previsionnels: {
+          ...s.previsionnels,
+          [exercice]: (s.previsionnels[exercice] ?? []).map(l => l.id === ligneId
+            ? { ...l, valeurs: l.valeurs.map(() => montant) }
+            : l),
+        },
+      })),
+
       addChrono: (c) => set(s => ({ chronologie: [...s.chronologie, { ...c, id: uid() }] })),
       updateChrono: (id, patch) => set(s => ({
         chronologie: s.chronologie.map(c => c.id === id ? { ...c, ...patch } : c),
@@ -418,7 +475,7 @@ export const useStore = create<AppState>()(
     },
     {
       name: 'bbg-compta-v1',
-      version: 2,
+      version: 3,
       // v2 : ajout de la liste des jeux et rattachement des dépenses de
       // développement au jeu concerné (déduit des mots clés / de la catégorie).
       migrate: (persisted, version) => {
@@ -428,13 +485,18 @@ export const useStore = create<AppState>()(
           s.referentiels = { ...s.referentiels, jeux };
           s.entries = (s.entries ?? []).map(e => e.jeu ? e : { ...e, jeu: deduireJeu(e, jeux) });
         }
+        if (version < 3 && s?.budgets && !s.previsionnels) {
+          // v3 : le prévisionnel est réécrit sur les catégories de la synthèse.
+          s.previsionnels = migrerBudgets(s.budgets, s.referentiels);
+        }
         return s;
       },
       // Seules les données sont persistées : l'historique repart à zéro
       // à chaque ouverture, et les actions ne sont jamais sérialisées.
       partialize: (s) => ({
         entries: s.entries, finances: s.finances, referentiels: s.referentiels,
-        budgets: s.budgets, chronologie: s.chronologie, tresoPrev: s.tresoPrev,
+        budgets: s.budgets, previsionnels: s.previsionnels,
+        chronologie: s.chronologie, tresoPrev: s.tresoPrev,
         journalFormats: s.journalFormats,
       }) as unknown as AppState,
     },

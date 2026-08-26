@@ -44,7 +44,7 @@ function journalRows(entries: JournalEntry[]) {
 
 export function exportExcel(state: AppState, exercice: string) {
   const wb = XLSX.utils.book_new();
-  const { entries, referentiels, budgets, chronologie, finances } = state;
+  const { entries, referentiels, previsionnels, chronologie, finances } = state;
 
   // Journal complet
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(journalRows(entries)), 'Journal');
@@ -110,17 +110,18 @@ export function exportExcel(state: AppState, exercice: string) {
   }));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(tvaRows), 'TVA');
 
-  // Budgets
-  for (const [ex, b] of Object.entries(budgets)) {
-    const rows = b.lignes.map(l => {
+  // Prévisionnel : mêmes catégories et mêmes mois que la synthèse
+  for (const [ex, lignes] of Object.entries(previsionnels ?? {})) {
+    const mois = moisExercice(ex);
+    const rows = lignes.map(l => {
       const row: Record<string, string | number> = {
-        'Section': l.section, 'Groupe': l.groupe, 'Ligne': l.label, 'Unité': l.kind,
+        'Bloc': l.section, 'Ligne': l.categorie, 'Unité': l.unite ?? '€',
       };
-      b.moisLabels.forEach((ml, i) => { row[ml] = l.valeurs[i] ?? ''; });
+      mois.forEach((m, i) => { row[labelMois(m)] = l.valeurs[i] ?? ''; });
       row['Total'] = r2(l.valeurs.reduce<number>((s, v) => s + (v ?? 0), 0));
       return row;
     });
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), `Budget ${ex}`);
+    if (rows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), `Prév ${ex}`);
   }
 
   // Chronologie
@@ -266,6 +267,7 @@ export async function exportBackup(state: AppState, avecFichiers = true) {
     finances: state.finances,
     referentiels: state.referentiels,
     budgets: state.budgets,
+    previsionnels: state.previsionnels,
     chronologie: state.chronologie,
     tresoPrev: state.tresoPrev,
     journalFormats: state.journalFormats,
@@ -289,6 +291,7 @@ export async function importBackup(file: File): Promise<{
       finances: data.finances ?? [],
       referentiels: data.referentiels,
       budgets: data.budgets,
+      previsionnels: data.previsionnels,
       chronologie: data.chronologie ?? [],
       tresoPrev: data.tresoPrev ?? [],
     },
