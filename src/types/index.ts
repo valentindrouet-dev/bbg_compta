@@ -80,6 +80,12 @@ export interface TresoPrevLine {
 
 // ----- Référentiels ------------------------------------------------------
 
+/** Réglages libres d'une catégorie : sa couleur et son groupe de rattachement. */
+export interface CategorieMeta {
+  couleur?: string;
+  groupe?: string;
+}
+
 export interface Referentiels {
   categoriesDepenses: string[];
   categoriesJeux: string[];
@@ -88,4 +94,8 @@ export interface Referentiels {
   planComptable: string[];
   paiements: string[];
   tauxTVA: number[];
+  /** Couleur et groupe par catégorie, indexés par nom. */
+  categoriesMeta?: Record<string, CategorieMeta>;
+  /** Groupes de catégories, dans l'ordre d'affichage. */
+  groupes?: string[];
 }

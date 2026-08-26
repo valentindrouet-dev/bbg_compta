@@ -127,13 +127,14 @@ input[type="number"]::-webkit-outer-spin-button { opacity: 0.5; }
 /* En-tête de colonne active pour le tri */
 .sheet th.sorted { background: var(--bbg-purple-dark); }
 
-/* Blocs colorés du journal, comme les sections du tableur */
-.sheet-jeux th            { background: var(--bbg-yellow-dark); border-color: #5f4800; }
-.sheet-jeux th.sorted     { background: #5f4800; }
-.sheet-jeux tfoot td      { background: var(--bbg-yellow); border-color: var(--bbg-yellow-dark); }
-.sheet-produits th        { background: var(--bbg-green-dark); border-color: #2a5716; }
-.sheet-produits th.sorted { background: #2a5716; }
-.sheet-produits tfoot td  { background: var(--bbg-green); border-color: var(--bbg-green-dark); }
+/* Blocs colorés du journal : les pastels du tableur, avec un texte foncé
+   (un fond pastel + texte blanc serait illisible). */
+.sheet-jeux th            { background: var(--bbg-orange); color: #7a3e00; border-color: #e8a765; }
+.sheet-jeux th.sorted     { background: #f5b97e; }
+.sheet-jeux tfoot td      { background: var(--bbg-orange-light); border-color: var(--bbg-orange); color: #7a3e00; }
+.sheet-produits th        { background: var(--bbg-green); color: #1c5236; border-color: #93cdb2; }
+.sheet-produits th.sorted { background: #a5d8c1; }
+.sheet-produits tfoot td  { background: var(--bbg-green-light); border-color: var(--bbg-green); color: #1c5236; }
 
 /* Bouton de date (affichage « 26 août ») */
 .sheet button.w-full { font-size: inherit; font-family: inherit; }

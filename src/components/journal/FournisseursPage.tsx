@@ -8,6 +8,7 @@ import { PageHeader, Card, StatCard, useSort, sortBy, ThSort } from '../ui';
 interface LigneFournisseur {
   nom: string;
   nb: number;
+  /** Signé : négatif pour les dépenses, positif pour les produits. */
   ttc: number;
   ht: number;
   tva: number;
@@ -18,10 +19,19 @@ interface LigneFournisseur {
   sens: 'dépense' | 'produit' | 'mixte';
 }
 
+/** « −1 234,00 € » pour une sortie, « +1 234,00 € » pour une entrée. */
+function signe(v: number): string {
+  if (!v) return '·';
+  return (v > 0 ? '+' : '−') + euros(Math.abs(v));
+}
+function teinte(v: number): string {
+  return v > 0 ? 'var(--bbg-green-dark)' : v < 0 ? '#b7332e' : '#6f6690';
+}
+
 export function FournisseursPage() {
   const entries = useStore(s => s.entries);
   const [search, setSearch] = useState('');
-  const { sort, toggle } = useSort({ key: 'ttc', dir: 'desc' });
+  const { sort, toggle } = useSort({ key: 'ttc', dir: 'asc' });
 
   const lignes = useMemo<LigneFournisseur[]>(() => {
     const par = new Map<string, {
@@ -37,9 +47,11 @@ export function FournisseursPage() {
         par.set(cle, { nom, nb: 0, ttc: 0, ht: 0, tva: 0, dates: [], cats: new Map(), paies: new Map(), depenses: 0, produits: 0 });
       }
       const f = par.get(cle)!;
-      f.nb++; f.ttc += e.ttc; f.ht += e.ht; f.tva += e.tva;
+      // Un produit entre en caisse (+), une dépense en sort (−).
+      const signe = e.type === 'produit' ? 1 : -1;
+      f.nb++; f.ttc += signe * e.ttc; f.ht += signe * e.ht; f.tva += signe * e.tva;
       f.dates.push(e.date);
-      f.cats.set(e.categorie, (f.cats.get(e.categorie) ?? 0) + e.ttc);
+      f.cats.set(e.categorie, (f.cats.get(e.categorie) ?? 0) + e.ttc);  // pondération en valeur absolue
       if (e.paiement) f.paies.set(e.paiement, (f.paies.get(e.paiement) ?? 0) + 1);
       if (e.type === 'produit') f.produits++; else f.depenses++;
     }
@@ -75,14 +87,14 @@ export function FournisseursPage() {
   });
 
   const totalTTC = r2(lignes.filter(l => l.sens !== 'produit').reduce((s, l) => s + l.ttc, 0));
-  const plusGros = [...lignes].sort((a, b) => b.ttc - a.ttc)[0];
+  const plusGros = [...lignes].sort((a, b) => Math.abs(b.ttc) - Math.abs(a.ttc))[0];
   const plusFrequent = [...lignes].sort((a, b) => b.nb - a.nb)[0];
 
   return (
     <div className="p-4 w-full">
       <PageHeader
         title="Fournisseurs"
-        subtitle="Tous les fournisseurs saisis dans le journal — la saisie s'auto-complète à partir de cette liste"
+        subtitle="Montants signés : − pour les dépenses, + pour les produits. La saisie du journal s'auto-complète à partir de cette liste."
         actions={
           <div className="relative">
             <Search size={14} className="absolute left-2 top-2.5" style={{ color: '#9a92b5' }} />
@@ -99,9 +111,9 @@ export function FournisseursPage() {
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
         <StatCard label="Fournisseurs différents" value={String(lignes.length)} />
-        <StatCard label="Total dépensé (TTC)" value={euros(totalTTC)} tone="accent" />
+        <StatCard label="Total dépensé (TTC)" value={euros(totalTTC)} tone="bad" />
         <StatCard label="Plus gros poste" value={plusGros?.nom ?? '—'}
-          sub={plusGros ? `${euros(plusGros.ttc)} sur ${plusGros.nb} écriture${plusGros.nb > 1 ? 's' : ''}` : undefined} />
+          sub={plusGros ? `${signe(plusGros.ttc)} sur ${plusGros.nb} écriture${plusGros.nb > 1 ? 's' : ''}` : undefined} />
         <StatCard label="Le plus fréquent" value={plusFrequent?.nom ?? '—'}
           sub={plusFrequent ? `${plusFrequent.nb} écritures` : undefined} />
       </div>
@@ -129,10 +141,10 @@ export function FournisseursPage() {
                 <tr key={l.nom}>
                   <td className="font-medium" style={{ color: 'var(--bbg-purple-darker)' }}>{l.nom}</td>
                   <td className="text-right tabular-nums">{l.nb}</td>
-                  <td className="text-right tabular-nums font-semibold">{euros(l.ttc)}</td>
-                  <td className="text-right tabular-nums">{euros(l.ht)}</td>
-                  <td className="text-right tabular-nums" style={{ color: '#6f6690' }}>{euros(l.tva)}</td>
-                  <td className="text-right tabular-nums" style={{ color: '#6f6690' }}>{euros(r2(l.ttc / l.nb))}</td>
+                  <td className="text-right tabular-nums font-semibold" style={{ color: teinte(l.ttc) }}>{signe(l.ttc)}</td>
+                  <td className="text-right tabular-nums" style={{ color: teinte(l.ht) }}>{signe(l.ht)}</td>
+                  <td className="text-right tabular-nums" style={{ color: '#6f6690' }}>{signe(l.tva)}</td>
+                  <td className="text-right tabular-nums" style={{ color: '#6f6690' }}>{signe(r2(l.ttc / l.nb))}</td>
                   <td>
                     <span className="text-xs rounded-full px-2 py-0.5"
                       style={{ backgroundColor: 'var(--bbg-green-light)', color: '#3f3268' }}>

@@ -1,14 +1,12 @@
 import { useRef, useState } from 'react';
-import { Plus, Upload, RotateCcw, Trash2 } from 'lucide-react';
+import { Plus, Upload, RotateCcw } from 'lucide-react';
 import { useStore } from '../../store';
 import { importBackup, exportBackup } from '../../utils/export';
 import { PageHeader, Card, Btn } from '../ui';
 
-type CatKind = 'categoriesDepenses' | 'categoriesJeux' | 'categoriesProduits';
-
 export function SettingsPage() {
   const state = useStore();
-  const { referentiels, addCategorie, removeCategorie, addPaiement, addComptePlanComptable, restoreAll, resetToSeed, entries } = state;
+  const { referentiels, addPaiement, addComptePlanComptable, restoreAll, resetToSeed, entries } = state;
   const fileRef = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -60,15 +58,6 @@ export function SettingsPage() {
           </p>
         </Card>
 
-        <div className="grid md:grid-cols-3 gap-4">
-          <CatCard titre="Catégories de dépenses" kind="categoriesDepenses" list={referentiels.categoriesDepenses}
-            onAdd={addCategorie} onRemove={removeCategorie} />
-          <CatCard titre="Catégories jeux" kind="categoriesJeux" list={referentiels.categoriesJeux}
-            onAdd={addCategorie} onRemove={removeCategorie} />
-          <CatCard titre="Catégories de produits" kind="categoriesProduits" list={referentiels.categoriesProduits}
-            onAdd={addCategorie} onRemove={removeCategorie} />
-        </div>
-
         <div className="grid md:grid-cols-2 gap-4">
           <Card title="Moyens de paiement">
             <ListEditor list={referentiels.paiements} onAdd={addPaiement} placeholder="ex. Virement BBG" />
@@ -90,47 +79,6 @@ export function SettingsPage() {
         </Card>
       </div>
     </div>
-  );
-}
-
-function CatCard({ titre, kind, list, onAdd, onRemove }: {
-  titre: string; kind: CatKind; list: string[];
-  onAdd: (kind: CatKind, name: string) => void;
-  onRemove: (kind: CatKind, name: string) => void;
-}) {
-  const [nom, setNom] = useState('');
-  const entries = useStore(s => s.entries);
-  return (
-    <Card title={titre}>
-      <ul className="space-y-1 mb-3 max-h-64 overflow-auto">
-        {list.map(c => {
-          const utilisee = entries.some(e => e.categorie === c);
-          return (
-            <li key={c} className="flex items-center justify-between text-sm text-[#3f3268] group">
-              <span>{c}</span>
-              <button
-                className="text-[#e3b3af] hover:text-[#b7332e] opacity-0 group-hover:opacity-100 disabled:hidden"
-                disabled={utilisee}
-                title={utilisee ? 'Utilisée par des écritures' : 'Supprimer'}
-                onClick={() => onRemove(kind, c)}
-              >
-                <Trash2 size={13} />
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-      <div className="flex gap-1">
-        <input
-          className="flex-1 border border-[#c9c0e4] rounded px-2 py-1 text-sm"
-          placeholder="Nouvelle catégorie"
-          value={nom}
-          onChange={ev => setNom(ev.target.value)}
-          onKeyDown={ev => { if (ev.key === 'Enter' && nom.trim()) { onAdd(kind, nom); setNom(''); } }}
-        />
-        <Btn variant="ghost" onClick={() => { if (nom.trim()) { onAdd(kind, nom); setNom(''); } }}><Plus size={14} /></Btn>
-      </div>
-    </Card>
   );
 }
 

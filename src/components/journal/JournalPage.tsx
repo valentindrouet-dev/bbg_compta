@@ -424,6 +424,8 @@ function Row({ e, kind, categories, isSelected, onToggleRow, clip, onCopy, onPas
   const dateHorsMois = e.mois !== PRE_IMMAT && e.date.slice(0, 7) !== e.mois;
   const isProduits = kind === 'produits';
   const pillCat = isProduits ? 'pill-green' : kind === 'jeux' ? 'pill-yellow' : 'pill-green';
+  // Couleur définie dans l'onglet Catégories, sinon la teinte par défaut du bloc.
+  const couleurCat = refs.categoriesMeta?.[e.categorie]?.couleur;
 
   function setTTC(ttc: number | null) {
     const v = ttc ?? 0;
@@ -475,7 +477,9 @@ function Row({ e, kind, categories, isSelected, onToggleRow, clip, onCopy, onPas
       </td>
       <td><TextCell value={e.description} onCommit={v => update(e.id, { description: v })} style={colStyle(formats.description)} /></td>
       <td>
-        <select className={pillCat} style={colStyle(formats.categorie)}
+        <select
+          className={couleurCat ? '' : pillCat}
+          style={{ ...colStyle(formats.categorie), ...(couleurCat ? { backgroundColor: couleurCat } : {}) }}
           value={e.categorie} onChange={ev => update(e.id, { categorie: ev.target.value })}>
           {!categories.includes(e.categorie) && e.categorie && <option value={e.categorie}>{e.categorie}</option>}
           {categories.map(c => <option key={c} value={c}>{c}</option>)}

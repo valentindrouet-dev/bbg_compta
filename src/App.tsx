@@ -16,12 +16,13 @@ import { TresoPrevPage } from './components/prev/TresoPrevPage';
 import { ChronoPage } from './components/prev/ChronoPage';
 import { ExportsPage } from './components/settings/ExportsPage';
 import { SettingsPage } from './components/settings/SettingsPage';
+import { CategoriesPage } from './components/settings/CategoriesPage';
 
 export type Page =
   | 'dashboard'
   | 'journal' | 'synthese' | 'immos' | 'treso' | 'tva' | 'rembours' | 'fournisseurs'
   | 'budgets' | 'reelprevu' | 'tresoprev' | 'chrono'
-  | 'exports' | 'settings';
+  | 'exports' | 'categories' | 'settings';
 
 export default function App() {
   const [page, setPage] = useState<Page>('dashboard');
@@ -64,6 +65,7 @@ export default function App() {
         {page === 'tresoprev' && <TresoPrevPage />}
         {page === 'chrono' && <ChronoPage />}
         {page === 'exports' && <ExportsPage />}
+        {page === 'categories' && <CategoriesPage />}
         {page === 'settings' && <SettingsPage />}
       </main>
     </div>

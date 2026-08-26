@@ -1,6 +1,6 @@
 import {
   Coins, LayoutDashboard, NotebookPen, Table2, Building2, Wallet, Percent,
-  UserRound, Target, GitCompareArrows, Landmark, CalendarRange, FileDown, Settings, Store,
+  UserRound, Target, GitCompareArrows, Landmark, CalendarRange, FileDown, Settings, Store, Tags,
 } from 'lucide-react';
 import type { Page } from '../../App';
 import { APP_VERSION } from '../../version';
@@ -24,7 +24,6 @@ const NAV: { section: string; items: { page: Page; label: string; icon: typeof C
       { page: 'treso', label: 'Trésorerie', icon: Wallet },
       { page: 'tva', label: 'TVA', icon: Percent },
       { page: 'fournisseurs', label: 'Fournisseurs', icon: Store },
-      { page: 'rembours', label: 'Remboursements Val', icon: UserRound },
     ],
   },
   {
@@ -37,8 +36,15 @@ const NAV: { section: string; items: { page: Page; label: string; icon: typeof C
     ],
   },
   {
+    section: 'Autres',
+    items: [
+      { page: 'rembours', label: 'Remboursements Val', icon: UserRound },
+    ],
+  },
+  {
     section: 'Outils',
     items: [
+      { page: 'categories', label: 'Catégories', icon: Tags },
       { page: 'exports', label: 'Exports', icon: FileDown },
       { page: 'settings', label: 'Paramètres', icon: Settings },
     ],
@@ -52,18 +58,16 @@ export function Sidebar({ page, onNavigate }: SidebarProps) {
       style={{ backgroundColor: 'var(--bbg-purple-darker)' }}
     >
       <div className="p-4 border-b" style={{ backgroundColor: 'var(--bbg-purple-dark)', borderColor: '#57458f' }}>
-        <div className="flex items-center gap-2">
-          <Coins size={22} style={{ color: 'var(--bbg-yellow)' }} />
-          <span className="font-bold text-lg">BBG Compta</span>
-        </div>
-        <p className="text-xs mt-1">
+        <div className="flex items-center gap-1.5">
+          <Coins size={19} className="shrink-0" style={{ color: 'var(--bbg-yellow)' }} />
+          <span className="font-bold text-base whitespace-nowrap">BBG Compta</span>
           <span
-            className="inline-block px-1.5 py-0.5 rounded font-mono font-semibold tracking-tight"
+            className="px-1 py-0.5 rounded text-[10px] font-mono font-semibold tracking-tight shrink-0"
             style={{ backgroundColor: 'var(--bbg-yellow)', color: 'var(--bbg-purple-darker)' }}
           >
             v{APP_VERSION}
           </span>
-        </p>
+        </div>
       </div>
 
       <nav className="flex-1 overflow-auto py-1">

@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type {
-  JournalEntry, FinanceEntry, BudgetExercice, ChronoEvent, TresoPrevLine, Referentiels,
+  JournalEntry, FinanceEntry, BudgetExercice, ChronoEvent, TresoPrevLine, Referentiels, CategorieMeta,
 } from '../types';
 import seedJournal from '../data/journal.json';
 import seedReferentiels from '../data/referentiels.json';
@@ -20,6 +20,8 @@ export interface ColFormat {
   color?: string;
   align?: 'left' | 'center' | 'right';
 }
+
+export type CatKind = 'categoriesDepenses' | 'categoriesJeux' | 'categoriesProduits';
 
 /** Clés dont la modification est enregistrée dans l'historique d'annulation. */
 const DATA_KEYS = ['entries', 'finances', 'referentiels', 'budgets', 'chronologie', 'tresoPrev', 'journalFormats'] as const;
@@ -68,8 +70,18 @@ export interface AppState {
   updateChrono: (id: string, patch: Partial<ChronoEvent>) => void;
   removeChrono: (id: string) => void;
 
-  addCategorie: (kind: 'categoriesDepenses' | 'categoriesJeux' | 'categoriesProduits', name: string) => void;
-  removeCategorie: (kind: 'categoriesDepenses' | 'categoriesJeux' | 'categoriesProduits', name: string) => void;
+  addCategorie: (kind: CatKind, name: string) => void;
+  removeCategorie: (kind: CatKind, name: string) => void;
+  /** Renomme une catégorie et répercute le nouveau nom sur toutes les écritures. */
+  renameCategorie: (kind: CatKind, ancien: string, nouveau: string) => void;
+  /** Couleur / groupe d'une ou plusieurs catégories. */
+  setCategorieMeta: (noms: string[], patch: CategorieMeta) => void;
+  /** Déplace des catégories vers un autre type (dépense, jeux, produit). */
+  moveCategories: (noms: string[], vers: CatKind) => void;
+  /** Fusionne des catégories dans une seule : les écritures suivent. */
+  mergeCategories: (noms: string[], cible: string) => void;
+  removeCategories: (noms: string[]) => void;
+  setGroupes: (groupes: string[]) => void;
   addPaiement: (name: string) => void;
   addComptePlanComptable: (name: string) => void;
 
@@ -273,6 +285,79 @@ export const useStore = create<AppState>()(
         if (used) return s;
         return { referentiels: { ...s.referentiels, [kind]: s.referentiels[kind].filter(c => c !== name) } };
       }),
+      renameCategorie: (kind, ancien, nouveau) => set(s => {
+        const nom = nouveau.trim();
+        if (!nom || nom === ancien) return s;
+        const meta = { ...(s.referentiels.categoriesMeta ?? {}) };
+        if (meta[ancien]) { meta[nom] = meta[ancien]; delete meta[ancien]; }
+        return {
+          referentiels: {
+            ...s.referentiels,
+            [kind]: s.referentiels[kind].map(c => c === ancien ? nom : c),
+            categoriesMeta: meta,
+          },
+          entries: s.entries.map(e => e.categorie === ancien ? { ...e, categorie: nom } : e),
+        };
+      }),
+
+      setCategorieMeta: (noms, patch) => set(s => {
+        const meta = { ...(s.referentiels.categoriesMeta ?? {}) };
+        for (const n of noms) meta[n] = { ...meta[n], ...patch };
+        return { referentiels: { ...s.referentiels, categoriesMeta: meta } };
+      }),
+
+      moveCategories: (noms, vers) => set(s => {
+        const set_ = new Set(noms);
+        const KINDS: CatKind[] = ['categoriesDepenses', 'categoriesJeux', 'categoriesProduits'];
+        const refs = { ...s.referentiels };
+        for (const k of KINDS) refs[k] = refs[k].filter(c => !set_.has(c));
+        refs[vers] = [...refs[vers], ...noms.filter(n => !refs[vers].includes(n))];
+        // Une catégorie de produit implique des écritures de type « produit ».
+        const nouveauType = vers === 'categoriesProduits' ? 'produit' : 'charges';
+        return {
+          referentiels: refs,
+          entries: s.entries.map(e => {
+            if (!set_.has(e.categorie)) return e;
+            if (vers === 'categoriesProduits') return { ...e, type: 'produit' as const };
+            return e.type === 'produit' ? { ...e, type: nouveauType as JournalEntry['type'] } : e;
+          }),
+        };
+      }),
+
+      mergeCategories: (noms, cible) => set(s => {
+        const aFusionner = noms.filter(n => n !== cible);
+        if (!aFusionner.length) return s;
+        const set_ = new Set(aFusionner);
+        const KINDS: CatKind[] = ['categoriesDepenses', 'categoriesJeux', 'categoriesProduits'];
+        const refs = { ...s.referentiels };
+        for (const k of KINDS) refs[k] = refs[k].filter(c => !set_.has(c));
+        const meta = { ...(refs.categoriesMeta ?? {}) };
+        for (const n of aFusionner) delete meta[n];
+        refs.categoriesMeta = meta;
+        return {
+          referentiels: refs,
+          entries: s.entries.map(e => set_.has(e.categorie) ? { ...e, categorie: cible } : e),
+        };
+      }),
+
+      removeCategories: (noms) => set(s => {
+        // On ne supprime que les catégories sans écriture rattachée.
+        const utilisees = new Set(s.entries.map(e => e.categorie));
+        const set_ = new Set(noms.filter(n => !utilisees.has(n)));
+        if (!set_.size) return s;
+        const KINDS: CatKind[] = ['categoriesDepenses', 'categoriesJeux', 'categoriesProduits'];
+        const refs = { ...s.referentiels };
+        for (const k of KINDS) refs[k] = refs[k].filter(c => !set_.has(c));
+        const meta = { ...(refs.categoriesMeta ?? {}) };
+        for (const n of set_) delete meta[n];
+        refs.categoriesMeta = meta;
+        return { referentiels: refs };
+      }),
+
+      setGroupes: (groupes) => set(s => ({
+        referentiels: { ...s.referentiels, groupes },
+      })),
+
       addPaiement: (name) => set(s => {
         if (!name.trim() || s.referentiels.paiements.includes(name.trim())) return s;
         return { referentiels: { ...s.referentiels, paiements: [...s.referentiels.paiements, name.trim()] } };
