@@ -26,13 +26,13 @@ export function BudgetPage() {
   if (!budget) return <div className="p-6">Aucun budget pour cet exercice.</div>;
 
   return (
-    <div className="p-6 max-w-full">
+    <div className="p-4 w-full">
       <PageHeader
         title="Budgets annuels"
         subtitle="Compte de résultat prévisionnel — les sous-totaux, résultats et la TVA sont recalculés automatiquement"
         actions={
           <select
-            className="border border-gray-300 rounded-md px-2 py-1.5 text-sm bg-white"
+            className="border border-[#c9c0e4] rounded-md px-2 py-1.5 text-sm bg-white"
             value={exercice}
             onChange={ev => setExercice(ev.target.value)}
           >
@@ -56,7 +56,7 @@ export function BudgetPage() {
               <tr>
                 <th className="text-left min-w-64">Ligne</th>
                 {budget.moisLabels.map((m, i) => <th key={i} className="text-right min-w-20">{m}</th>)}
-                <th className="text-right bg-yellow-50 min-w-24">Total</th>
+                <th className="text-right bg-[#efeafa] min-w-24">Total</th>
                 <th></th>
               </tr>
             </thead>
@@ -83,14 +83,14 @@ export function BudgetPage() {
               <TotalOnlyRow label="IS (15 % si bénéfice)" value={roll.isTotal} nMois={nMois} />
               <TotalOnlyRow label="Résultat net" value={roll.resultatNetTotal} nMois={nMois} strong />
 
-              <tr><td colSpan={nMois + 3} className="bg-gray-100 font-bold text-gray-700 py-1.5">TVA prévisionnelle</td></tr>
+              <tr className="band-purple"><td colSpan={nMois + 3} className="py-1.5">TVA prévisionnelle</td></tr>
               <ComputedRow label="TVA collectée (20 % du CA)" values={roll.tvaCollectee} />
               <ComputedRow label="TVA déductible (dépenses assujetties)" values={roll.tvaDeductible} />
               <ComputedRow label="TVA à reverser (− = crédit)" values={roll.tvaAReverser} strong />
             </tbody>
           </table>
         </div>
-        <p className="text-xs text-gray-400 mt-2">
+        <p className="text-xs text-[#9a92b5] mt-2">
           Montants HT. Les lignes « heures / jours / volume / % » sont informatives et n'entrent pas dans les totaux €.
           ⛔ = TVA non déductible dans le modèle (forfaits, festivals…).
         </p>
@@ -112,12 +112,16 @@ function SectionRows({ exercice, section, budget, grouped }: {
   const lignes = budget.lignes.filter(l => l.section === section);
 
   const rows: ReactNode[] = [];
+  const bandClass = section === 'ca' ? 'band-green'
+    : section === 'charges_externes' ? 'band-orange'
+    : section === 'couts_dev' ? 'band-yellow'
+    : 'band-purple';
   rows.push(
-    <tr key={`head-${section}`}>
-      <td colSpan={budget.nMois + 2} className="bg-gray-100 font-bold text-gray-700 py-1.5">{meta.label}</td>
-      <td className="bg-gray-100">
+    <tr key={`head-${section}`} className={bandClass}>
+      <td colSpan={budget.nMois + 2} className="py-1.5">{meta.label}</td>
+      <td>
         <button
-          className="text-gray-500 hover:text-gray-900" title="Ajouter une ligne"
+          className="text-[#6f6690] hover:text-[#3f3268]" title="Ajouter une ligne"
           onClick={() => addBudgetLine(exercice, {
             exercice, section, groupe: '', label: 'Nouvelle ligne', baseTTC: null, baseHT: null,
             kind: 'montant', valeurs: new Array(budget.nMois).fill(null),
@@ -134,8 +138,8 @@ function SectionRows({ exercice, section, budget, grouped }: {
     if (grouped && l.groupe !== lastGroup) {
       lastGroup = l.groupe;
       rows.push(
-        <tr key={`g-${section}-${l.groupe}`}>
-          <td colSpan={budget.nMois + 3} className="bg-gray-50 font-semibold text-gray-500 italic py-1">{l.groupe || 'Autre'}</td>
+        <tr key={`g-${section}-${l.groupe}`} className="band-yellow">
+          <td colSpan={budget.nMois + 3} className="font-semibold italic py-1">{l.groupe || 'Autre'}</td>
         </tr>,
       );
     }
@@ -154,11 +158,11 @@ function LineRow({ l, nMois, onCell, onRemove }: {
   const isEuro = l.kind === 'montant';
   const tot = l.valeurs.reduce<number>((s, v) => s + (v ?? 0), 0);
   return (
-    <tr className="group hover:bg-yellow-50/40">
+    <tr className="group hover:bg-[#f4f1fb]">
       <td>
         <div className="flex items-center gap-1.5">
           <input
-            className="w-full min-w-52 px-1 py-0.5 border border-transparent hover:border-gray-200 focus:border-gray-300 rounded text-xs bg-transparent"
+            className="w-full min-w-52 px-1 py-0.5 border border-transparent hover:border-[#ddd6ef] focus:border-[#c9c0e4] rounded text-xs bg-transparent"
             defaultValue={l.label}
             onBlur={ev => ev.target.value !== l.label && updateBudgetLine(l.exercice, l.id, { label: ev.target.value })}
           />
@@ -172,15 +176,15 @@ function LineRow({ l, nMois, onCell, onRemove }: {
           <MoneyInput
             value={l.valeurs[i] ?? null}
             onCommit={v => onCell(i, v)}
-            className="w-full min-w-16 border-transparent hover:border-gray-200 bg-transparent text-xs"
+            className="w-full min-w-16 border-transparent hover:border-[#ddd6ef] bg-transparent text-xs"
           />
         </td>
       ))}
-      <td className={`text-right tabular-nums font-medium bg-yellow-50 ${tot < 0 ? 'text-red-700' : ''}`}>
+      <td className={`text-right tabular-nums font-medium bg-[#efeafa] ${tot < 0 ? 'text-[#b7332e]' : ''}`}>
         {isEuro ? euros(r2(tot)) : r2(tot).toLocaleString('fr-FR')}
       </td>
       <td>
-        <button className="text-red-300 hover:text-red-600 opacity-0 group-hover:opacity-100" onClick={onRemove}>
+        <button className="text-[#e3b3af] hover:text-[#b7332e] opacity-0 group-hover:opacity-100" onClick={onRemove}>
           <Trash2 size={13} />
         </button>
       </td>
@@ -191,18 +195,19 @@ function LineRow({ l, nMois, onCell, onRemove }: {
 function ComputedRow({ label, values, strong, accent }: {
   label: string; values: number[]; strong?: boolean; accent?: boolean;
 }) {
-  const cls = accent
-    ? 'bg-yellow-50 font-bold'
-    : strong ? 'bg-gray-50 font-semibold' : 'text-gray-500';
+  // accent = solde intermédiaire (marge, VA, EBE…) -> vert du tableur
+  // strong = sous-total de section -> violet clair
+  const cls = accent ? 'band-green' : strong ? 'band-soft' : 'text-[#6f6690]';
   return (
     <tr className={cls}>
       <td className="italic">{label}</td>
       {values.map((v, i) => (
-        <td key={i} className={`text-right tabular-nums ${v < 0 ? 'text-red-700' : ''}`}>
+        <td key={i} className={`text-right tabular-nums ${v < 0 ? 'text-[#b7332e]' : ''}`}>
           {v !== 0 ? euros0(r2(v)) : '·'}
         </td>
       ))}
-      <td className={`text-right tabular-nums font-bold bg-yellow-100 ${total(values) < 0 ? 'text-red-700' : ''}`}>
+      <td className={`text-right tabular-nums font-bold ${total(values) < 0 ? 'text-[#b7332e]' : ''}`}
+          style={{ backgroundColor: 'var(--bbg-purple-light)' }}>
         {euros(total(values))}
       </td>
       <td></td>
@@ -214,10 +219,10 @@ function TotalOnlyRow({ label, value, nMois, strong }: {
   label: string; value: number; nMois: number; strong?: boolean;
 }) {
   return (
-    <tr className={strong ? 'bg-gray-50 font-bold' : 'text-gray-500'}>
+    <tr className={strong ? 'band-soft' : 'text-[#6f6690]'}>
       <td className="italic">{label}</td>
-      <td colSpan={nMois} className="text-center text-gray-300">calculé sur le total annuel</td>
-      <td className={`text-right tabular-nums font-bold bg-yellow-100 ${value < 0 ? 'text-red-700' : ''}`}>
+      <td colSpan={nMois} className="text-center text-[#c9c0e4]">calculé sur le total annuel</td>
+      <td className={`text-right tabular-nums font-bold bg-[#d9d2e9] ${value < 0 ? 'text-[#b7332e]' : ''}`}>
         {euros(value)}
       </td>
       <td></td>

@@ -6,7 +6,7 @@ import { formatDateFR, todayISO } from '../../utils/dates';
 import { PageHeader, Card, Btn, useSort, sortBy, ThSort } from '../ui';
 
 // Palette catégorielle validée (dataviz) — ordre fixe, une couleur par projet
-const COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948'];
+const COLORS = ['#674ea7', '#e69138', '#38761d', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948'];
 
 /** Groupe racine d'un événement : « Jeu 1 - Tirage 2 » -> « Jeu 1 ». */
 function racine(projet: string): string {
@@ -55,17 +55,17 @@ export function ChronoPage() {
   });
 
   return (
-    <div className="p-6 max-w-full">
+    <div className="p-4 w-full">
       <PageHeader
         title="Chronologie 2025-30"
         subtitle="Jalons de développement, tirages, sorties et périodes de ventes"
         actions={
           <>
-            <div className="flex rounded-md border border-gray-300 overflow-hidden text-sm">
+            <div className="flex rounded-md border border-[#c9c0e4] overflow-hidden text-sm">
               {(['timeline', 'liste'] as const).map(v => (
                 <button
                   key={v}
-                  className={`px-3 py-1.5 ${vue === v ? 'bg-yellow-500 text-gray-900 font-semibold' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                  className={`px-3 py-1.5 ${vue === v ? 'bg-[#674ea7] text-white text-[#3f3268] font-semibold' : 'bg-white text-[#5c5280] hover:bg-[#f4f1fb]'}`}
                   onClick={() => setVue(v)}
                 >
                   {v === 'timeline' ? 'Frise' : 'Liste'}
@@ -87,23 +87,23 @@ export function ChronoPage() {
               <div className="flex ml-[200px]">
                 {moisLabels.map((m, i) => (
                   <div key={i} className="w-[26px] text-center shrink-0">
-                    <div className="text-[10px] font-bold text-gray-700 h-4">{m.annee ?? ''}</div>
-                    <div className="text-[10px] text-gray-400">{m.label}</div>
+                    <div className="text-[10px] font-bold text-[#3f3268] h-4">{m.annee ?? ''}</div>
+                    <div className="text-[10px] text-[#9a92b5]">{m.label}</div>
                   </div>
                 ))}
               </div>
               {groupes.map((g, gi) => {
                 const evts = valides.filter(c => racine(c.projet) === g);
                 return (
-                  <div key={g} className="border-t border-gray-100 py-1.5">
-                    <div className="text-xs font-bold text-gray-700 mb-1">{g}</div>
+                  <div key={g} className="border-t border-[#ddd6ef] py-1.5">
+                    <div className="text-xs font-bold text-[#3f3268] mb-1">{g}</div>
                     {evts.map(c => {
                       const start = Math.max(0, moisIndex(c.debut, origine));
                       const endISO = /^\d{4}-\d{2}/.test(c.fin) ? c.fin : c.debut;
                       const end = Math.min(nMois - 1, Math.max(start, moisIndex(endISO, origine)));
                       return (
                         <div key={c.id} className="flex items-center h-6 group">
-                          <div className="w-[200px] shrink-0 text-[11px] text-gray-500 truncate pr-2" title={`${c.projet} — ${c.action}`}>
+                          <div className="w-[200px] shrink-0 text-[11px] text-[#6f6690] truncate pr-2" title={`${c.projet} — ${c.action}`}>
                             {c.projet !== g ? `${c.projet.slice(g.length).replace(/^ - /, '')} · ` : ''}{c.action}
                           </div>
                           <div className="relative flex-1 h-4" style={{ width: nMois * 26 }}>
@@ -132,7 +132,7 @@ export function ChronoPage() {
         <Card>
           <table className="sheet text-sm border-collapse w-full">
             <thead>
-              <tr className="text-left text-gray-600">
+              <tr className="text-left text-[#5c5280]">
                 <ThSort label="Projet" k="projet" sort={sort} onToggle={toggle} />
                 <ThSort label="Action" k="action" sort={sort} onToggle={toggle} />
                 <ThSort label="Début" k="debut" sort={sort} onToggle={toggle} />
@@ -156,29 +156,29 @@ function RowC({ c, onUpdate, onRemove }: {
   onRemove: (id: string) => void;
 }) {
   return (
-    <tr className="group hover:bg-yellow-50/40">
+    <tr className="group hover:bg-[#f4f1fb]">
       <td>
-        <input className="border border-gray-200 rounded px-1.5 py-1 text-sm w-40"
+        <input className="border border-[#ddd6ef] rounded px-1.5 py-1 text-sm w-40"
           defaultValue={c.projet} onBlur={ev => onUpdate(c.id, { projet: ev.target.value })} />
       </td>
       <td>
-        <input className="border border-gray-200 rounded px-1.5 py-1 text-sm w-52"
+        <input className="border border-[#ddd6ef] rounded px-1.5 py-1 text-sm w-52"
           defaultValue={c.action} onBlur={ev => onUpdate(c.id, { action: ev.target.value })} />
       </td>
       <td>
-        <input type="date" className="border border-gray-200 rounded px-1 py-0.5 text-sm"
+        <input type="date" className="border border-[#ddd6ef] rounded px-1 py-0.5 text-sm"
           value={c.debut} onChange={ev => ev.target.value && onUpdate(c.id, { debut: ev.target.value })} />
       </td>
       <td>
-        <input type="date" className="border border-gray-200 rounded px-1 py-0.5 text-sm"
+        <input type="date" className="border border-[#ddd6ef] rounded px-1 py-0.5 text-sm"
           value={c.fin} onChange={ev => ev.target.value && onUpdate(c.id, { fin: ev.target.value })} />
       </td>
       <td>
-        <input className="border border-gray-200 rounded px-1.5 py-1 text-sm w-52"
+        <input className="border border-[#ddd6ef] rounded px-1.5 py-1 text-sm w-52"
           defaultValue={c.detail ?? ''} onBlur={ev => onUpdate(c.id, { detail: ev.target.value })} />
       </td>
       <td>
-        <button className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100"
+        <button className="text-[#d98b86] hover:text-[#b7332e] opacity-0 group-hover:opacity-100"
           onClick={() => { if (confirm(`Supprimer « ${c.projet} — ${c.action} » ?`)) onRemove(c.id); }}>
           <Trash2 size={14} />
         </button>

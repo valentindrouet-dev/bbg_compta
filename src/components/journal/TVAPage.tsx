@@ -19,13 +19,13 @@ export function TVAPage() {
   const solde = r2(tot.collectee - tot.deductible);
 
   return (
-    <div className="p-6 max-w-[1100px]">
+    <div className="p-4 w-full max-w-[1300px]">
       <PageHeader
         title="TVA"
         subtitle="TVA collectée sur les produits, déductible sur les dépenses — calculée écriture par écriture"
         actions={
           <select
-            className="border border-gray-300 rounded-md px-2 py-1.5 text-sm bg-white"
+            className="border border-[#c9c0e4] rounded-md px-2 py-1.5 text-sm bg-white"
             value={exercice}
             onChange={ev => setExercice(ev.target.value)}
           >
@@ -48,7 +48,7 @@ export function TVAPage() {
         <div className="overflow-x-auto -mx-4 px-4">
           <table className="sheet text-sm border-collapse w-full">
             <thead>
-              <tr className="text-left text-gray-600">
+              <tr className="text-left text-[#5c5280]">
                 <th>Mois</th>
                 <th className="text-right">CA TTC</th>
                 <th className="text-right">CA HT</th>
@@ -70,17 +70,17 @@ export function TVAPage() {
                   <td className="text-right tabular-nums">{x.depTTC ? euros(x.depTTC) : '·'}</td>
                   <td className="text-right tabular-nums">{x.depHT ? euros(x.depHT) : '·'}</td>
                   <td className="text-right tabular-nums">{x.tvaDeductible ? euros(x.tvaDeductible) : '·'}</td>
-                  <td className={`text-right tabular-nums ${x.solde > 0 ? 'text-red-700' : 'text-emerald-700'}`}>
+                  <td className={`text-right tabular-nums ${x.solde > 0 ? 'text-[#b7332e]' : 'text-[#38761d]'}`}>
                     {euros(x.solde)}
                   </td>
-                  <td className={`text-right tabular-nums font-semibold ${x.cumul > 0 ? 'text-red-700' : 'text-emerald-700'}`}>
+                  <td className={`text-right tabular-nums font-semibold ${x.cumul > 0 ? 'text-[#b7332e]' : 'text-[#38761d]'}`}>
                     {euros(x.cumul)}
                   </td>
                 </tr>
               ))}
             </tbody>
             <tfoot>
-              <tr className="font-bold bg-yellow-50">
+              <tr className="font-bold bg-[#efeafa]">
                 <td>Total exercice</td>
                 <td className="text-right tabular-nums">{euros(r2(rows.reduce((s, x) => s + x.caTTC, 0)))}</td>
                 <td className="text-right tabular-nums">{euros(r2(rows.reduce((s, x) => s + x.caHT, 0)))}</td>
@@ -93,7 +93,7 @@ export function TVAPage() {
             </tfoot>
           </table>
         </div>
-        <p className="text-xs text-gray-400 mt-2">
+        <p className="text-xs text-[#9a92b5] mt-2">
           * Solde du mois = TVA collectée − TVA déductible. Positif (rouge) : TVA due à l'État ;
           négatif (vert) : crédit de TVA. Le cumul se remet à zéro après chaque déclaration —
           il court ici sur tout l'exercice à titre indicatif.

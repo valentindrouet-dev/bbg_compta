@@ -25,6 +25,12 @@ export interface AppState {
   updateEntry: (id: string, patch: Partial<JournalEntry>) => void;
   removeEntry: (id: string) => void;
   duplicateEntry: (id: string) => void;
+  /** Modification groupée : applique le meme patch a plusieurs ecritures. */
+  updateEntries: (ids: string[], patch: Partial<JournalEntry>) => void;
+  removeEntries: (ids: string[]) => void;
+  duplicateEntries: (ids: string[]) => void;
+  /** Colle le contenu d'une ecriture source dans une ecriture cible. */
+  pasteInto: (targetId: string, source: JournalEntry) => void;
 
   addFinance: (f: Omit<FinanceEntry, 'id'>) => void;
   updateFinance: (id: string, patch: Partial<FinanceEntry>) => void;
@@ -78,6 +84,38 @@ export const useStore = create<AppState>()(
         if (!src) return s;
         return { entries: [...s.entries, { ...src, id: uid(), facture: '' }] };
       }),
+
+      updateEntries: (ids, patch) => set(s => {
+        const set_ = new Set(ids);
+        return { entries: s.entries.map(e => set_.has(e.id) ? { ...e, ...patch } : e) };
+      }),
+      removeEntries: (ids) => set(s => {
+        const set_ = new Set(ids);
+        return { entries: s.entries.filter(e => !set_.has(e.id)) };
+      }),
+      duplicateEntries: (ids) => set(s => {
+        const set_ = new Set(ids);
+        const copies = s.entries.filter(e => set_.has(e.id)).map(e => ({ ...e, id: uid(), facture: '' }));
+        return { entries: [...s.entries, ...copies] };
+      }),
+      pasteInto: (targetId, source) => set(s => ({
+        entries: s.entries.map(e => e.id === targetId ? {
+          // On garde l'identite et le rattachement de la ligne cible ;
+          // tout le contenu vient de la ligne copiee.
+          ...e,
+          fournisseur: source.fournisseur,
+          description: source.description,
+          categorie: source.categorie,
+          ttc: source.ttc,
+          tva: source.tva,
+          ht: source.ht,
+          paiement: source.paiement,
+          type: source.type,
+          compta: source.compta,
+          motsCles: source.motsCles,
+          immoDureeAns: source.immoDureeAns,
+        } : e),
+      })),
 
       addFinance: (f) => set(s => ({ finances: [...s.finances, { ...f, id: uid() }] })),
       updateFinance: (id, patch) => set(s => ({

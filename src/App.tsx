@@ -24,7 +24,7 @@ export default function App() {
   const [page, setPage] = useState<Page>('dashboard');
 
   return (
-    <div className="flex h-screen bg-gray-100 overflow-hidden">
+    <div className="flex h-screen overflow-hidden" style={{ backgroundColor: '#f6f4fc' }}>
       <Sidebar page={page} onNavigate={setPage} />
       <main className="flex-1 overflow-auto">
         {page === 'dashboard' && <Dashboard onNavigate={setPage} />}

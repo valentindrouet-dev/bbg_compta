@@ -45,20 +45,23 @@ const NAV: { section: string; items: { page: Page; label: string; icon: typeof C
 
 export function Sidebar({ page, onNavigate }: SidebarProps) {
   return (
-    <aside className="w-64 bg-gray-900 text-white flex flex-col h-full shrink-0">
-      <div className="p-4 bg-gray-800 border-b border-gray-700">
+    <aside
+      className="w-60 text-white flex flex-col h-full shrink-0"
+      style={{ backgroundColor: 'var(--bbg-purple-darker)' }}
+    >
+      <div className="p-4 border-b" style={{ backgroundColor: 'var(--bbg-purple-dark)', borderColor: '#57458f' }}>
         <div className="flex items-center gap-2">
-          <Coins className="text-yellow-400" size={22} />
+          <Coins size={22} style={{ color: 'var(--bbg-yellow)' }} />
           <span className="font-bold text-lg">BBG Compta</span>
         </div>
-        <p className="text-xs text-gray-400 mt-1">Comptabilité &amp; prévisionnel</p>
+        <p className="text-xs mt-1" style={{ color: 'var(--bbg-purple-light)' }}>Comptabilité &amp; prévisionnel</p>
       </div>
 
       <nav className="flex-1 overflow-auto py-1">
         {NAV.map(group => (
           <div key={group.section || 'top'}>
             {group.section && (
-              <div className="px-4 pt-3 pb-1 text-xs text-gray-500 uppercase tracking-wide">
+              <div className="px-4 pt-3 pb-1 text-[11px] uppercase tracking-wide" style={{ color: '#a99ad6' }}>
                 {group.section}
               </div>
             )}
@@ -68,9 +71,12 @@ export function Sidebar({ page, onNavigate }: SidebarProps) {
               return (
                 <button
                   key={item.page}
-                  className={`w-full flex items-center gap-2 px-4 py-2 text-sm text-left transition-colors ${
-                    active ? 'bg-yellow-500 text-gray-900 font-bold' : 'text-gray-300 hover:bg-gray-800'
-                  }`}
+                  className="w-full flex items-center gap-2 px-4 py-2 text-sm text-left transition-colors"
+                  style={active
+                    ? { backgroundColor: 'var(--bbg-purple-light)', color: 'var(--bbg-purple-darker)', fontWeight: 700, boxShadow: 'inset 3px 0 0 var(--bbg-yellow)' }
+                    : { color: '#ded7f2' }}
+                  onMouseEnter={ev => { if (!active) ev.currentTarget.style.backgroundColor = 'var(--bbg-purple-dark)'; }}
+                  onMouseLeave={ev => { if (!active) ev.currentTarget.style.backgroundColor = 'transparent'; }}
                   onClick={() => onNavigate(item.page)}
                 >
                   <Icon size={15} className="shrink-0" />
@@ -82,7 +88,7 @@ export function Sidebar({ page, onNavigate }: SidebarProps) {
         ))}
       </nav>
 
-      <div className="p-3 text-[11px] text-gray-500 border-t border-gray-800">
+      <div className="p-3 text-[11px] border-t" style={{ color: '#a99ad6', borderColor: '#57458f' }}>
         Données stockées dans ce navigateur.<br />
         Pense à faire une sauvegarde (Paramètres).
       </div>

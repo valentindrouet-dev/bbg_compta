@@ -1,22 +1,125 @@
 @import "tailwindcss";
 
+/* ------------------------------------------------------------------ */
+/*  Palette Big Budi Games — reprise des couleurs des tableurs Sheets  */
+/* ------------------------------------------------------------------ */
+:root {
+  /* Violets : en-têtes de colonnes, barre latérale, lignes de totaux */
+  --bbg-purple:        #8e7cc3;
+  --bbg-purple-dark:   #674ea7;
+  --bbg-purple-darker: #3f3268;
+  --bbg-purple-light:  #d9d2e9;
+  --bbg-lavender:      #f4f1fb;
+  --bbg-lavender-2:    #e9e3f7;
+
+  /* Verts : produits, chiffre d'affaires, totaux positifs */
+  --bbg-green:         #b7e1cd;
+  --bbg-green-light:   #d9ead3;
+  --bbg-green-dark:    #38761d;
+
+  /* Oranges / pêche : charges externes */
+  --bbg-orange:        #f9cb9c;
+  --bbg-orange-light:  #fce5cd;
+  --bbg-orange-dark:   #b45f06;
+
+  /* Jaunes : sections jeux / EDIT */
+  --bbg-yellow:        #ffe599;
+  --bbg-yellow-light:  #fff2cc;
+  --bbg-yellow-dark:   #7f6000;
+
+  --bbg-border:        #c9c0e4;
+  --bbg-border-soft:   #ddd6ef;
+}
+
 body {
   margin: 0;
   font-family: system-ui, -apple-system, sans-serif;
+  background: #f6f4fc;
 }
 
 input[type="number"]::-webkit-inner-spin-button,
-input[type="number"]::-webkit-outer-spin-button {
-  opacity: 0.5;
-}
+input[type="number"]::-webkit-outer-spin-button { opacity: 0.5; }
 
-/* Tableaux denses type tableur */
-.sheet th, .sheet td {
-  border: 1px solid theme(--color-gray-200);
-  padding: 0.3rem 0.5rem;
-  white-space: nowrap;
+/* ------------------------------------------------------------------ */
+/*  Tableaux « tableur »                                              */
+/* ------------------------------------------------------------------ */
+.sheet {
+  border-collapse: collapse;
+  width: 100%;
 }
 .sheet th {
-  background: theme(--color-gray-50);
+  background: var(--bbg-purple);
+  color: #fff;
   font-weight: 600;
+  text-align: left;
+  border: 1px solid var(--bbg-purple-dark);
+  padding: 0.3rem 0.4rem;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+.sheet th.num { text-align: right; }
+.sheet td {
+  border: 1px solid var(--bbg-border-soft);
+  padding: 0.1rem 0.25rem;
+  vertical-align: middle;
+}
+.sheet tbody tr:nth-child(even) > td { background: var(--bbg-lavender); }
+.sheet tbody tr:hover > td { background: var(--bbg-lavender-2); }
+.sheet tbody tr.is-selected > td { background: #ded4f5; }
+.sheet tfoot td {
+  background: var(--bbg-purple-light);
+  border-color: var(--bbg-purple);
+  font-weight: 700;
+  padding: 0.3rem 0.4rem;
+}
+
+/* Champs de saisie : discrets, façon cellule de tableur */
+.sheet input,
+.sheet select {
+  width: 100%;
+  max-width: 100%;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  padding: 0.15rem 0.25rem;
+  font-size: inherit;
+  font-family: inherit;
+  color: inherit;
+}
+.sheet input:hover,
+.sheet select:hover { border-color: var(--bbg-border); background: #fff; }
+.sheet input:focus,
+.sheet select:focus {
+  outline: none;
+  border-color: var(--bbg-purple-dark);
+  background: #fff;
+  box-shadow: 0 0 0 2px rgba(103, 78, 167, 0.22);
+}
+.sheet input:disabled { color: #9b95a8; }
+.sheet input.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Pastilles colorées, comme les listes déroulantes du tableur */
+.sheet select.pill-green  { background: var(--bbg-green-light); }
+.sheet select.pill-orange { background: var(--bbg-orange-light); }
+.sheet select.pill-yellow { background: var(--bbg-yellow-light); }
+.sheet select.pill-green:hover  { background: #cbe3c2; border-color: var(--bbg-border); }
+.sheet select.pill-orange:hover { background: #f8d9b6; border-color: var(--bbg-border); }
+.sheet select.pill-yellow:hover { background: #ffe9ad; border-color: var(--bbg-border); }
+
+/* Bandeaux de section dans les tableaux larges (budgets, synthèse) */
+.sheet tr.band-purple > td { background: var(--bbg-purple-light) !important; font-weight: 700; color: var(--bbg-purple-darker); }
+.sheet tr.band-green  > td { background: var(--bbg-green) !important;        font-weight: 700; }
+.sheet tr.band-orange > td { background: var(--bbg-orange) !important;       font-weight: 700; }
+.sheet tr.band-yellow > td { background: var(--bbg-yellow-light) !important; color: var(--bbg-yellow-dark); }
+.sheet tr.band-soft   > td { background: #efeafa !important; font-weight: 600; }
+
+/* Mode « collage » : la ligne entière devient cliquable */
+.paste-mode .sheet tbody tr { cursor: copy; }
+.paste-mode .sheet tbody td input,
+.paste-mode .sheet tbody td select,
+.paste-mode .sheet tbody td button { pointer-events: none; }
+.paste-mode .sheet tbody tr:hover > td {
+  background: var(--bbg-yellow-light);
+  border-color: var(--bbg-yellow-dark);
 }

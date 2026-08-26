@@ -51,7 +51,7 @@ export function TresoPrevPage() {
   }, [entries, finances]);
 
   return (
-    <div className="p-6 max-w-[1200px]">
+    <div className="p-4 w-full max-w-[1400px]">
       <PageHeader
         title="Trésorerie prévisionnelle vs réalisée"
         subtitle="Vue TTC par exercice — le réalisé est calculé depuis le journal, sans IMPORTRANGE"
@@ -61,10 +61,10 @@ export function TresoPrevPage() {
         <div className="overflow-x-auto -mx-4 px-4">
           <table className="sheet text-sm border-collapse w-full">
             <thead>
-              <tr className="text-left text-gray-600">
+              <tr className="text-left text-[#5c5280]">
                 <th className="min-w-56">Catégories (TTC)</th>
                 {EXERCICES.map(ex => <th key={ex} className="text-right">{ex}</th>)}
-                <th className="text-right bg-yellow-50">Total</th>
+                <th className="text-right bg-[#efeafa]">Total</th>
               </tr>
             </thead>
             <tbody>
@@ -72,24 +72,24 @@ export function TresoPrevPage() {
                 const tot = l.valeurs.reduce<number>((s, v) => s + (v ?? 0), 0);
                 const isComputed = ['Entrées Totales', 'Dépenses Totales', 'Cumulé (TTC)', 'Trésorerie (TTC)'].includes(l.label);
                 return (
-                  <tr key={l.label + li} className={isComputed ? 'bg-gray-50 font-semibold' : 'hover:bg-yellow-50/40'}>
+                  <tr key={l.label + li} className={isComputed ? 'bg-[#f4f1fb] font-semibold' : 'hover:bg-[#f4f1fb]'}>
                     <td>{l.label}</td>
                     {l.valeurs.map((v, ei) => (
                       <td key={ei} className="text-right p-0.5!">
                         {isComputed
-                          ? <span className={`tabular-nums px-1.5 ${(v ?? 0) < 0 ? 'text-red-700' : ''}`}>{v != null ? euros(v) : '—'}</span>
+                          ? <span className={`tabular-nums px-1.5 ${(v ?? 0) < 0 ? 'text-[#b7332e]' : ''}`}>{v != null ? euros(v) : '—'}</span>
                           : <MoneyInput value={v} onCommit={x => setPrevCell(li, ei, x)}
-                              className="w-full min-w-24 border-transparent hover:border-gray-200 bg-transparent" />}
+                              className="w-full min-w-24 border-transparent hover:border-[#ddd6ef] bg-transparent" />}
                       </td>
                     ))}
-                    <td className={`text-right tabular-nums font-medium bg-yellow-50 ${tot < 0 ? 'text-red-700' : ''}`}>{euros(r2(tot))}</td>
+                    <td className={`text-right tabular-nums font-medium bg-[#efeafa] ${tot < 0 ? 'text-[#b7332e]' : ''}`}>{euros(r2(tot))}</td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
         </div>
-        <p className="text-xs text-gray-400 mt-2">
+        <p className="text-xs text-[#9a92b5] mt-2">
           Repris de ton tableur (les cellules en erreur #REF! sont vides — à compléter).
           Les lignes « Totales / Cumulé / Trésorerie » affichent les valeurs importées ; elles seront recalculées
           quand les liaisons avec le production calculator seront en place.
@@ -100,7 +100,7 @@ export function TresoPrevPage() {
         <div className="overflow-x-auto -mx-4 px-4">
           <table className="sheet text-sm border-collapse w-full">
             <thead>
-              <tr className="text-left text-gray-600">
+              <tr className="text-left text-[#5c5280]">
                 <th className="min-w-56">Catégories (TTC)</th>
                 {realise.map(x => <th key={x.ex} className="text-right">{x.ex}</th>)}
               </tr>
@@ -120,7 +120,7 @@ export function TresoPrevPage() {
             </tbody>
           </table>
         </div>
-        <p className="text-xs text-gray-400 mt-2">
+        <p className="text-xs text-[#9a92b5] mt-2">
           La trésorerie fin d'exercice cumule les exercices précédents. Les placements y figurent en sortie :
           la trésorerie affichée est la trésorerie disponible (hors comptes à terme).
         </p>
@@ -140,12 +140,12 @@ function RowR({ label, get, realise, strong, accent }: {
   realise: RealiseRow[]; strong?: boolean; accent?: boolean;
 }) {
   return (
-    <tr className={accent ? 'bg-yellow-50 font-bold' : strong ? 'bg-gray-50 font-semibold' : ''}>
+    <tr className={accent ? 'bg-[#efeafa] font-bold' : strong ? 'bg-[#f4f1fb] font-semibold' : ''}>
       <td>{label}</td>
       {realise.map((x, i) => {
         const v = get(x);
         return (
-          <td key={i} className={`text-right tabular-nums ${v < 0 ? 'text-red-700' : ''}`}>
+          <td key={i} className={`text-right tabular-nums ${v < 0 ? 'text-[#b7332e]' : ''}`}>
             {v !== 0 ? euros(v) : '·'}
           </td>
         );

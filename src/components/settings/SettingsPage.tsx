@@ -27,7 +27,7 @@ export function SettingsPage() {
       <PageHeader title="Paramètres" subtitle="Référentiels, sauvegarde et restauration" />
 
       {message && (
-        <div className="mb-4 px-4 py-2.5 bg-yellow-50 border border-yellow-200 rounded-md text-sm text-gray-800">
+        <div className="mb-4 px-4 py-2.5 bg-[#efeafa] border border-[#c9c0e4] rounded-md text-sm text-[#3f3268]">
           {message}
         </div>
       )}
@@ -52,7 +52,7 @@ export function SettingsPage() {
               <span className="inline-flex items-center gap-1"><RotateCcw size={14} /> Réinitialiser à l'import initial</span>
             </Btn>
           </div>
-          <p className="text-xs text-gray-400 mt-3">
+          <p className="text-xs text-[#9a92b5] mt-3">
             Les données vivent dans le stockage local de ce navigateur ({entries.length} écritures actuellement).
             Fais une sauvegarde régulière, et avant de changer de navigateur ou de machine.
           </p>
@@ -77,12 +77,12 @@ export function SettingsPage() {
         </div>
 
         <Card title="À propos des données importées">
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-[#5c5280]">
             Les données initiales proviennent de tes deux tableurs (🧾 Journal Comptable 2025-26 et
             🎯 Budget prévisionnel 2025-30), importés le 26/08/2026. Lors de cet import, quelques
             anomalies des tableurs ont été détectées et corrigées ici (totaux sur plages incomplètes,
             références cassées, valeur fantôme dans un récap) — le détail est dans le fichier
-            <code className="mx-1 px-1 bg-gray-100 rounded">RAPPORT_ANOMALIES.md</code> du dépôt.
+            <code className="mx-1 px-1 bg-[#e9e3f7] rounded">RAPPORT_ANOMALIES.md</code> du dépôt.
             Ce site recalcule tous les totaux à partir des écritures : ils sont justes par construction.
           </p>
         </Card>
@@ -104,10 +104,10 @@ function CatCard({ titre, kind, list, onAdd, onRemove }: {
         {list.map(c => {
           const utilisee = entries.some(e => e.categorie === c);
           return (
-            <li key={c} className="flex items-center justify-between text-sm text-gray-700 group">
+            <li key={c} className="flex items-center justify-between text-sm text-[#3f3268] group">
               <span>{c}</span>
               <button
-                className="text-red-300 hover:text-red-600 opacity-0 group-hover:opacity-100 disabled:hidden"
+                className="text-[#e3b3af] hover:text-[#b7332e] opacity-0 group-hover:opacity-100 disabled:hidden"
                 disabled={utilisee}
                 title={utilisee ? 'Utilisée par des écritures' : 'Supprimer'}
                 onClick={() => onRemove(kind, c)}
@@ -120,7 +120,7 @@ function CatCard({ titre, kind, list, onAdd, onRemove }: {
       </ul>
       <div className="flex gap-1">
         <input
-          className="flex-1 border border-gray-300 rounded px-2 py-1 text-sm"
+          className="flex-1 border border-[#c9c0e4] rounded px-2 py-1 text-sm"
           placeholder="Nouvelle catégorie"
           value={nom}
           onChange={ev => setNom(ev.target.value)}
@@ -138,12 +138,12 @@ function ListEditor({ list, onAdd, placeholder }: {
   const [nom, setNom] = useState('');
   return (
     <>
-      <ul className="space-y-1 mb-3 max-h-48 overflow-auto text-sm text-gray-700">
+      <ul className="space-y-1 mb-3 max-h-48 overflow-auto text-sm text-[#3f3268]">
         {list.map(c => <li key={c}>{c}</li>)}
       </ul>
       <div className="flex gap-1">
         <input
-          className="flex-1 border border-gray-300 rounded px-2 py-1 text-sm"
+          className="flex-1 border border-[#c9c0e4] rounded px-2 py-1 text-sm"
           placeholder={placeholder}
           value={nom}
           onChange={ev => setNom(ev.target.value)}

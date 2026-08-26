@@ -31,13 +31,13 @@ export function RemboursPage() {
   );
 
   return (
-    <div className="p-6 max-w-[1200px]">
+    <div className="p-4 w-full">
       <PageHeader
         title="Remboursements Val"
         subtitle="Dépenses payées avec une carte personnelle, à rembourser par la société"
         actions={
           <select
-            className="border border-gray-300 rounded-md px-2 py-1.5 text-sm bg-white"
+            className="border border-[#c9c0e4] rounded-md px-2 py-1.5 text-sm bg-white"
             value={paiement}
             onChange={ev => setPaiement(ev.target.value)}
           >
@@ -57,7 +57,7 @@ export function RemboursPage() {
         <div className="overflow-x-auto -mx-4 px-4">
           <table className="sheet text-sm border-collapse w-full">
             <thead>
-              <tr className="text-left text-gray-600">
+              <tr className="text-left text-[#5c5280]">
                 <ThSort label="Date" k="date" sort={sort} onToggle={toggle} />
                 <ThSort label="Mois" k="mois" sort={sort} onToggle={toggle} />
                 <ThSort label="Fournisseur" k="fournisseur" sort={sort} onToggle={toggle} />
@@ -71,21 +71,21 @@ export function RemboursPage() {
             </thead>
             <tbody>
               {rows.map(e => (
-                <tr key={e.id} className="hover:bg-yellow-50/40">
+                <tr key={e.id} className="hover:bg-[#f4f1fb]">
                   <td>{formatDateFR(e.date)}</td>
-                  <td className="text-gray-500">{labelMois(e.mois)}</td>
+                  <td className="text-[#6f6690]">{labelMois(e.mois)}</td>
                   <td>{e.fournisseur}</td>
                   <td>{e.description}</td>
                   <td>{e.categorie}</td>
-                  <td className="text-gray-500">{e.type}</td>
+                  <td className="text-[#6f6690]">{e.type}</td>
                   <td className="text-right tabular-nums font-medium">{euros(e.ttc)}</td>
-                  <td className="text-right tabular-nums text-gray-500">{euros(e.ht)}</td>
-                  <td className="text-gray-500 max-w-44 truncate" title={e.facture}>{e.facture}</td>
+                  <td className="text-right tabular-nums text-[#6f6690]">{euros(e.ht)}</td>
+                  <td className="text-[#6f6690] max-w-44 truncate" title={e.facture}>{e.facture}</td>
                 </tr>
               ))}
             </tbody>
             <tfoot>
-              <tr className="font-bold bg-yellow-50">
+              <tr className="font-bold bg-[#efeafa]">
                 <td colSpan={6}>Total ({list.length} écritures)</td>
                 <td className="text-right tabular-nums">{euros(totTTC)}</td>
                 <td className="text-right tabular-nums">{euros(r2(list.reduce((s, e) => s + e.ht, 0)))}</td>

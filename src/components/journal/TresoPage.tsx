@@ -34,7 +34,7 @@ export function TresoPage() {
   const [showFinances, setShowFinances] = useState(false);
 
   return (
-    <div className="p-6 max-w-[1100px]">
+    <div className="p-4 w-full max-w-[1300px]">
       <PageHeader
         title="Trésorerie"
         subtitle="Encaissements et décaissements TTC, mouvements financiers inclus — calculés depuis le journal"
@@ -61,7 +61,7 @@ export function TresoPage() {
         >
           <table className="sheet text-sm border-collapse w-full">
             <thead>
-              <tr className="text-left text-gray-600">
+              <tr className="text-left text-[#5c5280]">
                 <th>Date</th><th>Libellé</th><th>Type</th>
                 <th className="text-right">Montant (+ entrée / − sortie)</th><th></th>
               </tr>
@@ -70,15 +70,15 @@ export function TresoPage() {
               {[...finances].sort((a, b) => a.date.localeCompare(b.date)).map(f => (
                 <tr key={f.id} className="group">
                   <td>
-                    <input type="date" className="border border-gray-200 rounded px-1 py-0.5 text-sm"
+                    <input type="date" className="border border-[#ddd6ef] rounded px-1 py-0.5 text-sm"
                       value={f.date} onChange={ev => ev.target.value && updateFinance(f.id, { date: ev.target.value })} />
                   </td>
                   <td>
-                    <input className="border border-gray-200 rounded px-1.5 py-1 text-sm w-72"
+                    <input className="border border-[#ddd6ef] rounded px-1.5 py-1 text-sm w-72"
                       defaultValue={f.label} onBlur={ev => updateFinance(f.id, { label: ev.target.value })} />
                   </td>
                   <td>
-                    <select className="border border-gray-200 rounded px-1 py-1 text-sm bg-white"
+                    <select className="border border-[#ddd6ef] rounded px-1 py-1 text-sm bg-white"
                       value={f.type} onChange={ev => updateFinance(f.id, { type: ev.target.value as FinanceEntry['type'] })}>
                       {FINANCE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                     </select>
@@ -87,7 +87,7 @@ export function TresoPage() {
                     <MoneyInput value={f.montant} onCommit={v => updateFinance(f.id, { montant: v ?? 0 })} className="w-32" />
                   </td>
                   <td>
-                    <button className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100"
+                    <button className="text-[#d98b86] hover:text-[#b7332e] opacity-0 group-hover:opacity-100"
                       onClick={() => { if (confirm(`Supprimer « ${f.label} » ?`)) removeFinance(f.id); }}>
                       <Trash2 size={14} />
                     </button>
@@ -103,7 +103,7 @@ export function TresoPage() {
         <div className="overflow-x-auto -mx-4 px-4">
           <table className="sheet text-sm border-collapse w-full">
             <thead>
-              <tr className="text-left text-gray-600">
+              <tr className="text-left text-[#5c5280]">
                 <th>Mois</th>
                 <th className="text-right">Solde initial</th>
                 <th className="text-right">Encaissements</th>
@@ -114,15 +114,15 @@ export function TresoPage() {
             </thead>
             <tbody>
               {rows.map(row => (
-                <tr key={row.mois} className={row.mois === moisCourant() ? 'bg-yellow-50' : ''}>
+                <tr key={row.mois} className={row.mois === moisCourant() ? 'bg-[#efeafa]' : ''}>
                   <td className="font-medium">{labelMois(row.mois)}</td>
-                  <td className="text-right tabular-nums text-gray-500">{euros(row.soldeInitial)}</td>
-                  <td className="text-right tabular-nums text-emerald-700">{row.encaissements ? euros(row.encaissements) : '·'}</td>
-                  <td className="text-right tabular-nums text-red-700">{row.decaissements ? '−' + euros(row.decaissements) : '·'}</td>
-                  <td className={`text-right tabular-nums ${row.soldeMensuel >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                  <td className="text-right tabular-nums text-[#6f6690]">{euros(row.soldeInitial)}</td>
+                  <td className="text-right tabular-nums text-[#38761d]">{row.encaissements ? euros(row.encaissements) : '·'}</td>
+                  <td className="text-right tabular-nums text-[#b7332e]">{row.decaissements ? '−' + euros(row.decaissements) : '·'}</td>
+                  <td className={`text-right tabular-nums ${row.soldeMensuel >= 0 ? 'text-[#38761d]' : 'text-[#b7332e]'}`}>
                     {euros(row.soldeMensuel)}
                   </td>
-                  <td className={`text-right tabular-nums font-semibold ${row.soldeCumule >= 0 ? '' : 'text-red-700'}`}>
+                  <td className={`text-right tabular-nums font-semibold ${row.soldeCumule >= 0 ? '' : 'text-[#b7332e]'}`}>
                     {euros(row.soldeCumule)}
                   </td>
                 </tr>
@@ -130,7 +130,7 @@ export function TresoPage() {
             </tbody>
           </table>
         </div>
-        <p className="text-xs text-gray-400 mt-2">
+        <p className="text-xs text-[#9a92b5] mt-2">
           Les mouvements financiers du {formatDateFR(finances[0]?.date ?? '')} et suivants (capital, CCA, placements)
           sont inclus dans les encaissements/décaissements de leur mois.
         </p>

@@ -10,12 +10,13 @@ import { euros, euros0, r2 } from '../../utils/money';
 import { syntheseExercice, tableauTreso, tableauTVA, moisTresorerie } from '../../utils/calc';
 import { PageHeader, Card, StatCard, Btn } from '../ui';
 
-// Palette validée (dataviz) — la couleur suit l'entité sur tout le tableau de bord
-const C_PRODUITS = '#2a78d6';   // bleu
-const C_DEPENSES = '#eb6834';   // orange
-const C_TRESO = '#1baf7a';      // vert-aqua
-const INK_MUTED = '#898781';
-const GRID = '#e1e0d9';
+// Couleurs reprises des tableurs BBG (trio validé pour la vision des couleurs) :
+// vert = produits / CA, pêche-orange = charges, violet = trésorerie.
+const C_PRODUITS = '#38761d';
+const C_DEPENSES = '#e69138';
+const C_TRESO = '#674ea7';
+const INK_MUTED = '#6f6690';
+const GRID = '#ddd6ef';
 
 const kEuros = (v: number) => Math.abs(v) >= 1000 ? `${(v / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} k€` : `${v.toLocaleString('fr-FR')} €`;
 
@@ -54,14 +55,14 @@ export function Dashboard({ onNavigate }: { onNavigate: (p: Page) => void }) {
   const resultat = r2(data.totProd - data.totCharges - data.totJeux);
 
   return (
-    <div className="p-6 max-w-[1300px]">
+    <div className="p-4 w-full max-w-[1700px]">
       <PageHeader
         title="Tableau de bord"
         subtitle={`Exercice ${exercice} — ${labelMois(moisCourant())}`}
         actions={
           <>
             <select
-              className="border border-gray-300 rounded-md px-2 py-1.5 text-sm bg-white"
+              className="border border-[#c9c0e4] rounded-md px-2 py-1.5 text-sm bg-white"
               value={exercice}
               onChange={ev => setExercice(ev.target.value)}
             >
@@ -95,7 +96,7 @@ export function Dashboard({ onNavigate }: { onNavigate: (p: Page) => void }) {
                 contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${GRID}` }}
               />
               <Legend
-                formatter={(v: string) => <span style={{ color: '#52514e', fontSize: 12 }}>{v === 'produits' ? 'Produits' : 'Dépenses (charges + jeux + immo)'}</span>}
+                formatter={(v: string) => <span style={{ color: '#3f3268', fontSize: 12 }}>{v === 'produits' ? 'Produits' : 'Dépenses (charges + jeux + immo)'}</span>}
               />
               <Bar dataKey="produits" fill={C_PRODUITS} radius={[4, 4, 0, 0]} maxBarSize={18} />
               <Bar dataKey="depenses" fill={C_DEPENSES} radius={[4, 4, 0, 0]} maxBarSize={18} />
@@ -118,7 +119,7 @@ export function Dashboard({ onNavigate }: { onNavigate: (p: Page) => void }) {
                 dot={false} activeDot={{ r: 5, strokeWidth: 2, stroke: '#fff' }} />
             </LineChart>
           </ResponsiveContainer>
-          <p className="text-xs text-gray-400">Hors sommes placées — détail dans l'onglet Trésorerie.</p>
+          <p className="text-xs text-[#9a92b5]">Hors sommes placées — détail dans l'onglet Trésorerie.</p>
         </Card>
       </div>
 
@@ -128,7 +129,7 @@ export function Dashboard({ onNavigate }: { onNavigate: (p: Page) => void }) {
             <BarChart data={data.top} layout="vertical" margin={{ top: 0, right: 90, left: 8, bottom: 0 }}>
               <CartesianGrid horizontal={false} stroke={GRID} />
               <XAxis type="number" tickFormatter={kEuros} tick={{ fontSize: 11, fill: INK_MUTED }} tickLine={false} axisLine={false} />
-              <YAxis type="category" dataKey="cat" width={210} tick={{ fontSize: 12, fill: '#52514e' }} tickLine={false} axisLine={{ stroke: GRID }} />
+              <YAxis type="category" dataKey="cat" width={210} tick={{ fontSize: 12, fill: '#3f3268' }} tickLine={false} axisLine={{ stroke: GRID }} />
               <Tooltip
                 formatter={(v: number) => [euros(v), 'Total HT']}
                 contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${GRID}` }}
@@ -136,7 +137,7 @@ export function Dashboard({ onNavigate }: { onNavigate: (p: Page) => void }) {
               <Bar dataKey="ht" fill={C_DEPENSES} radius={[0, 4, 4, 0]} maxBarSize={16}>
                 {data.top.map((c, i) => <Cell key={i} fillOpacity={c.cat === 'Autres catégories' ? 0.45 : 1} />)}
                 <LabelList dataKey="ht" position="right" formatter={(v: number) => euros0(v)}
-                  style={{ fontSize: 11, fill: '#52514e' }} />
+                  style={{ fontSize: 11, fill: '#3f3268' }} />
               </Bar>
             </BarChart>
           </ResponsiveContainer>

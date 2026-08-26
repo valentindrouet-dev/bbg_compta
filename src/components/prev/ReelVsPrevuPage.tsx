@@ -123,13 +123,13 @@ export function ReelVsPrevuPage() {
   const depPrevuTot = total(data.depPrevu);
 
   return (
-    <div className="p-6 max-w-full">
+    <div className="p-4 w-full">
       <PageHeader
         title="Réel vs Prévu"
         subtitle="Le réalisé vient du journal, le prévu des budgets annuels — plus aucun IMPORTRANGE à maintenir"
         actions={
           <select
-            className="border border-gray-300 rounded-md px-2 py-1.5 text-sm bg-white"
+            className="border border-[#c9c0e4] rounded-md px-2 py-1.5 text-sm bg-white"
             value={exercice}
             onChange={ev => setExercice(ev.target.value)}
           >
@@ -158,7 +158,7 @@ export function ReelVsPrevuPage() {
               <tr>
                 <th className="text-left min-w-44"></th>
                 {budget.moisLabels.map((m, i) => <th key={i} className="text-right min-w-20">{m}</th>)}
-                <th className="text-right bg-yellow-50 min-w-24">Total</th>
+                <th className="text-right bg-[#efeafa] min-w-24">Total</th>
               </tr>
             </thead>
             <tbody>
@@ -170,7 +170,7 @@ export function ReelVsPrevuPage() {
           </table>
         </div>
         {exercice === '2025-26' && (
-          <p className="text-xs text-gray-400 mt-2">Le réel de la période pré-immatriculation (mai → août 2025) est inclus dans la colonne Septembre, comme les « Frais de lancement » du budget.</p>
+          <p className="text-xs text-[#9a92b5] mt-2">Le réel de la période pré-immatriculation (mai → août 2025) est inclus dans la colonne Septembre, comme les « Frais de lancement » du budget.</p>
         )}
       </Card>
 
@@ -178,7 +178,7 @@ export function ReelVsPrevuPage() {
         <div className="overflow-x-auto -mx-4 px-4">
           <table className="sheet text-sm border-collapse w-full">
             <thead>
-              <tr className="text-left text-gray-600">
+              <tr className="text-left text-[#5c5280]">
                 <th>Catégorie (réel)</th>
                 <th className="text-right">Réel</th>
                 <th className="text-right">Prévu (budget)</th>
@@ -190,14 +190,14 @@ export function ReelVsPrevuPage() {
               {data.catRows.map(row => {
                 const ecart = row.prevu != null ? r2(row.reel - row.prevu) : null;
                 return (
-                  <tr key={row.label} className="hover:bg-yellow-50/40">
+                  <tr key={row.label} className="hover:bg-[#f4f1fb]">
                     <td>{row.label}</td>
                     <td className="text-right tabular-nums font-medium">{euros(row.reel)}</td>
-                    <td className="text-right tabular-nums">{row.prevu != null ? euros(row.prevu) : <span className="text-gray-400">non budgété</span>}</td>
-                    <td className={`text-right tabular-nums ${ecart == null ? '' : ecart > 0 ? 'text-red-700' : 'text-emerald-700'}`}>
+                    <td className="text-right tabular-nums">{row.prevu != null ? euros(row.prevu) : <span className="text-[#9a92b5]">non budgété</span>}</td>
+                    <td className={`text-right tabular-nums ${ecart == null ? '' : ecart > 0 ? 'text-[#b7332e]' : 'text-[#38761d]'}`}>
                       {ecart != null ? euros(ecart) : '—'}
                     </td>
-                    <td className="text-right tabular-nums text-gray-500">
+                    <td className="text-right tabular-nums text-[#6f6690]">
                       {row.prevu ? pourcent(row.reel / row.prevu) : '—'}
                     </td>
                   </tr>
@@ -207,7 +207,7 @@ export function ReelVsPrevuPage() {
           </table>
         </div>
         {data.nonConsommees.length > 0 && (
-          <p className="text-xs text-gray-400 mt-3">
+          <p className="text-xs text-[#9a92b5] mt-3">
             Lignes budgétées sans dépense correspondante :{' '}
             {data.nonConsommees.map(l => `${l.label} (${euros0(l.valeurs.reduce<number>((s, v) => s + (v ?? 0), 0))})`).join(' · ')}
           </p>
@@ -224,24 +224,24 @@ function CompareRows({ label, prevu, reel, sensPositif }: {
   const bon = (v: number) => (sensPositif ? v >= 0 : v <= 0);
   return (
     <>
-      <tr className="bg-gray-50 font-semibold">
+      <tr className="bg-[#f4f1fb] font-semibold">
         <td>{label} — prévu</td>
-        {prevu.map((v, i) => <td key={i} className="text-right tabular-nums text-gray-500">{v ? euros0(r2(v)) : '·'}</td>)}
-        <td className="text-right tabular-nums bg-yellow-50">{euros(total(prevu))}</td>
+        {prevu.map((v, i) => <td key={i} className="text-right tabular-nums text-[#6f6690]">{v ? euros0(r2(v)) : '·'}</td>)}
+        <td className="text-right tabular-nums bg-[#efeafa]">{euros(total(prevu))}</td>
       </tr>
       <tr>
         <td className="pl-4">réel</td>
         {reel.map((v, i) => <td key={i} className="text-right tabular-nums font-medium">{v ? euros0(v) : '·'}</td>)}
-        <td className="text-right tabular-nums bg-yellow-50 font-semibold">{euros(total(reel))}</td>
+        <td className="text-right tabular-nums bg-[#efeafa] font-semibold">{euros(total(reel))}</td>
       </tr>
-      <tr className="border-b-2 border-gray-200">
-        <td className="pl-4 text-gray-500 italic">écart</td>
+      <tr className="border-b-2 border-[#ddd6ef]">
+        <td className="pl-4 text-[#6f6690] italic">écart</td>
         {ecart.map((v, i) => (
-          <td key={i} className={`text-right tabular-nums ${v === 0 ? 'text-gray-300' : bon(v) ? 'text-emerald-600' : 'text-red-600'}`}>
+          <td key={i} className={`text-right tabular-nums ${v === 0 ? 'text-[#c9c0e4]' : bon(v) ? 'text-[#38761d]' : 'text-[#b7332e]'}`}>
             {v ? euros0(v) : '·'}
           </td>
         ))}
-        <td className={`text-right tabular-nums bg-yellow-50 ${bon(total(ecart)) ? 'text-emerald-700' : 'text-red-700'}`}>
+        <td className={`text-right tabular-nums bg-[#efeafa] ${bon(total(ecart)) ? 'text-[#38761d]' : 'text-[#b7332e]'}`}>
           {euros(total(ecart))}
         </td>
       </tr>

@@ -37,7 +37,7 @@ export function ImmosPage() {
   };
 
   return (
-    <div className="p-6 max-w-[1400px]">
+    <div className="p-4 w-full">
       <PageHeader
         title="Immobilisations & dotations"
         subtitle="Alimenté automatiquement par les écritures de type « immo » du journal — amortissement linéaire"
@@ -46,7 +46,7 @@ export function ImmosPage() {
         <div className="overflow-x-auto -mx-4 px-4">
           <table className="sheet text-sm border-collapse w-full">
             <thead>
-              <tr className="text-left text-gray-600">
+              <tr className="text-left text-[#5c5280]">
                 <ThSort label="Date" k="date" sort={sort} onToggle={toggle} />
                 <th>Mois compta</th>
                 <ThSort label="Fournisseur" k="fournisseur" sort={sort} onToggle={toggle} />
@@ -66,18 +66,18 @@ export function ImmosPage() {
             </thead>
             <tbody>
               {rows.map(i => (
-                <tr key={i.entry.id} className="hover:bg-yellow-50/40">
+                <tr key={i.entry.id} className="hover:bg-[#f4f1fb]">
                   <td>{formatDateFR(i.entry.date)}</td>
-                  <td className="text-gray-500">{labelMois(i.entry.mois)}</td>
+                  <td className="text-[#6f6690]">{labelMois(i.entry.mois)}</td>
                   <td>{i.entry.fournisseur}</td>
                   <td>{i.entry.description}</td>
                   <td>{i.entry.categorie}</td>
                   <td className="text-right tabular-nums">{euros(i.entry.ttc)}</td>
-                  <td className="text-right tabular-nums text-gray-500">{euros(i.entry.tva)}</td>
+                  <td className="text-right tabular-nums text-[#6f6690]">{euros(i.entry.tva)}</td>
                   <td className="text-right tabular-nums font-medium">{euros(i.entry.ht)}</td>
                   <td>
                     <select
-                      className="border border-gray-200 rounded px-1 py-0.5 text-sm bg-white"
+                      className="border border-[#ddd6ef] rounded px-1 py-0.5 text-sm bg-white"
                       value={i.duree}
                       onChange={ev => update(i.entry.id, { immoDureeAns: Number(ev.target.value) })}
                     >
@@ -88,13 +88,13 @@ export function ImmosPage() {
                   <td className="text-right tabular-nums">{euros(i.dotationMois)}</td>
                   <td className="text-right tabular-nums">{euros(i.vnc(today))}</td>
                   <td>{formatDateFR(i.fin)}</td>
-                  <td className="text-gray-500 max-w-40 truncate" title={i.entry.compta}>{i.entry.compta}</td>
-                  <td className="text-gray-500 max-w-40 truncate" title={i.entry.facture}>{i.entry.facture}</td>
+                  <td className="text-[#6f6690] max-w-40 truncate" title={i.entry.compta}>{i.entry.compta}</td>
+                  <td className="text-[#6f6690] max-w-40 truncate" title={i.entry.facture}>{i.entry.facture}</td>
                 </tr>
               ))}
             </tbody>
             <tfoot>
-              <tr className="font-bold bg-yellow-50">
+              <tr className="font-bold bg-[#efeafa]">
                 <td colSpan={5}>Totaux ({infos.length} immobilisations)</td>
                 <td className="text-right tabular-nums">{euros(tot.ttc)}</td>
                 <td className="text-right tabular-nums">{euros(tot.tva)}</td>
@@ -108,7 +108,7 @@ export function ImmosPage() {
             </tfoot>
           </table>
         </div>
-        <p className="text-xs text-gray-400 mt-2">
+        <p className="text-xs text-[#9a92b5] mt-2">
           Pour ajouter une immobilisation : saisis la dépense dans le Journal du mois avec le type « immo ».
           La VNC (valeur nette comptable) est calculée au prorata des mois écoulés.
         </p>
