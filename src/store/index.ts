@@ -13,6 +13,21 @@ function uid(): string {
   return crypto.randomUUID();
 }
 
+/** Jeux repris des tableurs ; la liste est modifiable dans l'app. */
+export const JEUX_PAR_DEFAUT = ['EDIT', 'CAMINO', 'TORNADICES'];
+
+/**
+ * Déduit le jeu d'une écriture : d'abord le mot clé, sinon le suffixe de la
+ * catégorie (« Illustrations EDIT » -> EDIT). Utilisé à l'import et en migration.
+ */
+export function deduireJeu(e: JournalEntry, jeux: string[]): string {
+  const mot = (e.motsCles ?? '').trim().toUpperCase();
+  const trouve = jeux.find(j => j.toUpperCase() === mot);
+  if (trouve) return trouve;
+  const cat = e.categorie.toUpperCase();
+  return jeux.find(j => cat.endsWith(j.toUpperCase())) ?? '';
+}
+
 /** Mise en forme d'une colonne du journal (gras, italique, couleur, alignement). */
 export interface ColFormat {
   bold?: boolean;
@@ -82,6 +97,9 @@ export interface AppState {
   mergeCategories: (noms: string[], cible: string) => void;
   removeCategories: (noms: string[]) => void;
   setGroupes: (groupes: string[]) => void;
+  addJeu: (name: string) => void;
+  renameJeu: (ancien: string, nouveau: string) => void;
+  removeJeu: (name: string) => void;
   addPaiement: (name: string) => void;
   addComptePlanComptable: (name: string) => void;
 
@@ -90,10 +108,14 @@ export interface AppState {
 }
 
 function seedState() {
+  const refs = structuredClone(seedReferentiels) as Referentiels;
+  refs.jeux = refs.jeux ?? JEUX_PAR_DEFAUT;
+  const entries = (structuredClone(seedJournal) as JournalEntry[]).map(e =>
+    e.jeu ? e : { ...e, jeu: deduireJeu(e, refs.jeux!) });
   return {
-    entries: structuredClone(seedJournal) as JournalEntry[],
+    entries,
     finances: structuredClone(seedTresorerie.mouvementsFinanciers) as FinanceEntry[],
-    referentiels: structuredClone(seedReferentiels) as Referentiels,
+    referentiels: refs,
     budgets: structuredClone(seedBudgets) as unknown as Record<string, BudgetExercice>,
     chronologie: structuredClone(seedChronologie) as ChronoEvent[],
     tresoPrev: structuredClone(seedTresorerie.previsionnel) as TresoPrevLine[],
@@ -214,6 +236,7 @@ export const useStore = create<AppState>()(
           compta: source.compta,
           motsCles: source.motsCles,
           immoDureeAns: source.immoDureeAns,
+          jeu: source.jeu,
         } : e),
       })),
 
@@ -358,6 +381,28 @@ export const useStore = create<AppState>()(
         referentiels: { ...s.referentiels, groupes },
       })),
 
+      addJeu: (name) => set(s => {
+        const n = name.trim();
+        const jeux = s.referentiels.jeux ?? JEUX_PAR_DEFAUT;
+        if (!n || jeux.includes(n)) return s;
+        return { referentiels: { ...s.referentiels, jeux: [...jeux, n] } };
+      }),
+      renameJeu: (ancien, nouveau) => set(s => {
+        const n = nouveau.trim();
+        const jeux = s.referentiels.jeux ?? JEUX_PAR_DEFAUT;
+        if (!n || n === ancien) return s;
+        return {
+          referentiels: { ...s.referentiels, jeux: jeux.map(j => j === ancien ? n : j) },
+          entries: s.entries.map(e => e.jeu === ancien ? { ...e, jeu: n } : e),
+        };
+      }),
+      removeJeu: (name) => set(s => {
+        const jeux = s.referentiels.jeux ?? JEUX_PAR_DEFAUT;
+        return {
+          referentiels: { ...s.referentiels, jeux: jeux.filter(j => j !== name) },
+          entries: s.entries.map(e => e.jeu === name ? { ...e, jeu: '' } : e),
+        };
+      }),
       addPaiement: (name) => set(s => {
         if (!name.trim() || s.referentiels.paiements.includes(name.trim())) return s;
         return { referentiels: { ...s.referentiels, paiements: [...s.referentiels.paiements, name.trim()] } };
@@ -373,7 +418,18 @@ export const useStore = create<AppState>()(
     },
     {
       name: 'bbg-compta-v1',
-      version: 1,
+      version: 2,
+      // v2 : ajout de la liste des jeux et rattachement des dépenses de
+      // développement au jeu concerné (déduit des mots clés / de la catégorie).
+      migrate: (persisted, version) => {
+        const s = persisted as AppState;
+        if (version < 2 && s?.referentiels) {
+          const jeux = s.referentiels.jeux ?? JEUX_PAR_DEFAUT;
+          s.referentiels = { ...s.referentiels, jeux };
+          s.entries = (s.entries ?? []).map(e => e.jeu ? e : { ...e, jeu: deduireJeu(e, jeux) });
+        }
+        return s;
+      },
       // Seules les données sont persistées : l'historique repart à zéro
       // à chaque ouverture, et les actions ne sont jamais sérialisées.
       partialize: (s) => ({

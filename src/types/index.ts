@@ -26,6 +26,8 @@ export interface JournalEntry {
   mois: string;
   /** Durée d'amortissement en années (uniquement type === 'immo'). */
   immoDureeAns?: number;
+  /** Jeu auquel la dépense se rattache (EDIT, CAMINO…), pour les dépenses jeux. */
+  jeu?: string;
 }
 
 /** Mouvement financier hors exploitation (capital, CCA, placements…). */
@@ -98,4 +100,6 @@ export interface Referentiels {
   categoriesMeta?: Record<string, CategorieMeta>;
   /** Groupes de catégories, dans l'ordre d'affichage. */
   groupes?: string[];
+  /** Jeux du catalogue, pour ventiler les dépenses de développement. */
+  jeux?: string[];
 }

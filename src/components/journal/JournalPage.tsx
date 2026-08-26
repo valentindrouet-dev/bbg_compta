@@ -18,6 +18,8 @@ type SectionKind = 'depenses' | 'jeux' | 'produits';
 /** Largeurs de colonnes en % : tout doit tenir à l'écran, sans coupure. */
 const COLS_DEPENSES = [2, 7.5, 9, 12.5, 10.5, 5, 5, 5, 5.5, 6, 8.5, 9, 5.5, 7, 2];
 const COLS_PRODUITS = [2, 8, 11, 15, 12.5, 6, 5.5, 6, 6.5, 7, 9, 5, 4, 2.5];
+/** La section Jeux intercale une colonne « Jeu » après la catégorie. */
+const COLS_JEUX = [2, 7, 8.5, 12, 10, 7, 4.7, 4.7, 4.7, 5.2, 5.5, 7, 8.5, 4.5, 6.7, 2];
 
 export function JournalPage() {
   const entries = useStore(s => s.entries);
@@ -72,6 +74,7 @@ export function JournalPage() {
     compta: e => e.compta ?? '',
     motsCles: e => e.motsCles ?? '',
     facture: e => e.facture ?? '',
+    jeu: e => e.jeu ?? '',
   });
 
   const depenses = tri(duMois.filter(e => e.type !== 'produit' && !refs.categoriesJeux.includes(e.categorie)));
@@ -252,6 +255,7 @@ function Section({
   const addEntry = useStore(s => s.addEntry);
   const pasteInto = useStore(s => s.pasteInto);
   const formats = useStore(s => s.journalFormats);
+  const jeux = useStore(s => s.referentiels.jeux ?? []);
   const setColFormat = useStore(s => s.setColFormat);
   const resetColFormat = useStore(s => s.resetColFormat);
   const fmtMenu = (col: string) => (
@@ -264,7 +268,7 @@ function Section({
   const tot = sumTTH(rows);
   const parCat = sumParCategorie(rows);
   const isProduits = kind === 'produits';
-  const cols = isProduits ? COLS_PRODUITS : COLS_DEPENSES;
+  const cols = isProduits ? COLS_PRODUITS : kind === 'jeux' ? COLS_JEUX : COLS_DEPENSES;
 
   const categories = isProduits ? refs.categoriesProduits
     : kind === 'jeux' ? refs.categoriesJeux
@@ -288,6 +292,8 @@ function Section({
       paiement: refs.paiements[0] ?? 'CB BBG',
       type: isProduits ? 'produit' : 'charges',
       compta: '', motsCles: '', facture: '', mois,
+      // La nouvelle ligne reprend le jeu de la dernière saisie de la section.
+      jeu: kind === 'jeux' ? (rows[rows.length - 1]?.jeu ?? '') : undefined,
     });
   }
 
@@ -341,6 +347,7 @@ function Section({
                 <ThSort label="Fournisseur" k="fournisseur" sort={sort} onToggle={onSort} extra={fmtMenu('fournisseur')} />
                 <ThSort label="Description" k="description" sort={sort} onToggle={onSort} extra={fmtMenu('description')} />
                 <ThSort label="Catégorie" k="categorie" sort={sort} onToggle={onSort} extra={fmtMenu('categorie')} />
+                {kind === 'jeux' && <ThSort label="Jeu" k="jeu" sort={sort} onToggle={onSort} extra={fmtMenu('jeu')} />}
                 <ThSort label="TTC" k="ttc" sort={sort} onToggle={onSort} className="num" extra={fmtMenu('ttc')} />
                 <th>Taux</th>
                 <ThSort label="TVA" k="tva" sort={sort} onToggle={onSort} className="num" extra={fmtMenu('tva')} />
@@ -361,12 +368,30 @@ function Section({
                   clip={clip} onCopy={onCopy}
                   onPasteHere={() => clip && pasteInto(e.id, clip)}
                   fournisseurs={fournisseurs} formats={formats} anneeRef={anneeRef}
+                  jeux={jeux}
                 />
               ))}
+              {/* En mode collage, une ligne d'accueil est toujours disponible en bas :
+                  plus besoin de créer la ligne vide avant de copier. */}
+              {clip && (
+                <tr
+                  className="cursor-copy"
+                  onClick={() => { const id = nouvelleLigne(); onPaste(id, clip); }}
+                  title="Créer une nouvelle ligne et y coller la ligne copiée"
+                >
+                  <td
+                    colSpan={cols.length}
+                    className="text-center py-1.5 font-medium"
+                    style={{ backgroundColor: 'var(--bbg-yellow-light)', color: 'var(--bbg-yellow-dark)' }}
+                  >
+                    + Coller ici, dans une nouvelle ligne
+                  </td>
+                </tr>
+              )}
             </tbody>
             <tfoot>
               <tr>
-                <td colSpan={5} className="text-right">Totaux</td>
+                <td colSpan={kind === 'jeux' ? 6 : 5} className="text-right">Totaux</td>
                 <td className="text-right tabular-nums">{euros(tot.ttc)}</td>
                 <td></td>
                 <td className="text-right tabular-nums">{euros(tot.tva)}</td>
@@ -410,11 +435,11 @@ function tauxImplique(e: JournalEntry): number | 'manuel' {
   return 'manuel';
 }
 
-function Row({ e, kind, categories, isSelected, onToggleRow, clip, onCopy, onPasteHere, fournisseurs, formats, anneeRef }: {
+function Row({ e, kind, categories, isSelected, onToggleRow, clip, onCopy, onPasteHere, fournisseurs, formats, anneeRef, jeux }: {
   e: JournalEntry; kind: SectionKind; categories: string[];
   isSelected: boolean; onToggleRow: (id: string) => void;
   clip: JournalEntry | null; onCopy: (e: JournalEntry | null) => void; onPasteHere: () => void;
-  fournisseurs: string[]; formats: Record<string, ColFormat>; anneeRef: number;
+  fournisseurs: string[]; formats: Record<string, ColFormat>; anneeRef: number; jeux: string[];
 }) {
   const update = useStore(s => s.updateEntry);
   const remove = useStore(s => s.removeEntry);
@@ -485,6 +510,18 @@ function Row({ e, kind, categories, isSelected, onToggleRow, clip, onCopy, onPas
           {categories.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
       </td>
+      {kind === 'jeux' && (
+        <td>
+          <select
+            className="pill-yellow" style={colStyle(formats.jeu)}
+            value={e.jeu ?? ''} onChange={ev => update(e.id, { jeu: ev.target.value })}
+          >
+            <option value="">— non rattaché —</option>
+            {e.jeu && !jeux.includes(e.jeu) && <option value={e.jeu}>{e.jeu}</option>}
+            {jeux.map(j => <option key={j} value={j}>{j}</option>)}
+          </select>
+        </td>
+      )}
       <td><MoneyCell value={e.ttc} onCommit={setTTC} style={colStyle(formats.ttc)} /></td>
       <td>
         <select value={String(taux)} onChange={ev => setTaux(ev.target.value)}>

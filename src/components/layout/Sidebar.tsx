@@ -1,6 +1,6 @@
 import {
   Coins, LayoutDashboard, NotebookPen, Table2, Building2, Wallet, Percent,
-  UserRound, Target, GitCompareArrows, Landmark, CalendarRange, FileDown, Settings, Store, Tags,
+  UserRound, Target, GitCompareArrows, Landmark, CalendarRange, FileDown, Settings, Store, Tags, Gamepad2,
 } from 'lucide-react';
 import type { Page } from '../../App';
 import { APP_VERSION } from '../../version';
@@ -23,6 +23,7 @@ const NAV: { section: string; items: { page: Page; label: string; icon: typeof C
       { page: 'immos', label: 'Immobilisations', icon: Building2 },
       { page: 'treso', label: 'Trésorerie', icon: Wallet },
       { page: 'tva', label: 'TVA', icon: Percent },
+      { page: 'jeux', label: 'Jeux', icon: Gamepad2 },
       { page: 'fournisseurs', label: 'Fournisseurs', icon: Store },
     ],
   },
@@ -54,15 +55,15 @@ const NAV: { section: string; items: { page: Page; label: string; icon: typeof C
 export function Sidebar({ page, onNavigate }: SidebarProps) {
   return (
     <aside
-      className="w-60 text-white flex flex-col h-full shrink-0"
+      className="w-[264px] text-white flex flex-col h-full shrink-0"
       style={{ backgroundColor: 'var(--bbg-purple-darker)' }}
     >
       <div className="p-4 border-b" style={{ backgroundColor: 'var(--bbg-purple-dark)', borderColor: '#57458f' }}>
-        <div className="flex items-center gap-1.5">
-          <Coins size={19} className="shrink-0" style={{ color: 'var(--bbg-yellow)' }} />
-          <span className="font-bold text-base whitespace-nowrap">BBG Compta</span>
+        <div className="flex items-center gap-2">
+          <Coins size={24} className="shrink-0" style={{ color: 'var(--bbg-yellow)' }} />
+          <span className="font-bold text-xl whitespace-nowrap">BBG Compta</span>
           <span
-            className="px-1 py-0.5 rounded text-[10px] font-mono font-semibold tracking-tight shrink-0"
+            className="px-1.5 py-0.5 rounded text-[12px] font-mono font-bold tracking-tight shrink-0"
             style={{ backgroundColor: 'var(--bbg-yellow)', color: 'var(--bbg-purple-darker)' }}
           >
             v{APP_VERSION}

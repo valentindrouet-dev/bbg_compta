@@ -171,8 +171,12 @@ export function tableauTreso(entries: JournalEntry[], finances: FinanceEntry[], 
 
 // ----- Synthèse par exercice --------------------------------------------
 
+/** Base de restitution des montants : hors taxes ou toutes taxes comprises. */
+export type BaseMontant = 'ht' | 'ttc';
+
 export interface SyntheseExercice {
   moisList: string[];
+  base: BaseMontant;
   /** catégorie -> (mois -> HT) pour les charges hors jeux. */
   charges: Map<string, Map<string, number>>;
   /** idem pour les catégories jeux. */
@@ -185,12 +189,19 @@ export interface SyntheseExercice {
   totalProduitsParMois: Map<string, number>;
   totalProduitsTTCParMois: Map<string, number>;
   immoParMois: Map<string, number>;
+  /** Immobilisations ventilées par catégorie, comme les charges. */
+  immos: Map<string, Map<string, number>>;
+  /** Dépenses jeux ventilées par jeu puis par mois. */
+  jeuxParJeu: Map<string, Map<string, number>>;
 }
 
 export function syntheseExercice(
   entries: JournalEntry[], exercice: string, categoriesJeux: string[],
+  base: BaseMontant = 'ht',
 ): SyntheseExercice {
   const moisList = moisExercice(exercice);
+  /** Montant retenu selon la base choisie (bouton HT / TTC de la synthèse). */
+  const montant = (e: JournalEntry) => base === 'ttc' ? e.ttc : e.ht;
   const charges = new Map<string, Map<string, number>>();
   const jeux = new Map<string, Map<string, number>>();
   const produits = new Map<string, Map<string, number>>();
@@ -200,6 +211,8 @@ export function syntheseExercice(
   const totalProduitsParMois = new Map<string, number>();
   const totalProduitsTTCParMois = new Map<string, number>();
   const immoParMois = new Map<string, number>();
+  const immos = new Map<string, Map<string, number>>();
+  const jeuxParJeu = new Map<string, Map<string, number>>();
 
   const add = (m: Map<string, Map<string, number>>, cat: string, mois: string, v: number) => {
     if (!m.has(cat)) m.set(cat, new Map());
@@ -210,25 +223,81 @@ export function syntheseExercice(
 
   for (const e of entries) {
     if (!moisList.includes(e.mois)) continue;
+    const v = montant(e);
     if (e.type === 'produit') {
-      add(produits, e.categorie, e.mois, e.ht);
-      bump(totalProduitsParMois, e.mois, e.ht);
+      add(produits, e.categorie, e.mois, v);
+      bump(totalProduitsParMois, e.mois, v);
       bump(totalProduitsTTCParMois, e.mois, e.ttc);
     } else if (categoriesJeux.includes(e.categorie)) {
-      add(jeux, e.categorie, e.mois, e.ht);
-      bump(totalJeuxParMois, e.mois, e.ht);
+      add(jeux, e.categorie, e.mois, v);
+      add(jeuxParJeu, e.jeu || '— non rattaché —', e.mois, v);
+      bump(totalJeuxParMois, e.mois, v);
       bump(totalTTCParMois, e.mois, e.ttc);
     } else if (e.type === 'immo') {
-      bump(immoParMois, e.mois, e.ht);
+      // Une immobilisation n'est pas une charge de l'exercice : elle est
+      // suivie à part, et c'est sa dotation annuelle qui pèse sur le résultat.
+      add(immos, e.categorie, e.mois, v);
+      bump(immoParMois, e.mois, v);
       bump(totalTTCParMois, e.mois, e.ttc);
     } else {
-      add(charges, e.categorie, e.mois, e.ht);
-      bump(totalChargesParMois, e.mois, e.ht);
+      add(charges, e.categorie, e.mois, v);
+      bump(totalChargesParMois, e.mois, v);
       bump(totalTTCParMois, e.mois, e.ttc);
     }
   }
   return {
-    moisList, charges, jeux, produits, totalChargesParMois, totalTTCParMois,
+    moisList, base, charges, jeux, produits, totalChargesParMois, totalTTCParMois,
     totalJeuxParMois, totalProduitsParMois, totalProduitsTTCParMois, immoParMois,
+    immos, jeuxParJeu,
   };
+}
+
+/** Écritures qui composent une cellule de la synthèse (pour l'aperçu au survol). */
+export function ecrituresDeCellule(
+  entries: JournalEntry[], mois: string, opts: { categorie?: string; jeu?: string; type?: 'charges' | 'immo' | 'produit' },
+): JournalEntry[] {
+  return entries.filter(e => {
+    if (e.mois !== mois) return false;
+    if (opts.categorie != null && e.categorie !== opts.categorie) return false;
+    if (opts.jeu != null && (e.jeu || '— non rattaché —') !== opts.jeu) return false;
+    if (opts.type != null && e.type !== opts.type) return false;
+    return true;
+  }).sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/** Agrégat comptable d'un jeu : dépenses par catégorie, par mois, total. */
+export interface BilanJeu {
+  jeu: string;
+  nb: number;
+  ttc: number;
+  ht: number;
+  tva: number;
+  parCategorie: Map<string, number>;
+  parMois: Map<string, number>;
+  premiere: string;
+  derniere: string;
+}
+
+export function bilanJeux(entries: JournalEntry[], categoriesJeux: string[]): BilanJeu[] {
+  const par = new Map<string, BilanJeu>();
+  for (const e of entries) {
+    if (!categoriesJeux.includes(e.categorie)) continue;
+    const jeu = e.jeu || '— non rattaché —';
+    if (!par.has(jeu)) {
+      par.set(jeu, {
+        jeu, nb: 0, ttc: 0, ht: 0, tva: 0,
+        parCategorie: new Map(), parMois: new Map(),
+        premiere: e.date, derniere: e.date,
+      });
+    }
+    const b = par.get(jeu)!;
+    b.nb++; b.ttc += e.ttc; b.ht += e.ht; b.tva += e.tva;
+    b.parCategorie.set(e.categorie, (b.parCategorie.get(e.categorie) ?? 0) + e.ht);
+    b.parMois.set(e.mois, (b.parMois.get(e.mois) ?? 0) + e.ht);
+    if (e.date < b.premiere) b.premiere = e.date;
+    if (e.date > b.derniere) b.derniere = e.date;
+  }
+  return [...par.values()]
+    .map(b => ({ ...b, ttc: r2(b.ttc), ht: r2(b.ht), tva: r2(b.tva) }))
+    .sort((a, b) => b.ht - a.ht);
 }
