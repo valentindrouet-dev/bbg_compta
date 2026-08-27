@@ -19,7 +19,7 @@
  * [Production Calculator](https://valentindrouet-dev.github.io/boardgame_prod_calculator/),
  * qui reste seul maître des devis usine. On l'y recopie, une fois par tirage.
  */
-import type { LigneStock, MouvementStock } from '../types';
+import type { CanalVente, LigneStock, MouvementStock } from '../types';
 import { compareMois, exerciceDuMois, moisExercice, EXERCICES } from './dates';
 import { r2 } from './money';
 
@@ -35,18 +35,49 @@ export const CATEGORIE_FABRICATION = 'Fabrication des jeux';
 /** La catégorie qui porte la correction de rattachement (compte 6031 / 71). */
 export const CATEGORIE_VARIATION_STOCK = 'Variation de stock';
 
+/**
+ * Les canaux de vente d'un jeu de société, du moins cher au plus cher. Un
+ * distributeur achète en gros et se paie sur la remise ; une boutique achète
+ * moins et paie plus ; un éditeur partenaire, encore autrement. Les trois se
+ * renomment et d'autres s'ajoutent.
+ */
+export const CANAUX_DEFAUT: { nom: string; aide: string }[] = [
+  { nom: 'Distributeur', aide: 'Vente en gros à un distributeur — le prix le plus bas, les volumes les plus gros' },
+  { nom: 'Boutique', aide: 'Vente directe aux boutiques — prix intermédiaire, sans intermédiaire' },
+  { nom: 'Éditeur', aide: 'Vente à un éditeur partenaire (co-édition, licence) ou en direct' },
+];
+
+let compteurCanal = 0;
+export function canalVide(nom: string, nMois: number, prix = 0): CanalVente {
+  return {
+    id: `canal-${Date.now().toString(36)}-${++compteurCanal}`,
+    nom, prix, mode: 'nombre', base: 'tirage',
+    valeurs: new Array<number | null>(nMois).fill(null),
+  };
+}
+
+/** Ce qu'un canal écoule et rapporte sur un mois. */
+export interface MoisCanal {
+  /** Exemplaires écoulés — la valeur saisie, ou celle que le % donne. */
+  quantite: number;
+  /** Ventes hors taxes du canal. */
+  ca: number;
+}
+
 /** Un mois de stock pour un jeu, tout ce qui en découle calculé. */
 export interface MoisStock {
   mois: string;
   /** Exemplaires sortis d'usine ce mois-là. */
   fabrique: number;
-  /** Exemplaires vendus ce mois-là. */
+  /** Exemplaires vendus ce mois-là, tous canaux confondus. */
   vendue: number;
+  /** Le détail par canal, indexé par identifiant de canal. */
+  parCanal: Map<string, MoisCanal>;
   stockDebut: number;
   stockFin: number;
   /** Ce que l'usine coûte : fabriqué × coût de revient unitaire. */
   coutFabrication: number;
-  /** Ventes hors taxes. */
+  /** Ventes hors taxes, tous canaux confondus. */
   ca: number;
   /** Ventes taxes comprises — ce qui entre vraiment sur le compte. */
   caTTC: number;
@@ -64,9 +95,16 @@ export interface StockJeu {
   ligne: LigneStock;
   mois: MoisStock[];
   /** Cumuls sur l'exercice. */
-  total: Omit<MoisStock, 'mois' | 'stockDebut' | 'stockFin' | 'valeurStock'> & {
-    stockDebut: number; stockFin: number; valeurStock: number;
+  total: {
+    fabrique: number; vendue: number;
+    stockDebut: number; stockFin: number;
+    coutFabrication: number; ca: number; caTTC: number; cogs: number;
+    variationStock: number; marge: number; valeurStock: number;
+    /** Exemplaires et chiffre d'affaires par canal. */
+    parCanal: Map<string, MoisCanal>;
   };
+  /** Le stock est-il descendu sous zéro ? On vend alors ce qu'on n'a pas. */
+  decouvert: boolean;
 }
 
 const somme = (xs: (number | null)[]) => xs.reduce<number>((s, v) => s + (v ?? 0), 0);
@@ -84,31 +122,67 @@ export function stockOuverture(lignes: LigneStock[], jeu: string, exercice: stri
   let stock = lignes.find(l => l.jeu === jeu && l.exercice === EXERCICES[0])?.stockInitial ?? 0;
   for (let i = 0; i < rang; i++) {
     const l = lignes.find(x => x.jeu === jeu && x.exercice === EXERCICES[i]);
-    if (l) stock += somme(l.fabrique) - somme(l.vendue);
+    if (!l) continue;
+    stock += somme(l.fabrique);
+    // On refait passer l'exercice pour résoudre les pourcentages, sinon un
+    // écoulement saisi en % ne diminuerait jamais le stock des années d'après.
+    for (const r of derouleStock(l, lignes).mois) stock -= r.vendue;
   }
   return stock;
 }
 
+/**
+ * Combien d'exemplaires un canal écoule un mois donné.
+ *
+ * En mode « nombre », c'est la valeur saisie. En mode « pourcentage », c'est
+ * ce pourcentage appliqué à l'assiette choisie — le tirage de l'exercice, ou
+ * le stock disponible ce mois-là. Le résultat est arrondi à l'exemplaire : on
+ * ne vend pas un demi-jeu.
+ */
+export function quantiteCanal(
+  canal: CanalVente, i: number, tirage: number, disponible: number,
+): number {
+  const v = canal.valeurs[i] ?? 0;
+  if (!v) return 0;
+  if (canal.mode !== 'pourcentage') return v;
+  const assiette = canal.base === 'disponible' ? disponible : tirage;
+  return Math.round((v / 100) * assiette);
+}
+
 /** Déroule un exercice de stock pour un jeu, mois par mois. */
-export function derouleStock(
-  ligne: LigneStock, lignes: LigneStock[],
-): StockJeu {
+export function derouleStock(ligne: LigneStock, lignes: LigneStock[]): StockJeu {
   const mois = moisExercice(ligne.exercice);
   const cu = ligne.coutUnitaire || 0;
-  const pu = ligne.prixUnitaire || 0;
   const tva = (ligne.tauxTVA ?? TVA_JEUX_DEFAUT) / 100;
-  let stock = stockOuverture(lignes, ligne.jeu, ligne.exercice);
-  const ouverture = stock;
+  const canaux = ligne.canaux ?? [];
+  const ouverture = stockOuverture(lignes, ligne.jeu, ligne.exercice);
+  // Le tirage de l'exercice sert d'assiette aux pourcentages « du tirage ».
+  const tirage = ouverture + somme(ligne.fabrique);
+  let stock = ouverture;
+  let decouvert = false;
 
   const rows: MoisStock[] = mois.map((m, i) => {
     const fabrique = ligne.fabrique[i] ?? 0;
-    const vendue = ligne.vendue[i] ?? 0;
     const stockDebut = stock;
-    const stockFin = stockDebut + fabrique - vendue;
+    const disponible = stockDebut + fabrique;
+
+    const parCanal = new Map<string, MoisCanal>();
+    let vendue = 0;
+    let ca = 0;
+    for (const c of canaux) {
+      const q = quantiteCanal(c, i, tirage, disponible);
+      const caCanal = r2(q * (c.prix || 0));
+      parCanal.set(c.id, { quantite: q, ca: caCanal });
+      vendue += q;
+      ca += caCanal;
+    }
+    ca = r2(ca);
+
+    const stockFin = disponible - vendue;
+    if (stockFin < 0) decouvert = true;
     stock = stockFin;
-    const ca = r2(vendue * pu);
     return {
-      mois: m, fabrique, vendue, stockDebut, stockFin,
+      mois: m, fabrique, vendue, parCanal, stockDebut, stockFin,
       coutFabrication: r2(fabrique * cu),
       ca, caTTC: r2(ca * (1 + tva)),
       cogs: r2(vendue * cu),
@@ -119,8 +193,15 @@ export function derouleStock(
   });
 
   const t = (f: (r: MoisStock) => number) => r2(rows.reduce((s, r) => s + f(r), 0));
+  const totalCanal = new Map<string, MoisCanal>();
+  for (const c of canaux) {
+    totalCanal.set(c.id, {
+      quantite: rows.reduce((s, r) => s + (r.parCanal.get(c.id)?.quantite ?? 0), 0),
+      ca: r2(rows.reduce((s, r) => s + (r.parCanal.get(c.id)?.ca ?? 0), 0)),
+    });
+  }
   return {
-    ligne, mois: rows,
+    ligne, mois: rows, decouvert,
     total: {
       fabrique: t(r => r.fabrique), vendue: t(r => r.vendue),
       stockDebut: ouverture, stockFin: stock,
@@ -129,6 +210,7 @@ export function derouleStock(
       variationStock: r2((stock - ouverture) * cu),
       marge: t(r => r.marge),
       valeurStock: r2(stock * cu),
+      parCanal: totalCanal,
     },
   };
 }
@@ -147,16 +229,16 @@ export function stocksExercice(
     .map(l => derouleStock(l, lignes));
 }
 
-/** Une ligne de stock vierge pour un jeu et un exercice. */
+/** Une ligne de stock vierge pour un jeu et un exercice, avec ses trois canaux. */
 export function ligneStockVide(
   jeu: string, exercice: string, id: string,
 ): LigneStock {
   const n = moisExercice(exercice).length;
   return {
     id, jeu, exercice,
-    coutUnitaire: 0, prixUnitaire: 0, tauxTVA: TVA_JEUX_DEFAUT,
+    coutUnitaire: 0, tauxTVA: TVA_JEUX_DEFAUT,
     fabrique: new Array<number | null>(n).fill(null),
-    vendue: new Array<number | null>(n).fill(null),
+    canaux: CANAUX_DEFAUT.map(c => canalVide(c.nom, n)),
   };
 }
 
@@ -167,6 +249,8 @@ export interface ApportStock {
   /** Ventes HT par mois, et par jeu. */
   caParMois: Map<string, number>;
   caParJeuEtMois: Map<string, Map<string, number>>;
+  /** Ventes HT par jeu, puis par canal, puis par mois. */
+  caParJeuCanalEtMois: Map<string, Map<string, Map<string, number>>>;
   caTTCParMois: Map<string, number>;
   /** Tirages payés à l'usine, HT puis TTC (la TVA de fabrication est déductible). */
   fabricationParMois: Map<string, number>;
@@ -187,7 +271,8 @@ export function apportStock(
   lignes: LigneStock[], exercice: string, jeux: string[],
 ): ApportStock {
   const out: ApportStock = {
-    caParMois: new Map(), caParJeuEtMois: new Map(), caTTCParMois: new Map(),
+    caParMois: new Map(), caParJeuEtMois: new Map(), caParJeuCanalEtMois: new Map(),
+    caTTCParMois: new Map(),
     fabricationParMois: new Map(), fabricationParJeuEtMois: new Map(),
     variationParMois: new Map(), cogsParMois: new Map(),
     margeParMois: new Map(), valeurParMois: new Map(),
@@ -195,6 +280,19 @@ export function apportStock(
   for (const s of stocksExercice(lignes, exercice, jeux)) {
     const parJeuCA = new Map<string, number>();
     const parJeuFab = new Map<string, number>();
+    for (const c of s.ligne.canaux ?? []) {
+      const parMois = new Map<string, number>();
+      for (const r of s.mois) {
+        const v = r.parCanal.get(c.id)?.ca ?? 0;
+        if (v) parMois.set(r.mois, v);
+      }
+      if (parMois.size) {
+        if (!out.caParJeuCanalEtMois.has(s.ligne.jeu)) {
+          out.caParJeuCanalEtMois.set(s.ligne.jeu, new Map());
+        }
+        out.caParJeuCanalEtMois.get(s.ligne.jeu)!.set(c.nom, parMois);
+      }
+    }
     for (const r of s.mois) {
       ajoute(out.caParMois, r.mois, r.ca);
       ajoute(out.caTTCParMois, r.mois, r.caTTC);
@@ -233,6 +331,8 @@ export interface PositionJeu {
   cogs: number;
   marge: number;
   parMois: Map<string, { entrees: number; sorties: number; stock: number }>;
+  /** Ventes réalisées par canal : exemplaires, chiffre d'affaires, prix moyen. */
+  parCanal: Map<string, { quantite: number; ca: number }>;
 }
 
 /**
@@ -255,7 +355,7 @@ export function positionsStock(
     if (!par.has(jeu)) {
       par.set(jeu, {
         jeu, entrees: 0, sorties: 0, stock: 0, valeur: 0, coutMoyen: 0,
-        ca: 0, cogs: 0, marge: 0, parMois: new Map(),
+        ca: 0, cogs: 0, marge: 0, parMois: new Map(), parCanal: new Map(),
       });
       cumul.set(jeu, { qte: 0, valeur: 0 });
     }
@@ -269,8 +369,12 @@ export function positionsStock(
     } else {
       p.sorties += q;
       if (mv.type === 'vente') {
-        p.ca = r2(p.ca + q * (mv.unitaire || 0));
+        const montant = r2(q * (mv.unitaire || 0));
+        p.ca = r2(p.ca + montant);
         p.cogs = r2(p.cogs + q * (c.qte ? c.valeur / c.qte : 0));
+        const canal = mv.canal || '— sans canal —';
+        const acc = p.parCanal.get(canal) ?? { quantite: 0, ca: 0 };
+        p.parCanal.set(canal, { quantite: acc.quantite + q, ca: r2(acc.ca + montant) });
       }
     }
     p.stock = p.entrees - p.sorties;

@@ -37,9 +37,11 @@ sont recalculés en direct à partir des écritures.
   jour toute seule à minuit.
 - **Immobilisations** — durées, dotations, VNC et fin d'amortissement calculées
 - **Stocks** — les **exemplaires**, pas les euros : un tirage entre, une vente
-  sort, une casse aussi, un inventaire corrige. La position de chaque jeu s'en
-  déduit — entrés, sortis, stock, **valeur au coût moyen pondéré**, ventes,
-  coût des ventes et marge — avec la comparaison au stock prévu. La valeur du
+  sort, une casse aussi, un inventaire corrige. Chaque vente porte son **canal**
+  (distributeur, boutique, éditeur). La position de chaque jeu s'en déduit —
+  entrés, sortis, stock, **valeur au coût moyen pondéré**, ventes, coût des
+  ventes et marge — avec un tableau **Ventes par canal** qui compare le prix
+  moyen constaté à celui budgété, et la comparaison au stock prévu. La valeur du
   stock figure **à l'actif** : elle ne pèse au résultat qu'une fois les
   exemplaires vendus
 - **Trésorerie** — chaque montant rattaché à sa source : **encaissements** et
@@ -63,17 +65,26 @@ sont recalculés en direct à partir des écritures.
 - **Prévisionnel** — la page se lit maintenant en **cinq onglets**, au-dessus des
   onglets d'exercice :
   - **Charges** — charges externes, personnel et rémunérations
-  - **Produits** — les workshops d'un côté, les **ventes de jeux** de l'autre.
-    Ces dernières ne se saisissent pas : elles sont le produit des exemplaires
-    vendus par leur prix, dans l'onglet Stock
+  - **Produits** — les workshops d'un côté, les **ventes de jeux** de l'autre,
+    **une ligne par jeu et par canal**. Ces dernières ne se saisissent pas :
+    elles sont le produit des exemplaires vendus par le prix de leur canal, dans
+    l'onglet Stock
   - **Immobilisations** — ce qui s'inscrit à l'actif et s'amortit
-  - **Stock** — jeu par jeu, deux lignes à remplir (fabriqués, vendus) et tout le
-    reste calculé : stock restant, coût des tirages, ventes, **coût des
-    exemplaires vendus**, **variation de stock** et **marge**. Le tirage payé à
-    l'usine est une charge du mois où il est réglé ; la variation de stock la
-    neutralise pour les exemplaires encore en carton, si bien que **seul le coût
-    de ce qui est vendu pèse sur le résultat**. Le coût de revient unitaire se
-    recopie depuis le Production Calculator — c'est lui qui tient les devis usine
+  - **Stock** — jeu par jeu. Une ligne pour ce qui sort d'usine, puis **une ligne
+    par canal de vente** : un jeu ne part pas au même prix chez un
+    **Distributeur**, en **Boutique** ou chez un **Éditeur**, alors chaque canal
+    a son prix et son écoulement (les trois se renomment, d'autres s'ajoutent).
+    Sur chaque canal, une bascule **`#` / `%`** : en `%`, tu tapes un
+    pourcentage et la quantité se calcule — au choix **du tirage** de l'exercice
+    ou **du stock disponible** ce mois-là ; le nombre d'exemplaires s'affiche
+    sous la case. Tout le reste suit : stock restant, coût des tirages, ventes
+    par canal et au total, **coût des exemplaires vendus**, **variation de
+    stock** et **marge**. Le tirage payé à l'usine est une charge du mois où il
+    est réglé ; la variation de stock la neutralise pour les exemplaires encore
+    en carton, si bien que **seul le coût de ce qui est vendu pèse sur le
+    résultat**. Un badge prévient si le stock passe sous zéro. Le coût de revient
+    unitaire se recopie depuis le Production Calculator — c'est lui qui tient les
+    devis usine
   - **Total** — tout le prévisionnel de l'exercice d'un seul tenant et
     **non modifiable** : chaque bloc, le stock, puis le compte de résultat
 - Dans les onglets de saisie : mêmes blocs, même ordre, mêmes catégories et mêmes couleurs

@@ -254,15 +254,22 @@ export function blobExcel(state: AppState, exercice: string): Blob {
   const lignesStockPrev: Record<string, string | number>[] = [];
   for (const ex of Object.keys(previsionnels ?? {}).sort()) {
     for (const s of stocksExercice(state.stocks ?? [], ex, refs.jeux ?? [])) {
+      const parCanal: Record<string, string | number> = {};
+      for (const c of s.ligne.canaux ?? []) {
+        const t = s.total.parCanal.get(c.id);
+        parCanal[`${c.nom} — prix HT`] = c.prix;
+        parCanal[`${c.nom} — exemplaires`] = t?.quantite ?? 0;
+        parCanal[`${c.nom} — ventes HT`] = t?.ca ?? 0;
+      }
       lignesStockPrev.push({
         'Exercice': ex,
         'Jeu': s.ligne.jeu,
         'Coût de revient unitaire HT': s.ligne.coutUnitaire,
-        'Prix de vente unitaire HT': s.ligne.prixUnitaire,
         'TVA %': s.ligne.tauxTVA ?? 20,
         'Stock ouverture': s.total.stockDebut,
         'Fabriqués': s.total.fabrique,
-        'Vendus': s.total.vendue,
+        ...parCanal,
+        'Vendus (tous canaux)': s.total.vendue,
         'Stock clôture': s.total.stockFin,
         'Tirages payés HT': s.total.coutFabrication,
         'Ventes HT': s.total.ca,
@@ -287,6 +294,7 @@ export function blobExcel(state: AppState, exercice: string): Blob {
     .sort((a, b) => compareMois(a.mois, b.mois) || a.date.localeCompare(b.date))
     .map(m => ({
       'Date': m.date, 'Mois': labelMois(m.mois), 'Jeu': m.jeu, 'Type': m.type,
+      'Canal': m.canal ?? '',
       'Quantité': m.quantite, 'Prix unitaire HT': m.unitaire,
       'Montant HT': r2(m.quantite * m.unitaire), 'Note': m.note ?? '',
     })));
@@ -525,10 +533,13 @@ function documentPDF(state: AppState, exercice: string): jsPDF {
     if (stockPrevu.length) {
       autoTable(doc, {
         startY: (positions.length ? finY() + 8 : 20),
-        head: [['Jeu (prévu)', 'Coût rev.', 'Prix vente', 'Fabriqués', 'Vendus',
+        head: [['Jeu (prévu)', 'Coût rev.', 'Canaux (prix × exemplaires)', 'Fabriqués', 'Vendus',
           'Stock clôture', 'Tirages HT', 'Ventes HT', 'Variation stock', 'Marge']],
         body: stockPrevu.map(x => [
-          x.ligne.jeu, eurosPDF(x.ligne.coutUnitaire), eurosPDF(x.ligne.prixUnitaire),
+          x.ligne.jeu, eurosPDF(x.ligne.coutUnitaire),
+          (x.ligne.canaux ?? []).filter(c => (x.total.parCanal.get(c.id)?.quantite ?? 0) > 0)
+            .map(c => `${c.nom} ${eurosPDF(c.prix)} × ${x.total.parCanal.get(c.id)!.quantite}`)
+            .join('\n') || '—',
           String(x.total.fabrique), String(x.total.vendue), String(x.total.stockFin),
           eurosPDF(x.total.coutFabrication), eurosPDF(x.total.ca),
           eurosPDF(x.total.variationStock), eurosPDF(x.total.marge),

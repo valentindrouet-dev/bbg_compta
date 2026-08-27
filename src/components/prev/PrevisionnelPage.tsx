@@ -402,7 +402,7 @@ export function PrevisionnelPage() {
         </Card>
       )}
 
-      {vue === 'produits' && stock.caParJeuEtMois.size > 0 && (
+      {vue === 'produits' && stock.caParJeuCanalEtMois.size > 0 && (
         <Card className="mb-5" title="Ventes de jeux — calculées dans l'onglet Stock"
           actions={
             <TotalBloc label="Total ventes de jeux"
@@ -412,29 +412,44 @@ export function PrevisionnelPage() {
             <table data-table="prev:ventesjeux" className="sheet text-sm border-collapse w-full">
               <thead>
                 <tr className="text-left" style={{ color: '#5c5280' }}>
-                  <th className="min-w-52">Jeu</th>
+                  <th className="min-w-52">Jeu et canal de vente</th>
                   {moisList.map(m => <th key={m} className="text-right">{labelMois(m)}</th>)}
                   <th className="text-right bg-[var(--bloc-total)]">Total</th>
                 </tr>
               </thead>
               <tbody>
-                {[...stock.caParJeuEtMois.entries()].map(([jeu, parMois]) => (
-                  <tr key={jeu}>
-                    <td>
-                      <span className="px-1.5 py-0.5 rounded text-[11px] font-bold"
-                        style={{ backgroundColor: couleurJeu(jeu, refs), color: encreSur(couleurJeu(jeu, refs)) }}>
-                        {jeu}
-                      </span>
-                    </td>
-                    {moisList.map(m => {
-                      const v = parMois.get(m) ?? 0;
-                      return <td key={m} className="text-right tabular-nums">{v ? euros0(v) : '·'}</td>;
-                    })}
-                    <td className="text-right tabular-nums bg-[var(--bloc-total)] font-medium">
-                      {euros(r2([...parMois.values()].reduce((x, v) => x + v, 0)))}
-                    </td>
-                  </tr>
-                ))}
+                {[...stock.caParJeuCanalEtMois.entries()].flatMap(([jeu, canaux]) => [
+                  ...[...canaux.entries()].map(([canal, parMois]) => (
+                    <tr key={`${jeu}-${canal}`}>
+                      <td>
+                        <span className="px-1.5 py-0.5 rounded text-[11px] font-bold mr-1.5"
+                          style={{ backgroundColor: couleurJeu(jeu, refs), color: encreSur(couleurJeu(jeu, refs)) }}>
+                          {jeu}
+                        </span>
+                        <span style={{ color: '#5c5280' }}>{canal}</span>
+                      </td>
+                      {moisList.map(m => {
+                        const v = parMois.get(m) ?? 0;
+                        return <td key={m} className="text-right tabular-nums">{v ? euros0(v) : '·'}</td>;
+                      })}
+                      <td className="text-right tabular-nums bg-[var(--bloc-total)] font-medium">
+                        {euros(r2([...parMois.values()].reduce((x, v) => x + v, 0)))}
+                      </td>
+                    </tr>
+                  )),
+                  canaux.size > 1 ? (
+                    <tr key={`${jeu}-total`} style={{ fontWeight: 700, backgroundColor: 'var(--bloc-tres-clair)' }}>
+                      <td>Total {jeu}</td>
+                      {moisList.map(m => {
+                        const v = stock.caParJeuEtMois.get(jeu)?.get(m) ?? 0;
+                        return <td key={m} className="text-right tabular-nums">{v ? euros0(v) : '·'}</td>;
+                      })}
+                      <td className="text-right tabular-nums bg-[var(--bloc-total)]">
+                        {euros(r2([...(stock.caParJeuEtMois.get(jeu)?.values() ?? [])].reduce((x, v) => x + v, 0)))}
+                      </td>
+                    </tr>
+                  ) : null,
+                ])}
               </tbody>
               <tfoot>
                 <tr className="total-bloc">
@@ -450,8 +465,9 @@ export function PrevisionnelPage() {
           </div>
           <p className="text-xs mt-2" style={{ color: '#9a92b5' }}>
             Ces montants ne se saisissent pas ici : ils sont le produit des exemplaires vendus par
-            leur prix de vente, dans l'onglet <b>Stock</b>. Ils entrent dans le résultat et dans la
-            trésorerie prévisionnelle comme n'importe quel produit.
+            le prix de <b>leur canal</b> — distributeur, boutique, éditeur — dans l'onglet
+            <b>Stock</b>. Ils entrent dans le résultat et dans la trésorerie prévisionnelle comme
+            n'importe quel produit.
           </p>
         </Card>
       )}

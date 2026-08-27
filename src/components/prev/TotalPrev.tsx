@@ -47,10 +47,15 @@ export function TotalPrev({ exercice, moisList }: { exercice: string; moisList: 
     <div className="space-y-5">
       {BLOCS_TOTAL.map(bloc => {
         const lignesBloc = lignes.filter(l => l.section === bloc.cle && !l.unite);
-        const duStock = bloc.cle === 'produits'
-          ? [...stock.caParJeuEtMois.entries()]
+        // Les ventes se détaillent par canal (distributeur, boutique, éditeur) ;
+        // les tirages, eux, n'ont qu'une ligne par jeu.
+        const duStock: [string, string, Map<string, number>][] = bloc.cle === 'produits'
+          ? [...stock.caParJeuCanalEtMois.entries()].flatMap(([jeu, canaux]) =>
+            [...canaux.entries()].map(([canal, parMois]) =>
+              [jeu, `Ventes ${canal} (stock)`, parMois] as [string, string, Map<string, number>]))
           : bloc.cle === 'charges'
-            ? [...stock.fabricationParJeuEtMois.entries()]
+            ? [...stock.fabricationParJeuEtMois.entries()].map(([jeu, parMois]) =>
+              [jeu, 'Tirages payés à l’usine (stock)', parMois] as [string, string, Map<string, number>])
             : [];
         if (!lignesBloc.length && !duStock.length) return null;
 
@@ -97,16 +102,16 @@ export function TotalPrev({ exercice, moisList }: { exercice: string; moisList: 
                       </tr>
                     );
                   })}
-                  {duStock.map(([jeu, parMoisJeu]) => {
+                  {duStock.map(([jeu, libelle, parMoisJeu]) => {
                     const total = r2([...parMoisJeu.values()].reduce((s, v) => s + v, 0));
                     return (
-                      <tr key={`stock-${jeu}`} style={{ fontStyle: 'italic' }}>
+                      <tr key={`stock-${jeu}-${libelle}`} style={{ fontStyle: 'italic' }}>
                         <td>
                           <span className="mr-1.5 px-1.5 py-0.5 rounded text-[11px] font-bold"
                             style={{ backgroundColor: couleurJeu(jeu, refs), color: encreSur(couleurJeu(jeu, refs)) }}>
                             {jeu}
                           </span>
-                          {bloc.cle === 'produits' ? 'Ventes de jeux (stock)' : 'Tirages payés à l’usine (stock)'}
+                          {libelle}
                         </td>
                         {moisList.map(m => {
                           const v = parMoisJeu.get(m) ?? 0;

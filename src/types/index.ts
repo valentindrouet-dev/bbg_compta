@@ -154,17 +154,44 @@ export interface LigneStock {
   jeu: string;
   /** Coût de revient unitaire HT (fabrication + transport), par exemplaire. */
   coutUnitaire: number;
-  /** Prix de vente unitaire HT, par exemplaire. */
-  prixUnitaire: number;
   /** TVA des ventes, en % (20 par défaut). */
   tauxTVA?: number;
   /** Stock d'ouverture, en exemplaires — seulement sur le premier exercice. */
   stockInitial?: number;
   /** Exemplaires fabriqués, une case par mois de l'exercice. */
   fabrique: (number | null)[];
-  /** Exemplaires vendus, une case par mois de l'exercice. */
-  vendue: (number | null)[];
+  /**
+   * Les canaux de vente. Un même jeu ne se vend pas au même prix selon qu'il
+   * part chez un distributeur, dans une boutique ou chez un éditeur : chacun a
+   * donc son prix et sa propre ligne de quantités.
+   */
+  canaux: CanalVente[];
   note?: string;
+}
+
+/**
+ * Un canal de vente d'un jeu : son prix et ce qu'il écoule mois par mois.
+ *
+ * Les quantités se saisissent au choix en **exemplaires** ou en **pourcentage**
+ * — plus rapide pour esquisser un écoulement (« 8 % du tirage par mois »)
+ * que de recopier des nombres.
+ */
+export interface CanalVente {
+  id: string;
+  /** « Distributeur », « Boutique », « Éditeur »… librement renommable. */
+  nom: string;
+  /** Prix de vente unitaire HT sur ce canal. */
+  prix: number;
+  /** Ce que contiennent les cases : des exemplaires ou des pourcentages. */
+  mode: 'nombre' | 'pourcentage';
+  /**
+   * L'assiette du pourcentage :
+   * - `tirage` : le tirage de l'exercice (stock d'ouverture + fabriqués) ;
+   * - `disponible` : le stock du mois (stock au début + fabriqués du mois).
+   */
+  base?: 'tirage' | 'disponible';
+  /** Une case par mois : exemplaires, ou pourcentage selon `mode`. */
+  valeurs: (number | null)[];
 }
 
 /** Un mouvement de stock réel, saisi dans la page Stocks du journal. */
@@ -186,6 +213,8 @@ export interface MouvementStock {
    * vente. Une perte n'en a pas — elle est valorisée au coût moyen.
    */
   unitaire: number;
+  /** Canal de la vente (distributeur, boutique, éditeur…), pour la comparer au prévu. */
+  canal?: string;
   /** Écriture du journal correspondante, quand il y en a une. */
   entryId?: string;
   note?: string;

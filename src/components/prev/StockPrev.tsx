@@ -7,13 +7,13 @@
  * de stock qui remet chaque coût en face de la vente qui lui correspond.
  */
 import { useMemo, useState } from 'react';
-import { Plus, Trash2, ExternalLink } from 'lucide-react';
+import { Plus, Trash2, ExternalLink, AlertTriangle } from 'lucide-react';
 import { useStore } from '../../store';
 import type { LigneStock } from '../../types';
 import { labelMois } from '../../utils/dates';
 import { euros, euros0, r2 } from '../../utils/money';
 import { couleurJeu, encreSur, voileSur } from '../../utils/jeux';
-import { stocksExercice, type StockJeu } from '../../utils/stock';
+import { CANAUX_DEFAUT, stocksExercice, type StockJeu } from '../../utils/stock';
 import { Card, Btn, MoneyInput, StatCard } from '../ui';
 
 const AUCUN_JEU: string[] = [];
@@ -25,7 +25,6 @@ export function StockPrev({ exercice, moisList }: { exercice: string; moisList: 
   const addLigneStock = useStore(s => s.addLigneStock);
   const updateLigneStock = useStore(s => s.updateLigneStock);
   const removeLigneStock = useStore(s => s.removeLigneStock);
-  const setStockCell = useStore(s => s.setStockCell);
   const [nouveau, setNouveau] = useState('');
 
   const lignes = useMemo(
@@ -61,7 +60,6 @@ export function StockPrev({ exercice, moisList }: { exercice: string; moisList: 
           couleur={couleurJeu(s.ligne.jeu, refs)}
           lienProd={refs.jeuxMeta?.[s.ligne.jeu]?.lienProd}
           onPatch={patch => updateLigneStock(s.ligne.id, patch)}
-          onCell={(champ, i, v) => setStockCell(s.ligne.id, champ, i, v)}
           onRemove={() => removeLigneStock(s.ligne.id)}
         />
       ))}
@@ -101,15 +99,21 @@ export function StockPrev({ exercice, moisList }: { exercice: string; moisList: 
   );
 }
 
-function TableauJeu({ s, moisList, couleur, lienProd, onPatch, onCell, onRemove }: {
+function TableauJeu({ s, moisList, couleur, lienProd, onPatch, onRemove }: {
   s: StockJeu; moisList: string[]; couleur: string; lienProd?: string;
   onPatch: (p: Partial<LigneStock>) => void;
-  onCell: (champ: 'fabrique' | 'vendue', i: number, v: number | null) => void;
   onRemove: () => void;
 }) {
+  const setCanalCell = useStore(st => st.setCanalCell);
+  const addCanal = useStore(st => st.addCanal);
+  const updateCanal = useStore(st => st.updateCanal);
+  const removeCanal = useStore(st => st.removeCanal);
+  const setStockFabrique = useStore(st => st.setStockFabrique);
   const encre = encreSur(couleur);
   const voile = voileSur(couleur, 0.2);
   const l = s.ligne;
+  const nCanaux = (l.canaux ?? []).length;
+  const libres = CANAUX_DEFAUT.map(c => c.nom).filter(n => !(l.canaux ?? []).some(c => c.nom === n));
 
   /** Une ligne calculée : libellé, valeur par mois, total, et son ton. */
   const Ligne = ({ label, aide, get, total, fort, monnaie = true, signe }: {
@@ -142,19 +146,22 @@ function TableauJeu({ s, moisList, couleur, lienProd, onPatch, onCell, onRemove 
           <span className="text-sm font-normal" style={{ color: '#6f6690' }}>
             {s.total.stockFin} exemplaire{s.total.stockFin > 1 ? 's' : ''} en stock à la clôture
           </span>
+          {s.decouvert && (
+            <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full"
+              style={{ backgroundColor: '#fdecea', color: '#b7332e' }}
+              title="Le stock descend sous zéro : tu vends plus d'exemplaires que tu n'en as fabriqué.">
+              <AlertTriangle size={12} /> stock négatif
+            </span>
+          )}
         </span>
       }
       actions={
         <div className="flex items-center gap-2 text-sm">
-          <label className="inline-flex items-center gap-1.5" style={{ color: '#5c5280' }}>
+          <label className="inline-flex items-center gap-1.5" style={{ color: '#5c5280' }}
+            title="Coût de revient unitaire HT — à recopier du Production Calculator">
             Coût de revient
             <MoneyInput value={l.coutUnitaire || null} className="w-24"
               onCommit={v => onPatch({ coutUnitaire: v ?? 0 })} placeholder="0 €" />
-          </label>
-          <label className="inline-flex items-center gap-1.5" style={{ color: '#5c5280' }}>
-            Prix de vente
-            <MoneyInput value={l.prixUnitaire || null} className="w-24"
-              onCommit={v => onPatch({ prixUnitaire: v ?? 0 })} placeholder="0 €" />
           </label>
           <label className="inline-flex items-center gap-1.5" style={{ color: '#5c5280' }} title="Stock d'ouverture, en exemplaires">
             Stock initial
@@ -184,7 +191,7 @@ function TableauJeu({ s, moisList, couleur, lienProd, onPatch, onCell, onRemove 
         <table data-table={`stockprev:${l.jeu}`} className="sheet text-sm border-collapse w-full">
           <thead>
             <tr className="text-left" style={{ color: '#5c5280' }}>
-              <th className="min-w-52">Mouvement</th>
+              <th className="min-w-64">Mouvement</th>
               {moisList.map(m => <th key={m} className="text-right">{labelMois(m)}</th>)}
               <th className="text-right" style={{ backgroundColor: voile }}>Total</th>
             </tr>
@@ -198,7 +205,7 @@ function TableauJeu({ s, moisList, couleur, lienProd, onPatch, onCell, onRemove 
                     type="number" min={0}
                     className="w-full min-w-16 text-right px-1 py-0.5 rounded border border-transparent hover:border-[#ddd6ef] bg-transparent tabular-nums"
                     value={l.fabrique[i] ?? ''}
-                    onChange={e => onCell('fabrique', i, e.target.value === '' ? null : Number(e.target.value))}
+                    onChange={e => setStockFabrique(l.id, i, e.target.value === '' ? null : Number(e.target.value))}
                   />
                 </td>
               ))}
@@ -206,30 +213,136 @@ function TableauJeu({ s, moisList, couleur, lienProd, onPatch, onCell, onRemove 
                 {s.total.fabrique || '·'}
               </td>
             </tr>
+
+            {/* ------ Un canal de vente par ligne : son prix, son écoulement ---- */}
+            {(l.canaux ?? []).map(c => {
+              const pct = c.mode === 'pourcentage';
+              return (
+                <tr key={c.id} className="group/canal">
+                  <td>
+                    <div className="flex items-center gap-1 flex-wrap">
+                      <input
+                        className="border border-transparent hover:border-[#ddd6ef] rounded px-1 py-0.5 bg-transparent font-medium w-28"
+                        value={c.nom}
+                        title={CANAUX_DEFAUT.find(x => x.nom === c.nom)?.aide ?? 'Nom du canal de vente'}
+                        onChange={e => updateCanal(l.id, c.id, { nom: e.target.value })}
+                      />
+                      <MoneyInput value={c.prix || null} className="w-20"
+                        placeholder="prix"
+                        onCommit={v => updateCanal(l.id, c.id, { prix: v ?? 0 })} />
+                      <span className="flex rounded border overflow-hidden text-[11px]"
+                        style={{ borderColor: 'var(--bbg-border)' }}>
+                        {([['nombre', '#'], ['pourcentage', '%']] as const).map(([m, lab]) => (
+                          <button
+                            key={m}
+                            className="px-1.5 py-0.5 font-bold"
+                            style={c.mode === m
+                              ? { backgroundColor: 'var(--bbg-purple-dark)', color: '#fff' }
+                              : { backgroundColor: '#fff', color: '#5c5280' }}
+                            title={m === 'nombre'
+                              ? 'Saisir des exemplaires'
+                              : 'Saisir un pourcentage — la quantité est calculée'}
+                            onClick={() => updateCanal(l.id, c.id, { mode: m })}
+                          >{lab}</button>
+                        ))}
+                      </span>
+                      {pct && (
+                        <select
+                          className="border rounded px-1 py-0.5 text-[11px] bg-white"
+                          style={{ borderColor: 'var(--bbg-border)' }}
+                          value={c.base ?? 'tirage'}
+                          title="Sur quoi porte le pourcentage"
+                          onChange={e => updateCanal(l.id, c.id, { base: e.target.value as 'tirage' | 'disponible' })}
+                        >
+                          <option value="tirage">du tirage</option>
+                          <option value="disponible">du stock dispo.</option>
+                        </select>
+                      )}
+                      {nCanaux > 1 && (
+                        <button
+                          className="opacity-0 group-hover/canal:opacity-100"
+                          style={{ color: '#b7332e' }} title="Retirer ce canal"
+                          onClick={() => removeCanal(l.id, c.id)}
+                        ><Trash2 size={12} /></button>
+                      )}
+                    </div>
+                  </td>
+                  {moisList.map((m, i) => {
+                    const q = s.mois[i].parCanal.get(c.id)?.quantite ?? 0;
+                    return (
+                      <td key={m} className="text-right p-0.5!"
+                        title={pct && q ? `${c.valeurs[i]} % → ${q} exemplaire${q > 1 ? 's' : ''}` : undefined}>
+                        <div className="flex items-center justify-end gap-0.5">
+                          <input
+                            type="number" min={0} step={pct ? 0.5 : 1}
+                            className="w-full min-w-14 text-right px-1 py-0.5 rounded border border-transparent hover:border-[#ddd6ef] bg-transparent tabular-nums"
+                            value={c.valeurs[i] ?? ''}
+                            onChange={e => setCanalCell(l.id, c.id, i, e.target.value === '' ? null : Number(e.target.value))}
+                          />
+                          {pct && <span className="text-[10px] shrink-0" style={{ color: '#9a92b5' }}>%</span>}
+                        </div>
+                        {pct && q > 0 && (
+                          <div className="text-[10px] leading-none pr-1 pb-0.5 tabular-nums"
+                            style={{ color: 'var(--bbg-purple-dark)' }}>{q}</div>
+                        )}
+                      </td>
+                    );
+                  })}
+                  <td className="text-right tabular-nums" style={{ backgroundColor: voile, fontWeight: 700 }}>
+                    {s.total.parCanal.get(c.id)?.quantite || '·'}
+                  </td>
+                </tr>
+              );
+            })}
             <tr>
-              <td title="Exemplaires écoulés ce mois-là">Vendus (exemplaires)</td>
-              {moisList.map((m, i) => (
-                <td key={m} className="text-right p-0.5!">
-                  <input
-                    type="number" min={0}
-                    className="w-full min-w-16 text-right px-1 py-0.5 rounded border border-transparent hover:border-[#ddd6ef] bg-transparent tabular-nums"
-                    value={l.vendue[i] ?? ''}
-                    onChange={e => onCell('vendue', i, e.target.value === '' ? null : Number(e.target.value))}
-                  />
-                </td>
-              ))}
-              <td className="text-right tabular-nums" style={{ backgroundColor: voile, fontWeight: 700 }}>
-                {s.total.vendue || '·'}
+              <td colSpan={moisList.length + 2} className="py-1">
+                <div className="flex items-center gap-1.5 flex-wrap text-xs">
+                  <span style={{ color: '#9a92b5' }}>Ajouter un canal :</span>
+                  {libres.map(n => (
+                    <button key={n}
+                      className="px-2 py-0.5 rounded-full border"
+                      style={{ borderColor: 'var(--bbg-border)', color: 'var(--bbg-purple-dark)' }}
+                      title={CANAUX_DEFAUT.find(x => x.nom === n)?.aide}
+                      onClick={() => addCanal(l.id, n)}
+                    >+ {n}</button>
+                  ))}
+                  <button
+                    className="px-2 py-0.5 rounded-full border inline-flex items-center gap-1"
+                    style={{ borderColor: 'var(--bbg-border)', color: 'var(--bbg-purple-dark)' }}
+                    onClick={() => {
+                      const n = prompt('Nom du canal de vente ?');
+                      if (n?.trim()) addCanal(l.id, n.trim());
+                    }}
+                  ><Plus size={11} /> autre</button>
+                </div>
               </td>
             </tr>
+
+            <Ligne label="TOTAL VENDUS (exemplaires)" monnaie={false} fort
+              aide="Tous canaux confondus"
+              get={i => s.mois[i].vendue} total={s.total.vendue} />
             <Ligne label="Stock en fin de mois (exemplaires)" monnaie={false}
               aide="Stock d'ouverture + fabriqués − vendus"
               get={i => s.mois[i].stockFin} total={s.total.stockFin} />
             <Ligne label="Coût des tirages (HT)" fort
               aide="Fabriqués × coût de revient — ce qui sort du compte pour l'usine"
               get={i => s.mois[i].coutFabrication} total={s.total.coutFabrication} />
-            <Ligne label="Ventes (HT)" fort
-              aide="Vendus × prix de vente"
+            {(l.canaux ?? []).map(c => (
+              <tr key={`ca-${c.id}`}>
+                <td style={{ paddingLeft: 18 }} title={`Exemplaires écoulés chez « ${c.nom} » × ${euros(c.prix)}`}>
+                  Ventes {c.nom} (HT)
+                </td>
+                {moisList.map((m, i) => {
+                  const v = s.mois[i].parCanal.get(c.id)?.ca ?? 0;
+                  return <td key={m} className="text-right tabular-nums">{v ? euros0(v) : '·'}</td>;
+                })}
+                <td className="text-right tabular-nums" style={{ backgroundColor: voile, fontWeight: 700 }}>
+                  {s.total.parCanal.get(c.id)?.ca ? euros(s.total.parCanal.get(c.id)!.ca) : '·'}
+                </td>
+              </tr>
+            ))}
+            <Ligne label="TOTAL VENTES (HT)" fort
+              aide="Tous canaux confondus"
               get={i => s.mois[i].ca} total={s.total.ca} />
             <Ligne label="Coût des exemplaires vendus"
               aide="Vendus × coût de revient — la seule part du tirage qui pèse au résultat"

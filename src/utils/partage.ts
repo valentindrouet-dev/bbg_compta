@@ -297,7 +297,7 @@ export function pageLectureSeule(state: AppState, exercice: string): string {
         <span class="total">${ech(euros(r2(prevuStock.reduce((s, x) => s + x.total.marge, 0))))} de marge</span></h3>
       <div class="defile"><table class="journal">
         <thead><tr>
-          <th>Jeu</th><th class="n">Coût de revient</th><th class="n">Prix de vente</th>
+          <th>Jeu</th><th class="n">Coût de revient</th><th>Canaux de vente</th>
           <th class="n">Fabriqués</th><th class="n">Vendus</th><th class="n">Stock clôture</th>
           <th class="n">Tirages HT</th><th class="n">Ventes HT</th>
           <th class="n">Variation de stock</th><th class="n">Marge</th>
@@ -305,7 +305,9 @@ export function pageLectureSeule(state: AppState, exercice: string): string {
         <tbody>${prevuStock.map(x => `<tr>
           <td><span class="pastille" style="background:${ech(couleurJeu(x.ligne.jeu, refs))};color:${ech(encreSur(couleurJeu(x.ligne.jeu, refs)))}">${ech(x.ligne.jeu)}</span></td>
           <td class="n">${ech(euros(x.ligne.coutUnitaire))}</td>
-          <td class="n">${ech(euros(x.ligne.prixUnitaire))}</td>
+          <td>${(x.ligne.canaux ?? []).filter(c => (x.total.parCanal.get(c.id)?.quantite ?? 0) > 0)
+            .map(c => `${ech(c.nom)} ${ech(euros(c.prix))} × ${x.total.parCanal.get(c.id)!.quantite}`)
+            .join('<br>') || '<span class="vide">·</span>'}</td>
           <td class="n">${x.total.fabrique || '·'}</td><td class="n">${x.total.vendue || '·'}</td>
           <td class="n fort">${x.total.stockFin}</td>
           <td class="n">${ech(euros(x.total.coutFabrication))}</td>

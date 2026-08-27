@@ -18,7 +18,7 @@ import {
 import { euros, euros0, r2 } from '../../utils/money';
 import { couleurJeu, encreSur, voileSur } from '../../utils/jeux';
 import {
-  mouvementsExercice, positionsStock, sensMouvement, stocksExercice,
+  CANAUX_DEFAUT, mouvementsExercice, positionsStock, sensMouvement, stocksExercice,
 } from '../../utils/stock';
 import { useEtatVue } from '../../utils/etatVue';
 import { PageHeader, Card, Btn, StatCard, MoneyInput, ExerciceTabs } from '../ui';
@@ -50,6 +50,14 @@ export function StocksPage() {
   const positions = useMemo(() => positionsStock(mouvements, jeux), [mouvements, jeux]);
   const prevu = useMemo(() => stocksExercice(stocks, exercice, jeux), [stocks, exercice, jeux]);
 
+  /** Les canaux déjà utilisés, plus ceux du catalogue : de quoi compléter. */
+  const canauxConnus = useMemo(() => {
+    const vus = new Set<string>(CANAUX_DEFAUT.map(c => c.nom));
+    for (const l of stocks) for (const c of l.canaux ?? []) vus.add(c.nom);
+    for (const m of mouvements) if (m.canal) vus.add(m.canal);
+    return [...vus];
+  }, [stocks, mouvements]);
+
   const totalStock = positions.reduce((s, p) => s + p.stock, 0);
   const valeurStock = r2(positions.reduce((s, p) => s + p.valeur, 0));
   const totalCA = r2(positions.reduce((s, p) => s + p.ca, 0));
@@ -78,6 +86,10 @@ export function StocksPage() {
         <StatCard label="Marge dégagée" value={euros0(totalMarge)}
           tone={totalMarge >= 0 ? 'good' : 'bad'} sub="ventes − coût des exemplaires sortis" />
       </div>
+
+      <datalist id="canaux-vente">
+        {canauxConnus.map(c => <option key={c} value={c} />)}
+      </datalist>
 
       {/* ---------------------------------------------- Position par jeu --- */}
       <Card title="Position de chaque jeu" className="mb-5">
@@ -153,6 +165,55 @@ export function StocksPage() {
         )}
       </Card>
 
+      {/* ------------------------------------------- Ventes par canal ------ */}
+      {positions.some(p => p.parCanal.size > 0) && (
+        <Card title="Ventes par canal" className="mb-5">
+          <div className="overflow-x-auto -mx-4 px-4">
+            <table data-table="stocks:canaux" className="sheet text-sm border-collapse w-full">
+              <thead>
+                <tr className="text-left" style={{ color: '#5c5280' }}>
+                  <th className="min-w-40">Jeu</th>
+                  <th className="min-w-32">Canal</th>
+                  <th className="text-right">Exemplaires</th>
+                  <th className="text-right">Ventes HT</th>
+                  <th className="text-right">Prix moyen</th>
+                  <th className="text-right">Prévu (prix du canal)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {positions.flatMap(pos => [...pos.parCanal.entries()].map(([canal, v]) => {
+                  const c = couleurJeu(pos.jeu, refs);
+                  const prevuCanal = prevu.find(x => x.ligne.jeu === pos.jeu)
+                    ?.ligne.canaux?.find(x => x.nom === canal);
+                  return (
+                    <tr key={`${pos.jeu}-${canal}`}>
+                      <td>
+                        <span className="px-2 py-0.5 rounded-full text-xs font-bold"
+                          style={{ backgroundColor: c, color: encreSur(c) }}>{pos.jeu}</span>
+                      </td>
+                      <td>{canal}</td>
+                      <td className="text-right tabular-nums font-bold">{v.quantite}</td>
+                      <td className="text-right tabular-nums">{euros(v.ca)}</td>
+                      <td className="text-right tabular-nums">
+                        {v.quantite ? euros(r2(v.ca / v.quantite)) : '·'}
+                      </td>
+                      <td className="text-right tabular-nums" style={{ color: '#9a92b5' }}
+                        title="Prix de ce canal dans le prévisionnel de stock">
+                        {prevuCanal?.prix ? euros(prevuCanal.prix) : '—'}
+                      </td>
+                    </tr>
+                  );
+                }))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs mt-2" style={{ color: '#9a92b5' }}>
+            Un jeu ne part pas au même prix chez un distributeur, en boutique ou chez un éditeur :
+            le prix moyen constaté se compare ici à celui budgété dans <b>Prévisionnel → Stock</b>.
+          </p>
+        </Card>
+      )}
+
       <NouveauMouvement jeux={jeux} exercice={exercice} onAjouter={addMouvementStock} />
 
       {/* ------------------------------------------------- Mouvements ------ */}
@@ -163,6 +224,7 @@ export function StocksPage() {
               <thead>
                 <tr className="text-left" style={{ color: '#5c5280' }}>
                   <th>Date</th><th>Mois</th><th className="min-w-32">Jeu</th><th>Type</th>
+                  <th>Canal</th>
                   <th className="text-right">Quantité</th>
                   <th className="text-right">Prix unitaire HT</th>
                   <th className="text-right">Montant HT</th>
@@ -194,6 +256,13 @@ export function StocksPage() {
                           onChange={e => updateMouvementStock(m.id, { type: e.target.value as MouvementStock['type'] })}>
                           {TYPES.map(t => <option key={t.cle} value={t.cle}>{t.label}</option>)}
                         </select>
+                      </td>
+                      <td>
+                        {m.type === 'vente' ? (
+                          <input list="canaux-vente" value={m.canal ?? ''} placeholder="—"
+                            className="w-28 border border-transparent hover:border-[#ddd6ef] rounded px-1 py-0.5 bg-transparent"
+                            onChange={e => updateMouvementStock(m.id, { canal: e.target.value || undefined })} />
+                        ) : <span style={{ color: '#c1bad6' }}>·</span>}
                       </td>
                       <td className="text-right tabular-nums"
                         style={{ color: entree ? '#38761d' : '#b7332e', fontWeight: 700 }}>
@@ -249,6 +318,7 @@ function NouveauMouvement({ jeux, exercice, onAjouter }: {
   const [date, setDate] = useState(todayISO());
   const [quantite, setQuantite] = useState('');
   const [unitaire, setUnitaire] = useState<number | null>(null);
+  const [canal, setCanal] = useState(CANAUX_DEFAUT[0].nom);
   const [note, setNote] = useState('');
 
   const mois = moisDeDate(date);
@@ -259,7 +329,11 @@ function NouveauMouvement({ jeux, exercice, onAjouter }: {
   const valider = () => {
     const q = Number(quantite);
     if (!jeu || !q) return;
-    onAjouter({ date, mois, jeu, type, quantite: Math.abs(q), unitaire: unitaire ?? 0, note: note || undefined });
+    onAjouter({
+      date, mois, jeu, type, quantite: Math.abs(q), unitaire: unitaire ?? 0,
+      ...(type === 'vente' && canal ? { canal } : {}),
+      note: note || undefined,
+    });
     setQuantite(''); setNote('');
   };
 
@@ -286,6 +360,14 @@ function NouveauMouvement({ jeux, exercice, onAjouter }: {
             {TYPES.map(t => <option key={t.cle} value={t.cle} title={t.aide}>{t.label}</option>)}
           </select>
         </label>
+        {type === 'vente' && (
+          <label className="text-sm" style={{ color: '#5c5280' }}>
+            <div className="mb-0.5">Canal</div>
+            <input list="canaux-vente" value={canal} onChange={e => setCanal(e.target.value)}
+              title="Distributeur, boutique, éditeur… le prix n'est pas le même"
+              className="border rounded px-2 py-1.5 w-32 bg-white" style={{ borderColor: 'var(--bbg-border)' }} />
+          </label>
+        )}
         <label className="text-sm" style={{ color: '#5c5280' }}>
           <div className="mb-0.5">Quantité</div>
           <input type="number" min={1} value={quantite} onChange={e => setQuantite(e.target.value)}

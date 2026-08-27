@@ -2,10 +2,12 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type {
   JournalEntry, FinanceEntry, BudgetExercice, ChronoEvent, TresoPrevLine, Referentiels, CategorieMeta,
-  FormulePrev, JeuMeta, LigneStock, MouvementStock, PrevLigne, PrevSection, TresoManuel,
+  CanalVente, FormulePrev, JeuMeta, LigneStock, MouvementStock, PrevLigne, PrevSection,
+  TresoManuel,
 } from '../types';
 import {
-  CATEGORIE_FABRICATION, CATEGORIE_VARIATION_STOCK, CATEGORIE_VENTES_JEUX, ligneStockVide,
+  CANAUX_DEFAUT, CATEGORIE_FABRICATION, CATEGORIE_VARIATION_STOCK, CATEGORIE_VENTES_JEUX,
+  canalVide, ligneStockVide,
 } from '../utils/stock';
 import {
   categoriesImmobilisees, categoriesManquantes, estLigneCalculee, gabaritPrevisionnel,
@@ -301,8 +303,13 @@ export interface AppState {
   addLigneStock: (exercice: string, jeu: string) => void;
   updateLigneStock: (id: string, patch: Partial<LigneStock>) => void;
   removeLigneStock: (id: string) => void;
-  /** Écrit une quantité fabriquée ou vendue dans une case du mois. */
-  setStockCell: (id: string, champ: 'fabrique' | 'vendue', i: number, v: number | null) => void;
+  /** Écrit une quantité fabriquée dans une case du mois. */
+  setStockFabrique: (id: string, i: number, v: number | null) => void;
+  /** Écrit une valeur (exemplaires ou %) dans la case d'un canal de vente. */
+  setCanalCell: (id: string, canalId: string, i: number, v: number | null) => void;
+  addCanal: (id: string, nom: string) => void;
+  updateCanal: (id: string, canalId: string, patch: Partial<CanalVente>) => void;
+  removeCanal: (id: string, canalId: string) => void;
   addMouvementStock: (mv: Omit<MouvementStock, 'id'>) => void;
   updateMouvementStock: (id: string, patch: Partial<MouvementStock>) => void;
   removeMouvementStock: (id: string) => void;
@@ -1059,9 +1066,32 @@ export const useStore = create<AppState>()(
         stocks: s.stocks.map(l => l.id === id ? { ...l, ...patch } : l),
       })),
       removeLigneStock: (id) => set(s => ({ stocks: s.stocks.filter(l => l.id !== id) })),
-      setStockCell: (id, champ, i, v) => set(s => ({
+      setStockFabrique: (id, i, v) => set(s => ({
         stocks: s.stocks.map(l => l.id === id
-          ? { ...l, [champ]: l[champ].map((x, j) => j === i ? v : x) }
+          ? { ...l, fabrique: l.fabrique.map((x, j) => j === i ? v : x) }
+          : l),
+      })),
+      setCanalCell: (id, canalId, i, v) => set(s => ({
+        stocks: s.stocks.map(l => l.id === id ? {
+          ...l,
+          canaux: l.canaux.map(c => c.id === canalId
+            ? { ...c, valeurs: c.valeurs.map((x, j) => j === i ? v : x) }
+            : c),
+        } : l),
+      })),
+      addCanal: (id, nom) => set(s => ({
+        stocks: s.stocks.map(l => l.id === id
+          ? { ...l, canaux: [...l.canaux, canalVide(nom, moisExercice(l.exercice).length)] }
+          : l),
+      })),
+      updateCanal: (id, canalId, patch) => set(s => ({
+        stocks: s.stocks.map(l => l.id === id ? {
+          ...l, canaux: l.canaux.map(c => c.id === canalId ? { ...c, ...patch } : c),
+        } : l),
+      })),
+      removeCanal: (id, canalId) => set(s => ({
+        stocks: s.stocks.map(l => l.id === id
+          ? { ...l, canaux: l.canaux.filter(c => c.id !== canalId) }
           : l),
       })),
       addMouvementStock: (mv) => set(s => ({
@@ -1080,7 +1110,7 @@ export const useStore = create<AppState>()(
     },
     {
       name: 'bbg-compta-v1',
-      version: 14,
+      version: 15,
       // v2 : ajout de la liste des jeux et rattachement des dépenses de
       // développement au jeu concerné (déduit des mots clés / de la catégorie).
       migrate: (persisted, version) => {
@@ -1226,6 +1256,29 @@ export const useStore = create<AppState>()(
             s.referentiels = avecGroupesProduits(
               { ...refs, categoriesProduits: prod, categoriesDepenses: dep });
           }
+        }
+        // v15 : un jeu ne se vend pas au même prix selon qu'il part chez un
+        // distributeur, en boutique ou chez un éditeur. Le prix unique et sa
+        // ligne de quantités laissent la place à des canaux. Ce qui avait déjà
+        // été saisi est conservé dans un canal « Ventes (à ventiler) » : on ne
+        // devine pas à quel canal il appartenait.
+        if (version < 15 && s.stocks) {
+          s.stocks = s.stocks.map((l: LigneStock & {
+            prixUnitaire?: number; vendue?: (number | null)[];
+          }) => {
+            if (l.canaux) return l;
+            const n = moisExercice(l.exercice).length;
+            const canaux = CANAUX_DEFAUT.map(c => canalVide(c.nom, n));
+            const deja = (l.vendue ?? []).some(v => v != null && v !== 0);
+            if (deja) {
+              const repris = canalVide('Ventes (à ventiler)', n, l.prixUnitaire ?? 0);
+              repris.valeurs = [...(l.vendue ?? [])];
+              canaux.unshift(repris);
+            }
+            const { prixUnitaire: _p, vendue: _v, ...reste } = l;
+            void _p; void _v;
+            return { ...reste, canaux };
+          });
         }
         return s;
       },
