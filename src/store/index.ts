@@ -8,7 +8,10 @@ import {
   categoriesImmobilisees, categoriesManquantes, estLigneCalculee, gabaritPrevisionnel,
   migrerBudgets, sectionDeCategorie,
 } from '../utils/previsionnel';
-import { CATEGORIES_PERSONNEL_INITIALES, GROUPE_PERSONNEL } from '../utils/blocs';
+import {
+  CATEGORIES_PERSONNEL_INITIALES, GROUPE_PERSONNEL, POSTES_JEU_IMMOBILISES,
+  estPosteJeuImmobilise,
+} from '../utils/blocs';
 import { EXERCICES, moisExercice, PREMIER_EXERCICE } from '../utils/dates';
 import seedJournal from '../data/journal.json';
 import seedReferentiels from '../data/referentiels.json';
@@ -69,13 +72,6 @@ function remboursementsEnReductionDeCharges(
   };
 }
 
-/**
- * Ce qui, dans un jeu, s'inscrit à l'actif : le développement graphique et les
- * illustrations sont les coûts de développement d'un projet identifié, portés
- * au bilan et amortis. Le reste — prototypes, communication, avances — reste en
- * charges de l'exercice.
- */
-const POSTES_JEU_IMMOBILISES = ['Développement Graphique', 'Illustrations'];
 /** Postes de jeu qui restent en charges, listés pour que la grille les propose. */
 const POSTES_JEU_CHARGES = ['Prototypage Jeux', 'Communication Jeux', "Avances Droit d'Auteur"];
 
@@ -823,7 +819,7 @@ export const useStore = create<AppState>()(
     },
     {
       name: 'bbg-compta-v1',
-      version: 9,
+      version: 10,
       // v2 : ajout de la liste des jeux et rattachement des dépenses de
       // développement au jeu concerné (déduit des mots clés / de la catégorie).
       migrate: (persisted, version) => {
@@ -890,6 +886,17 @@ export const useStore = create<AppState>()(
                 return { ...l, categorie: nom, jeu: l.jeu ?? (suffixe || undefined) };
               })]));
           }
+        }
+        // v10 : le bloc « Jeux » du prévisionnel disparaît, comme dans la
+        // synthèse. Chaque ligne rejoint le bloc auquel elle appartient — les
+        // immobilisations pour le développement graphique et les illustrations,
+        // les charges pour le reste — en gardant son jeu.
+        if (version < 10 && s.previsionnels) {
+          s.previsionnels = Object.fromEntries(
+            Object.entries(s.previsionnels).map(([ex, lignes]) => [ex, (lignes ?? []).map(l =>
+              l.section === 'jeux'
+                ? { ...l, section: estPosteJeuImmobilise(l.categorie) ? 'immos' as const : 'charges' as const }
+                : l)]));
         }
         return s;
       },

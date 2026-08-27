@@ -57,8 +57,6 @@ export function pageLectureSeule(state: AppState, exercice: string): string {
     { cle: 'produits', titre: 'Produits', lignes: lignesDe(syn.produits, refs.categoriesProduits), totaux: syn.totalProduitsParMois },
     { cle: 'charges', titre: 'Charges', lignes: lignesDe(syn.charges, refs.categoriesDepenses), totaux: syn.totalChargesParMois },
     { cle: 'personnel', titre: 'Personnel & rémunérations', lignes: lignesDe(syn.personnel, refs.categoriesDepenses), totaux: syn.totalPersonnelParMois },
-    { cle: 'jeux', titre: 'Dépenses Jeux — ventilation, déjà comprise dans les charges',
-      lignes: lignesDe(syn.jeux, refs.categoriesJeux), totaux: syn.totalJeuxParMois },
     { cle: 'immos', titre: 'Immobilisations — investissements', lignes: lignesDe(syn.immos, []), totaux: syn.immoParMois },
   ];
 

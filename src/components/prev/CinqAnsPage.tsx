@@ -25,7 +25,6 @@ const BLOCS_SUIVIS: { cle: BlocCle; section: PrevSection; label: string }[] = [
   { cle: 'produits', section: 'produits', label: 'Produits' },
   { cle: 'charges', section: 'charges', label: 'Charges' },
   { cle: 'personnel', section: 'personnel', label: 'Personnel' },
-  { cle: 'jeux', section: 'jeux', label: 'Dépenses Jeux' },
   { cle: 'immos', section: 'immos', label: 'Immobilisations' },
 ];
 
@@ -69,7 +68,6 @@ export function CinqAnsPage() {
       ['produits', somme(syn.totalProduitsParMois)],
       ['charges', somme(syn.totalChargesParMois)],
       ['personnel', somme(syn.totalPersonnelParMois)],
-      ['jeux', somme(syn.totalJeuxParMois)],
       ['immos', somme(syn.immoParMois)],
     ]);
 
@@ -90,7 +88,7 @@ export function CinqAnsPage() {
       produits: prevuMois('produits'),
       charges: prevuMois('charges'),
       personnel: prevuMois('personnel'),
-      jeux: prevuMois('jeux'),
+      jeux: new Map<string, number>(),   // les postes de jeu sont dans les charges
       dotations: dotationsPrevues,
       produitsFinanciers: produitsFinanciersParMois(finances, moisList),
       chargesFinancieres: chargesFinPrevues,

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import {
   ResponsiveContainer, BarChart, Bar, LineChart, Line, XAxis, YAxis,
   CartesianGrid, Tooltip, Legend, ReferenceLine, Cell, LabelList,
@@ -10,6 +10,7 @@ import { euros, euros0, r2 } from '../../utils/money';
 import { syntheseExercice, tableauTreso, tableauTVA, moisTresorerie } from '../../utils/calc';
 import { PageHeader, Card, StatCard, Btn } from '../ui';
 import { teinte } from '../../utils/couleurs';
+import { useEtatVue } from '../../utils/etatVue';
 
 // Couleurs choisies par Valentin pour l'accueil : menthe = produits,
 // pêche = dépenses. Les traits et les étiquettes prennent la version foncée
@@ -28,7 +29,8 @@ export function Dashboard({ onNavigate }: { onNavigate: (p: Page) => void }) {
   const entries = useStore(s => s.entries);
   const finances = useStore(s => s.finances);
   const refs = useStore(s => s.referentiels);
-  const [exercice, setExercice] = useState('2025-26');
+  const [exercice, setExercice] = useEtatVue('dashboard.exercice', '2025-26',
+    v => (EXERCICES as readonly string[]).includes(v));
 
   const data = useMemo(() => {
     const syn = syntheseExercice(entries, exercice, refs);

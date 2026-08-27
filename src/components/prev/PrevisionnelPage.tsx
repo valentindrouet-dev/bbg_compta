@@ -21,6 +21,7 @@ import {
   PageHeader, Card, Btn, StatCard, MoneyInput, BlocColorMenu, TotalBloc, styleBloc, MonthTabs,
 } from '../ui';
 import { useSelectionCellules } from '../../utils/selection';
+import { useEtatVue } from '../../utils/etatVue';
 
 /** Durée d'amortissement retenue pour une immobilisation prévue, faute de mieux. */
 const DUREE_IMMO_PREVUE = 5;
@@ -43,11 +44,12 @@ export function PrevisionnelPage() {
   const creerCalculHeures = useStore(s => s.creerCalculHeures);
   const completerPrevisionnel = useStore(s => s.completerPrevisionnel);
 
-  const [exercice, setExercice] = useState('2025-26');
+  const [exercice, setExercice] = useEtatVue('prev.exercice', '2025-26',
+    v => (EXERCICES as readonly string[]).includes(v));
   /** HT (base du résultat) ou TTC (ce qui sort vraiment du compte). */
-  const [base, setBase] = useState<'ht' | 'ttc'>('ht');
+  const [base, setBase] = useEtatVue<'ht' | 'ttc'>('prev.base', 'ht');
   /** Vue simplifiée : les totaux seuls, comme dans la synthèse. */
-  const [simple, setSimple] = useState(false);
+  const [simple, setSimple] = useEtatVue('prev.simple', false);
   const [nouvelleCat, setNouvelleCat] = useState('');
   const [alarmesOuvertes, setAlarmesOuvertes] = useState(true);
 
@@ -366,21 +368,24 @@ export function PrevisionnelPage() {
             ? (reelJeux.get(l.jeu)?.get(l.categorie) ?? 0)
             : (reelSec.get(l.categorie) ?? reel.get(l.categorie) ?? 0);
 
-          // Regroupement : par jeu dans le bloc Jeux, par groupe de catégories ailleurs.
-          const cle = (l: PrevLigne) => sec.cle === 'jeux'
-            ? (l.jeu || '— non rattaché —')
-            : (meta[l.categorie]?.groupe ?? '');
+          // Regroupement : une ligne rattachée à un jeu passe sous le bandeau de
+          // ce jeu, les autres sous leur groupe de catégories. Les jeux ferment
+          // le bloc, après les postes généraux.
+          const cle = (l: PrevLigne) => l.jeu || (meta[l.categorie]?.groupe ?? '');
           const parGroupe = new Map<string, PrevLigne[]>();
           for (const l of lignesSec) {
             const g = cle(l);
             if (!parGroupe.has(g)) parGroupe.set(g, []);
             parGroupe.get(g)!.push(l);
           }
-          const ordre = sec.cle === 'jeux'
-            ? [...jeuxCatalogue.filter(j => parGroupe.has(j)),
-              ...[...parGroupe.keys()].filter(g => !jeuxCatalogue.includes(g))]
-            : [...groupes.filter(g => parGroupe.has(g)), ...(parGroupe.has('') ? [''] : [])];
-          const avecGroupes = sec.cle === 'jeux'
+          const estJeu = (g: string) => jeuxCatalogue.includes(g);
+          const ordre = [
+            ...groupes.filter(g => parGroupe.has(g) && !estJeu(g)),
+            ...(parGroupe.has('') ? [''] : []),
+            ...jeuxCatalogue.filter(j => parGroupe.has(j)),
+            ...[...parGroupe.keys()].filter(g => g && !estJeu(g) && !groupes.includes(g)),
+          ];
+          const avecGroupes = ordre.some(estJeu)
             || ordre.length > 1 || (ordre.length === 1 && ordre[0] !== '');
 
           return (
@@ -437,18 +442,18 @@ export function PrevisionnelPage() {
                         <Fragment key={`${sec.cle}-${g}`}>
                           {avecGroupes && (
                             <tr className="band-bloc"
-                              {...(g ? reorg.ligne(sec.cle === 'jeux' ? 'jeu' : 'groupe', g) : {})}>
+                              {...(g ? reorg.ligne(estJeu(g) ? 'jeu' : 'groupe', g) : {})}>
                               <td colSpan={moisList.length + 5} className="py-1">
                                 <span className="inline-flex items-center gap-1.5">
                                   {g && (
                                     <span className="poignee-glisse" {...reorg.poignee()}
-                                      title={sec.cle === 'jeux'
+                                      title={estJeu(g)
                                         ? "Glisser pour changer l'ordre des jeux"
                                         : 'Glisser pour déplacer tout le groupe'}>
                                       <GripVertical size={13} />
                                     </span>
                                   )}
-                                  {sec.cle === 'jeux' && <Gamepad2 size={13} />}
+                                  {estJeu(g) && <Gamepad2 size={13} />}
                                   {g || '— sans groupe —'}
                                 </span>
                               </td>

@@ -3,6 +3,7 @@ import {
   Plus, Copy, Trash2, AlertTriangle, Search, ClipboardPaste, X, CopyPlus, FileDown,
 } from 'lucide-react';
 import { useStore } from '../../store';
+import { useEtatVue } from '../../utils/etatVue';
 import type { JournalEntry } from '../../types';
 import {
   EXERCICES, moisExercice, labelMois, labelMoisLong, moisCourant, exerciceDuMois, PRE_IMMAT,
@@ -43,12 +44,16 @@ export function JournalPage({ cible }: { cible?: Cible }) {
   const pasteInto = useStore(s => s.pasteInto);
 
   const courant = moisCourant();
-  const [exercice, setExercice] = useState(() => {
-    const ex = exerciceDuMois(courant);
-    return (EXERCICES as readonly string[]).includes(ex) ? ex : '2025-26';
-  });
+  // Par défaut le mois en cours ; ensuite, celui qu'on regardait la dernière fois.
+  const exerciceDefaut = (EXERCICES as readonly string[]).includes(exerciceDuMois(courant))
+    ? exerciceDuMois(courant) : '2025-26';
+  const [exercice, setExercice] = useEtatVue('journal.exercice', exerciceDefaut,
+    v => (EXERCICES as readonly string[]).includes(v));
   const moisList = moisExercice(exercice);
-  const [mois, setMois] = useState(() => moisList.includes(courant) ? courant : moisList[0]);
+  const [mois, setMois] = useEtatVue(
+    'journal.mois',
+    moisList.includes(courant) ? courant : moisList[0],
+    v => moisList.includes(v));
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [clip, setClip] = useState<JournalEntry | null>(null);

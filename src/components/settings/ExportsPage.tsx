@@ -5,10 +5,12 @@ import { EXERCICES } from '../../utils/dates';
 import { exportExcel, exportCSV, exportPDF, exportBackup, exportTout, exportPartage } from '../../utils/export';
 import { formatTaille } from '../../utils/files';
 import { PageHeader, Card, Btn } from '../ui';
+import { useEtatVue } from '../../utils/etatVue';
 
 export function ExportsPage() {
   const state = useStore();
-  const [exercice, setExercice] = useState('2025-26');
+  const [exercice, setExercice] = useEtatVue('exports.exercice', '2025-26',
+    v => (EXERCICES as readonly string[]).includes(v));
   const [avecFactures, setAvecFactures] = useState(true);
   const [enCours, setEnCours] = useState(false);
   const [resultat, setResultat] = useState<string | null>(null);

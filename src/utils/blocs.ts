@@ -71,9 +71,26 @@ export function blocDeEcriture(e: JournalEntry, refs: Referentiels): BlocCle {
 }
 
 /** Bloc d'affichage d'une catégorie (hors immobilisations, qui tiennent au type). */
+/**
+ * Postes de jeu portés à l'actif : le développement graphique et les
+ * illustrations sont les coûts de développement d'un projet identifié, inscrits
+ * au bilan et amortis. Les autres postes d'un jeu — prototypage, communication,
+ * avances aux auteurs — restent des charges de l'exercice.
+ */
+export const POSTES_JEU_IMMOBILISES = ['Développement Graphique', 'Illustrations'];
+
+export function estPosteJeuImmobilise(categorie: string): boolean {
+  const n = categorie.trim().toLowerCase();
+  return POSTES_JEU_IMMOBILISES.some(p => p.toLowerCase() === n);
+}
+
 export function blocDeCategorie(categorie: string, refs: Referentiels): BlocCle {
   if (refs.categoriesProduits.includes(categorie)) return 'produits';
-  if (refs.categoriesJeux.includes(categorie)) return 'jeux';
+  // Un poste de jeu n'a plus de bloc à lui : il va aux immobilisations ou aux
+  // charges, selon ce qu'il est. Le jeu, lui, reste porté par la colonne « Jeu ».
+  if (refs.categoriesJeux.includes(categorie)) {
+    return estPosteJeuImmobilise(categorie) ? 'immos' : 'charges';
+  }
   if (estPersonnel(categorie, refs)) return 'personnel';
   return 'charges';
 }

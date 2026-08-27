@@ -22,6 +22,7 @@ import { ChronoPage } from './components/prev/ChronoPage';
 import { ExportsPage } from './components/settings/ExportsPage';
 import { SettingsPage } from './components/settings/SettingsPage';
 import { CategoriesPage } from './components/settings/CategoriesPage';
+import { useEtatVue } from './utils/etatVue';
 
 export type Page =
   | 'dashboard'
@@ -29,8 +30,17 @@ export type Page =
   | 'budgets' | 'cinqans' | 'reelprevu' | 'tresoprev' | 'chrono'
   | 'exports' | 'categories' | 'settings';
 
+/** Les pages existantes : une valeur mémorisée qui n'en fait plus partie est ignorée. */
+const PAGES: readonly Page[] = [
+  'dashboard',
+  'journal', 'synthese', 'immos', 'treso', 'tva', 'rembours', 'fournisseurs', 'jeux', 'factures',
+  'budgets', 'cinqans', 'reelprevu', 'tresoprev', 'chrono',
+  'exports', 'categories', 'settings',
+];
+
 export default function App() {
-  const [page, setPage] = useState<Page>('dashboard');
+  // On rouvre l'app là où on l'avait laissée.
+  const [page, setPage] = useEtatVue<Page>('page', 'dashboard', v => PAGES.includes(v));
   /** Ligne à rejoindre quand on arrive depuis les contrôles comptables. */
   const [cible, setCible] = useState<{ page: Page } & Cible | null>(null);
   const compteur = useRef(0);

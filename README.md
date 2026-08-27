@@ -75,6 +75,12 @@ sont recalculés en direct à partir des écritures.
 
 ## Gestes utiles
 
+- **On revient là où on était** : le mois ouvert dans le journal, l'exercice du
+  prévisionnel, les bascules HT/TTC et détaillée/simplifiée, et même la page
+  affichée sont retrouvés quand on revient — y compris après avoir fermé
+  l'onglet. C'est enregistré à part des données comptables : ni **Cmd+Z** ni une
+  restauration de sauvegarde n'y touchent.
+
 - **Glisser-déposer une facture** : lâche un PDF ou une photo **sur une ligne du
   journal** pour l'y attacher ; lâche-en plusieurs sur la **zone en bas d'un
   tableau** pour créer une ligne par fichier (le nom du fichier sert de libellé,
@@ -93,13 +99,14 @@ sont recalculés en direct à partir des écritures.
   **charges, en négatif** — ils viennent en réduction des charges du mois, et
   leur TVA en moins de la TVA déductible. Le résultat est identique, le CA
   redevient juste.
-- **Postes de jeu** : le **développement graphique** et les **illustrations**
-  sont des coûts de développement portés à l'actif (amortis sur 5 ans) ; ils
-  apparaissent dans les **Immobilisations**, ventilés jeu par jeu. Le
-  **prototypage**, la **communication jeux** et les **avances droit d'auteur**
-  restent en **charges**, également ventilés par jeu. Le bloc « Dépenses Jeux »
-  de la synthèse est une **lecture par jeu**, pas un bloc de résultat en plus :
-  ce qu'il liste est déjà compté dans les charges et les immobilisations.
+- **Postes de jeu** : il n'y a plus de bloc « Dépenses Jeux ». Le
+  **développement graphique** et les **illustrations** sont des coûts de
+  développement portés à l'actif (amortis sur 5 ans) : ils sont dans les
+  **Immobilisations**, sous un bandeau par jeu. Le **prototypage**, la
+  **communication jeux** et les **avances droit d'auteur** sont des charges de
+  l'exercice : ils sont dans les **Charges**, également sous un bandeau par jeu,
+  à la suite des postes généraux. La synthèse et le prévisionnel suivent la
+  même organisation ; l'onglet **Jeux** garde la vue complète par jeu.
 - **Immobiliser un poste de jeu** : dans le bloc Jeux de la synthèse, le lien
   **immobiliser** au survol d'une ligne porte tout le poste à l'actif sur
   l'exercice (amorti sur 5 ans) ; **repasser en charges** fait l'inverse.

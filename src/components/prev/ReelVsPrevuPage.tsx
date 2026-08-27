@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useStore } from '../../store';
 import type { PrevLigne, PrevSection } from '../../types';
 import { EXERCICES, labelMois, moisExercice } from '../../utils/dates';
@@ -8,6 +8,7 @@ import {
   SECTIONS, SECTIONS_DEPENSES,
 } from '../../utils/previsionnel';
 import { PageHeader, Card, StatCard } from '../ui';
+import { useEtatVue } from '../../utils/etatVue';
 
 const DEPENSES: PrevSection[] = SECTIONS_DEPENSES;
 
@@ -15,7 +16,8 @@ export function ReelVsPrevuPage() {
   const entries = useStore(s => s.entries);
   const refs = useStore(s => s.referentiels);
   const previsionnels = useStore(s => s.previsionnels);
-  const [exercice, setExercice] = useState('2025-26');
+  const [exercice, setExercice] = useEtatVue('reelvsprevu.exercice', '2025-26',
+    v => (EXERCICES as readonly string[]).includes(v));
 
   const moisList = moisExercice(exercice);
   const lignes: PrevLigne[] = previsionnels[exercice] ?? [];

@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useStore } from '../../store';
 import { EXERCICES, labelMois, moisExercice } from '../../utils/dates';
 import { euros, r2 } from '../../utils/money';
 import { tableauTVA } from '../../utils/calc';
 import { PageHeader, Card, StatCard } from '../ui';
+import { useEtatVue } from '../../utils/etatVue';
 
 /** Rouge = je dois à l'État ; vert = l'État me doit. */
 const ROUGE = '#b7332e';
@@ -18,7 +19,8 @@ function sensTVA(v: number): { couleur: string; sens: string } {
 
 export function TVAPage() {
   const entries = useStore(s => s.entries);
-  const [exercice, setExercice] = useState('2025-26');
+  const [exercice, setExercice] = useEtatVue('tva.exercice', '2025-26',
+    v => (EXERCICES as readonly string[]).includes(v));
 
   const moisList = moisExercice(exercice);
   const rows = useMemo(() => tableauTVA(entries, moisList), [entries, moisList]);

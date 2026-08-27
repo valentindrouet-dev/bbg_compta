@@ -1,7 +1,7 @@
 import type {
   BudgetExercice, JournalEntry, PrevLigne, PrevSection, Referentiels,
 } from '../types';
-import { BLOCS, blocDeCategorie, blocDeEcriture } from './blocs';
+import { BLOCS, blocDeCategorie, blocDeEcriture, estPosteJeuImmobilise } from './blocs';
 import { moisExercice, PREMIER_EXERCICE } from './dates';
 import { r2 } from './money';
 
@@ -63,14 +63,21 @@ export function sectionDeCategorie(categorie: string, refs: Referentiels): PrevS
  * Les sections du prévisionnel sont exactement les blocs de la synthèse, dans
  * le même ordre — plus les indicateurs non monétaires du tableur d'origine.
  */
+/**
+ * Les blocs du prévisionnel, dans l'ordre de la synthèse. Il n'y a plus de bloc
+ * « Jeux » : ses postes sont rangés là où ils appartiennent — en charges pour
+ * le prototypage, la communication et les avances, aux immobilisations pour le
+ * développement graphique et les illustrations. Le découpage par jeu subsiste,
+ * en bandeaux à l'intérieur de ces blocs.
+ */
 export const SECTIONS: { cle: PrevSection; titre: string }[] = [
-  ...BLOCS.filter(b => b.cle !== 'resultat' && b.cle !== 'tva')
+  ...BLOCS.filter(b => b.cle !== 'resultat' && b.cle !== 'tva' && b.cle !== 'jeux')
     .map(b => ({ cle: b.cle as PrevSection, titre: b.titre })),
   { cle: 'indicateurs', titre: 'Indicateurs (non monétaires)' },
 ];
 
 /** Les sections qui constituent une dépense (par opposition aux produits). */
-export const SECTIONS_DEPENSES: PrevSection[] = ['charges', 'personnel', 'jeux', 'immos'];
+export const SECTIONS_DEPENSES: PrevSection[] = ['charges', 'personnel', 'immos'];
 
 /**
  * Convertit les budgets importés du tableur vers le nouveau modèle, aligné
@@ -314,12 +321,21 @@ export function gabaritPrevisionnel(
     if (personnel.has(c) || immos.has(c)) continue;
     ajouter(c, 'charges');
   }
-  for (const c of refs.categoriesDepenses) if (personnel.has(c)) ajouter(c, 'personnel');
-  // Bloc Jeux : une ligne par jeu et par poste, comme dans la synthèse.
+  // Les postes de jeu qui restent en charges : une ligne par jeu et par poste,
+  // à la suite des charges, exactement comme dans la synthèse.
   for (const jeu of refs.jeux ?? []) {
-    for (const c of refs.categoriesJeux) ajouter(c, 'jeux', { jeu });
+    for (const c of refs.categoriesJeux) {
+      if (!estPosteJeuImmobilise(c)) ajouter(c, 'charges', { jeu });
+    }
   }
+  for (const c of refs.categoriesDepenses) if (personnel.has(c)) ajouter(c, 'personnel');
   for (const c of refs.categoriesDepenses) if (immos.has(c)) ajouter(c, 'immos');
+  // Le développement porté à l'actif, jeu par jeu.
+  for (const jeu of refs.jeux ?? []) {
+    for (const c of refs.categoriesJeux) {
+      if (estPosteJeuImmobilise(c)) ajouter(c, 'immos', { jeu });
+    }
+  }
   return lignes;
 }
 
@@ -349,12 +365,14 @@ export function ordreAffichage(lignes: PrevLigne[], refs: Referentiels): PrevLig
   };
   const refDe = (l: PrevLigne) =>
     l.section === 'produits' ? refs.categoriesProduits
-      : l.section === 'jeux' ? refs.categoriesJeux
+      : l.jeu ? refs.categoriesJeux
         : refs.categoriesDepenses;
   const jeux = refs.jeux ?? [];
 
+  // Dans un bloc : d'abord les postes généraux, puis les jeux, dans l'ordre du
+  // catalogue ; à l'intérieur, l'ordre du référentiel.
   const clef = (l: PrevLigne, i: number): [number, number, number] =>
-    [l.section === 'jeux' ? rang(jeux, l.jeu) : 0, rang(refDe(l), l.categorie), i];
+    [l.jeu ? 1 + rang(jeux, l.jeu) : 0, rang(refDe(l), l.categorie), i];
 
   const trie = lignes
     .map((l, i) => ({ l, k: clef(l, i) }))
