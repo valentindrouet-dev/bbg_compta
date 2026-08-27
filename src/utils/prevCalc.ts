@@ -19,6 +19,21 @@ import { apportStock, type ApportStock } from './stock';
 /** Durée d'amortissement retenue pour un investissement seulement prévu. */
 export const DUREE_IMMO_PREVUE = 5;
 
+/** Les durées proposées d'un clic. Le reste se tape à la main. */
+export const DUREES_COURANTES = [3, 5, 10] as const;
+
+/**
+ * Sur combien d'années une ligne d'investissement prévu s'amortit : la durée
+ * qu'elle porte, sinon celle de sa catégorie, sinon cinq ans.
+ */
+export function dureePrevue(l: PrevLigne, refs?: Referentiels): number {
+  if (l.dureeAns && l.dureeAns > 0) return l.dureeAns;
+  if (refs && refs.categoriesMeta?.[l.categorie]?.dureeAns) {
+    return refs.categoriesMeta[l.categorie].dureeAns!;
+  }
+  return DUREE_IMMO_PREVUE;
+}
+
 /** Total d'un bloc du prévisionnel, mois par mois. */
 export function montantsSection(
   lignes: PrevLigne[], moisList: string[], section: PrevSection,
@@ -40,6 +55,8 @@ const plus = (a: Map<string, number>, b: Map<string, number> | undefined, signe 
 export interface EntreesPrevisionnel {
   lignes: PrevLigne[];
   moisList: string[];
+  /** Pour lire la durée d'amortissement par défaut d'une catégorie. */
+  refs?: Referentiels;
   /** Immobilisations déjà au bilan : leurs dotations courent quand même. */
   immos: ImmoInfo[];
   finances: FinanceEntry[];
@@ -55,7 +72,7 @@ export interface EntreesPrevisionnel {
  * net qui atteint le résultat est donc la seule marge sur ce qui est vendu.
  */
 export function resultatPrevisionnel(e: EntreesPrevisionnel): LigneResultat[] {
-  const { lignes, moisList, immos, finances, stock } = e;
+  const { lignes, moisList, immos, finances, stock, refs } = e;
   const sec = (s: PrevSection) => montantsSection(lignes, moisList, s);
 
   const produits = plus(sec('produits'), stock?.caParMois);
@@ -63,12 +80,20 @@ export function resultatPrevisionnel(e: EntreesPrevisionnel): LigneResultat[] {
   let charges = plus(sec('charges'), stock?.fabricationParMois);
   charges = plus(charges, stock?.variationParMois, -1);
 
+  // Dotations : celles des biens déjà au bilan, plus celles que déclencheraient
+  // les investissements prévus. Chaque ligne d'immobilisation a sa durée —
+  // celle qu'on lui a fixée, sinon celle de sa catégorie, sinon cinq ans : un
+  // ordinateur ne s'amortit pas comme des travaux.
   const dotationsReelles = dotationsParMois(immos, moisList);
-  const immosPrevues = sec('immos');
+  const lignesImmo = lignes.filter(l => l.section === 'immos' && !l.unite)
+    .map(l => ({
+      duree: dureePrevue(l, refs),
+      valeurs: valeursDe(l, lignes),
+    }));
   const dotations = new Map(moisList.map((m, i) => {
     let d = dotationsReelles.get(m) ?? 0;
-    for (let j = 0; j <= i; j++) {
-      d += (immosPrevues.get(moisList[j]) ?? 0) / (DUREE_IMMO_PREVUE * 12);
+    for (const li of lignesImmo) {
+      for (let j = 0; j <= i; j++) d += (li.valeurs[j] ?? 0) / (li.duree * 12);
     }
     return [m, r2(d)] as const;
   }));

@@ -139,6 +139,13 @@ export interface PrevLigne {
   tauxTVA?: number;
   /** Une valeur par mois de l'exercice, dans l'ordre de moisExercice(). */
   valeurs: (number | null)[];
+  /**
+   * Durée d'amortissement, en années — seulement pour une ligne du bloc
+   * Immobilisations. Un ordinateur ne s'amortit pas sur la même durée que des
+   * travaux : c'est elle qui commande la dotation que l'investissement prévu
+   * fera peser sur le résultat. À défaut, celle de la catégorie, sinon 5 ans.
+   */
+  dureeAns?: number;
   note?: string;
 }
 

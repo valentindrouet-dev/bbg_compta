@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Palette, RotateCcw } from 'lucide-react';
+import {
+  ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Palette, RotateCcw, Gamepad2,
+} from 'lucide-react';
 import { useEtatVue } from '../../utils/etatVue';
 import { parseMontant, r2 } from '../../utils/money';
 import { useStore } from '../../store';
 import { BLOC_PAR_CLE, teinteBloc, type BlocCle } from '../../utils/blocs';
 import { TEINTES_MAJEURES, variablesTeinte, type Teinte } from '../../utils/couleurs';
+import { encreSur } from '../../utils/jeux';
 
 /**
  * L'en-tête d'une page : le titre et ses boutons.
@@ -102,6 +105,30 @@ export function VueTabs<T extends string>({ vue, vues, onChange }: {
         );
       })}
     </div>
+  );
+}
+
+/**
+ * Le bandeau d'un jeu dans un tableau, tel qu'il apparaît dans le prévisionnel
+ * et dans la synthèse : la couleur du jeu, la manette, et de quoi poser un
+ * total à droite. Un seul rendu pour tous les tableaux, sinon chaque page
+ * inventerait sa mise en forme.
+ */
+export function BandeauJeu({ jeu, couleur, colSpan, droite }: {
+  jeu: string; couleur: string; colSpan: number; droite?: ReactNode;
+}) {
+  return (
+    <tr>
+      <td colSpan={colSpan} className="py-1"
+        style={{ backgroundColor: couleur, color: encreSur(couleur), fontWeight: 700 }}>
+        <span className="flex items-center justify-between gap-3">
+          <span className="inline-flex items-center gap-1.5">
+            <Gamepad2 size={13} /> {jeu}
+          </span>
+          {droite && <span className="tabular-nums">{droite}</span>}
+        </span>
+      </td>
+    </tr>
   );
 }
 

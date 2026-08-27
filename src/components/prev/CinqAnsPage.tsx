@@ -85,7 +85,7 @@ export function CinqAnsPage() {
     ]);
 
     const dotationsReelles = dotationsParMois(immos, moisList);
-    const resultatPrevu = resultatPrevisionnel({ lignes, moisList, immos, finances, stock });
+    const resultatPrevu = resultatPrevisionnel({ lignes, moisList, immos, finances, stock, refs });
 
     const resultatReel = compteResultat({
       moisList,

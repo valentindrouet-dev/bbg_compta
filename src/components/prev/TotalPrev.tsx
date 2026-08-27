@@ -5,18 +5,18 @@
  * de la synthèse : produits, charges, personnel, immobilisations, stock, puis
  * le compte de résultat. On y lit l'année entière sans risquer de la changer.
  */
-import { useMemo } from 'react';
+import { Fragment, useMemo } from 'react';
 import { useStore } from '../../store';
 import type { PrevLigne, PrevSection } from '../../types';
 import { labelMois } from '../../utils/dates';
 import { euros, euros0, r2 } from '../../utils/money';
 import { immoInfos } from '../../utils/calc';
-import { couleurJeu, encreSur } from '../../utils/jeux';
-import { ordreAffichage, valeursDe, SECTIONS } from '../../utils/previsionnel';
+import { couleurJeu } from '../../utils/jeux';
+import { jeuDeLigne, ordreAffichage, valeursDe, SECTIONS } from '../../utils/previsionnel';
 import { apportStock } from '../../utils/stock';
 import { resultatPrevisionnel, montantsSection, sommeMap } from '../../utils/prevCalc';
 import { teinteBloc, type BlocCle } from '../../utils/blocs';
-import { Card, TotalBloc, styleBloc } from '../ui';
+import { Card, TotalBloc, styleBloc, BandeauJeu } from '../ui';
 
 const AUCUN_JEU: string[] = [];
 
@@ -38,8 +38,8 @@ export function TotalPrev({ exercice, moisList }: { exercice: string; moisList: 
   const stock = useMemo(() => apportStock(stocks, exercice, jeux), [stocks, exercice, jeux]);
   const immos = useMemo(() => immoInfos(entries, refs), [entries, refs]);
   const resultat = useMemo(
-    () => resultatPrevisionnel({ lignes, moisList, immos, finances, stock }),
-    [lignes, moisList, immos, finances, stock]);
+    () => resultatPrevisionnel({ lignes, moisList, immos, finances, stock, refs }),
+    [lignes, moisList, immos, finances, stock, refs]);
 
   const rn = resultat.find(l => l.cle === 'rn')!;
 
@@ -66,6 +66,9 @@ export function TotalPrev({ exercice, moisList }: { exercice: string; moisList: 
         const totalBloc = r2(sommeMap(parMois) + (apport ? sommeMap(apport) : 0));
 
         const valeurLigne = (l: PrevLigne, i: number) => valeursDe(l, lignes)[i] ?? 0;
+        // Les jeux présents dans ce bloc, dans l'ordre du catalogue.
+        const jeuxDuBloc = jeux.filter(j =>
+          lignesBloc.some(l => jeuDeLigne(l, jeux) === j) || duStock.some(([x]) => x === j));
 
         return (
           <Card key={bloc.cle} title={bloc.titre}
@@ -80,20 +83,14 @@ export function TotalPrev({ exercice, moisList }: { exercice: string; moisList: 
                   </tr>
                 </thead>
                 <tbody>
-                  {lignesBloc.map(l => {
+                  {/* D'abord les postes généraux, puis un bandeau par jeu —
+                      le même découpage que dans les onglets de saisie. */}
+                  {lignesBloc.filter(l => !jeuDeLigne(l, jeux)).map(l => {
                     const total = r2(moisList.reduce((s, _m, i) => s + valeurLigne(l, i), 0));
                     if (!total) return null;
                     return (
                       <tr key={l.id}>
-                        <td>
-                          {l.jeu && (
-                            <span className="mr-1.5 px-1.5 py-0.5 rounded text-[11px] font-bold"
-                              style={{ backgroundColor: couleurJeu(l.jeu, refs), color: encreSur(couleurJeu(l.jeu, refs)) }}>
-                              {l.jeu}
-                            </span>
-                          )}
-                          {l.categorie}
-                        </td>
+                        <td>{l.categorie}</td>
                         {moisList.map((m, i) => {
                           const v = valeurLigne(l, i);
                           return <td key={m} className="text-right tabular-nums">{v ? euros0(v) : '·'}</td>;
@@ -102,23 +99,46 @@ export function TotalPrev({ exercice, moisList }: { exercice: string; moisList: 
                       </tr>
                     );
                   })}
-                  {duStock.map(([jeu, libelle, parMoisJeu]) => {
-                    const total = r2([...parMoisJeu.values()].reduce((s, v) => s + v, 0));
+                  {jeuxDuBloc.map(jeu => {
+                    const siennes = lignesBloc.filter(l => jeuDeLigne(l, jeux) === jeu);
+                    const duStockJeu = duStock.filter(([j]) => j === jeu);
+                    const totalJeu = r2(
+                      siennes.reduce((s, l) => s + moisList.reduce((x, _m, i) => x + valeurLigne(l, i), 0), 0)
+                      + duStockJeu.reduce((s, [, , parMois]) =>
+                        s + [...parMois.values()].reduce((x, v) => x + v, 0), 0));
+                    if (!totalJeu) return null;
                     return (
-                      <tr key={`stock-${jeu}-${libelle}`} style={{ fontStyle: 'italic' }}>
-                        <td>
-                          <span className="mr-1.5 px-1.5 py-0.5 rounded text-[11px] font-bold"
-                            style={{ backgroundColor: couleurJeu(jeu, refs), color: encreSur(couleurJeu(jeu, refs)) }}>
-                            {jeu}
-                          </span>
-                          {libelle}
-                        </td>
-                        {moisList.map(m => {
-                          const v = parMoisJeu.get(m) ?? 0;
-                          return <td key={m} className="text-right tabular-nums">{v ? euros0(v) : '·'}</td>;
+                      <Fragment key={`jeu-${jeu}`}>
+                        <BandeauJeu jeu={jeu} couleur={couleurJeu(jeu, refs)}
+                          colSpan={moisList.length + 2} droite={euros(totalJeu)} />
+                        {siennes.map(l => {
+                          const total = r2(moisList.reduce((s, _m, i) => s + valeurLigne(l, i), 0));
+                          if (!total) return null;
+                          return (
+                            <tr key={l.id}>
+                              <td style={{ paddingLeft: 22 }}>{l.categorie}</td>
+                              {moisList.map((m, i) => {
+                                const v = valeurLigne(l, i);
+                                return <td key={m} className="text-right tabular-nums">{v ? euros0(v) : '·'}</td>;
+                              })}
+                              <td className="text-right tabular-nums bg-[var(--bloc-total)] font-medium">{euros(total)}</td>
+                            </tr>
+                          );
                         })}
-                        <td className="text-right tabular-nums bg-[var(--bloc-total)] font-medium">{euros(total)}</td>
-                      </tr>
+                        {duStockJeu.map(([, libelle, parMoisJeu]) => {
+                          const total = r2([...parMoisJeu.values()].reduce((s, v) => s + v, 0));
+                          return (
+                            <tr key={`${jeu}-${libelle}`}>
+                              <td style={{ paddingLeft: 22 }}>{libelle}</td>
+                              {moisList.map(m => {
+                                const v = parMoisJeu.get(m) ?? 0;
+                                return <td key={m} className="text-right tabular-nums">{v ? euros0(v) : '·'}</td>;
+                              })}
+                              <td className="text-right tabular-nums bg-[var(--bloc-total)] font-medium">{euros(total)}</td>
+                            </tr>
+                          );
+                        })}
+                      </Fragment>
                     );
                   })}
                   {bloc.cle === 'charges' && sommeMap(stock.variationParMois) !== 0 && (
@@ -156,6 +176,14 @@ export function TotalPrev({ exercice, moisList }: { exercice: string; moisList: 
                 </tfoot>
               </table>
             </div>
+            {bloc.cle === 'immos' && (
+              <p className="text-xs mt-2" style={{ color: '#9a92b5' }}>
+                Ces montants <b>ne passent pas au compte de résultat</b> : un investissement
+                s'inscrit à l'actif, et ne pèse que par sa <b>dotation</b>, étalée sur la durée
+                choisie ligne par ligne. Ils sortent en revanche de la trésorerie en totalité,
+                le mois où ils sont engagés.
+              </p>
+            )}
           </Card>
         );
       })}

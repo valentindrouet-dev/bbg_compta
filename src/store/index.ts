@@ -310,6 +310,11 @@ export interface AppState {
   addCanal: (id: string, nom: string) => void;
   updateCanal: (id: string, canalId: string, patch: Partial<CanalVente>) => void;
   removeCanal: (id: string, canalId: string) => void;
+  /**
+   * Un jeu qui a du stock ne s'arrête pas à la fin d'un exercice : sa ligne est
+   * reprise dans le suivant, avec son coût de revient et ses canaux.
+   */
+  assurerContinuiteStock: (exercice: string) => void;
   addMouvementStock: (mv: Omit<MouvementStock, 'id'>) => void;
   updateMouvementStock: (id: string, patch: Partial<MouvementStock>) => void;
   removeMouvementStock: (id: string) => void;
@@ -1094,6 +1099,34 @@ export const useStore = create<AppState>()(
           ? { ...l, canaux: l.canaux.filter(c => c.id !== canalId) }
           : l),
       })),
+      assurerContinuiteStock: (exercice) => set(s => {
+        const rang = (EXERCICES as readonly string[]).indexOf(exercice);
+        if (rang <= 0) return s;
+        const nMois = moisExercice(exercice).length;
+        const deja = new Set(s.stocks.filter(l => l.exercice === exercice).map(l => l.jeu));
+        // Le modèle le plus récent : c'est lui qui porte le bon coût de revient
+        // et les bons prix de vente.
+        const modeles = new Map<string, LigneStock>();
+        for (let i = 0; i < rang; i++) {
+          for (const l of s.stocks.filter(x => x.exercice === EXERCICES[i])) modeles.set(l.jeu, l);
+        }
+        const vide = () => new Array<number | null>(nMois).fill(null);
+        const nouvelles: LigneStock[] = [];
+        for (const [jeu, modele] of modeles) {
+          if (deja.has(jeu)) continue;
+          nouvelles.push({
+            id: uid(), jeu, exercice,
+            coutUnitaire: modele.coutUnitaire,
+            tauxTVA: modele.tauxTVA,
+            fabrique: vide(),
+            canaux: (modele.canaux ?? []).map(c => ({
+              ...c, id: uid(), valeurs: vide(),
+            })),
+          });
+        }
+        if (!nouvelles.length) return s;
+        return { stocks: [...s.stocks, ...nouvelles] };
+      }),
       addMouvementStock: (mv) => set(s => ({
         mouvementsStock: [...s.mouvementsStock, { ...mv, id: uid() }],
       })),

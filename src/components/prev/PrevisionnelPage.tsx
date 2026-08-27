@@ -20,13 +20,15 @@ import {
 } from '../../utils/previsionnel';
 import { teinteBloc, GROUPE_PERSONNEL, type BlocCle } from '../../utils/blocs';
 import { immoInfos, type LigneResultat } from '../../utils/calc';
-import { resultatPrevisionnel, sommeMap } from '../../utils/prevCalc';
+import {
+  DUREES_COURANTES, dureePrevue, resultatPrevisionnel, sommeMap,
+} from '../../utils/prevCalc';
 import { apportStock } from '../../utils/stock';
 import { StockPrev } from './StockPrev';
 import { TotalPrev } from './TotalPrev';
 import {
   PageHeader, Card, Btn, StatCard, MoneyInput, BlocColorMenu, TotalBloc, styleBloc, MonthTabs,
-  VueTabs,
+  VueTabs, BandeauJeu,
 } from '../ui';
 import { useSelectionCellules } from '../../utils/selection';
 import { useEtatVue } from '../../utils/etatVue';
@@ -203,8 +205,8 @@ export function PrevisionnelPage() {
   const stock = useMemo(
     () => apportStock(stocks, exercice, jeuxCatalogue), [stocks, exercice, jeuxCatalogue]);
   const resultat: LigneResultat[] = useMemo(
-    () => resultatPrevisionnel({ lignes, moisList, immos, finances, stock }),
-    [lignes, moisList, immos, finances, stock]);
+    () => resultatPrevisionnel({ lignes, moisList, immos, finances, stock, refs }),
+    [lignes, moisList, immos, finances, stock, refs]);
 
   /** Les onglets Stock et Total ne se saisissent pas au clavier des catégories. */
   const saisie = vue !== 'stock' && vue !== 'total';
@@ -341,8 +343,9 @@ export function PrevisionnelPage() {
       </div>
       )}
 
-      {/* Alarmes de cohérence */}
-      {alarmes.length > 0 && (
+      {/* Alarmes de cohérence — elles portent sur les lignes de catégories,
+          pas sur le stock ni sur la vue d'ensemble. */}
+      {saisie && alarmes.length > 0 && (
         <Card
           className="mb-4"
           title={
@@ -412,44 +415,44 @@ export function PrevisionnelPage() {
             <table data-table="prev:ventesjeux" className="sheet text-sm border-collapse w-full">
               <thead>
                 <tr className="text-left" style={{ color: '#5c5280' }}>
-                  <th className="min-w-52">Jeu et canal de vente</th>
+                  <th className="min-w-52">Canal de vente</th>
                   {moisList.map(m => <th key={m} className="text-right">{labelMois(m)}</th>)}
                   <th className="text-right bg-[var(--bloc-total)]">Total</th>
                 </tr>
               </thead>
               <tbody>
-                {[...stock.caParJeuCanalEtMois.entries()].flatMap(([jeu, canaux]) => [
-                  ...[...canaux.entries()].map(([canal, parMois]) => (
-                    <tr key={`${jeu}-${canal}`}>
-                      <td>
-                        <span className="px-1.5 py-0.5 rounded text-[11px] font-bold mr-1.5"
-                          style={{ backgroundColor: couleurJeu(jeu, refs), color: encreSur(couleurJeu(jeu, refs)) }}>
-                          {jeu}
-                        </span>
-                        <span style={{ color: '#5c5280' }}>{canal}</span>
-                      </td>
-                      {moisList.map(m => {
-                        const v = parMois.get(m) ?? 0;
-                        return <td key={m} className="text-right tabular-nums">{v ? euros0(v) : '·'}</td>;
-                      })}
-                      <td className="text-right tabular-nums bg-[var(--bloc-total)] font-medium">
-                        {euros(r2([...parMois.values()].reduce((x, v) => x + v, 0)))}
-                      </td>
-                    </tr>
-                  )),
-                  canaux.size > 1 ? (
-                    <tr key={`${jeu}-total`} style={{ fontWeight: 700, backgroundColor: 'var(--bloc-tres-clair)' }}>
-                      <td>Total {jeu}</td>
-                      {moisList.map(m => {
-                        const v = stock.caParJeuEtMois.get(jeu)?.get(m) ?? 0;
-                        return <td key={m} className="text-right tabular-nums">{v ? euros0(v) : '·'}</td>;
-                      })}
-                      <td className="text-right tabular-nums bg-[var(--bloc-total)]">
-                        {euros(r2([...(stock.caParJeuEtMois.get(jeu)?.values() ?? [])].reduce((x, v) => x + v, 0)))}
-                      </td>
-                    </tr>
-                  ) : null,
-                ])}
+                {[...stock.caParJeuCanalEtMois.entries()].map(([jeu, canaux]) => {
+                  const totalJeu = r2([...(stock.caParJeuEtMois.get(jeu)?.values() ?? [])]
+                    .reduce((x, v) => x + v, 0));
+                  return (
+                    <Fragment key={jeu}>
+                      <BandeauJeu jeu={jeu} couleur={couleurJeu(jeu, refs)}
+                        colSpan={moisList.length + 2} droite={euros(totalJeu)} />
+                      {[...canaux.entries()].map(([canal, parMois]) => (
+                        <tr key={`${jeu}-${canal}`}>
+                          <td style={{ paddingLeft: 22 }}>{canal}</td>
+                          {moisList.map(m => {
+                            const v = parMois.get(m) ?? 0;
+                            return <td key={m} className="text-right tabular-nums">{v ? euros0(v) : '·'}</td>;
+                          })}
+                          <td className="text-right tabular-nums bg-[var(--bloc-total)] font-medium">
+                            {euros(r2([...parMois.values()].reduce((x, v) => x + v, 0)))}
+                          </td>
+                        </tr>
+                      ))}
+                      {canaux.size > 1 && (
+                        <tr className="band-bloc">
+                          <td>Total {jeu}</td>
+                          {moisList.map(m => {
+                            const v = stock.caParJeuEtMois.get(jeu)?.get(m) ?? 0;
+                            return <td key={m} className="text-right tabular-nums">{v ? euros0(v) : '·'}</td>;
+                          })}
+                          <td className="text-right tabular-nums bg-[var(--bloc-total)]">{euros(totalJeu)}</td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
               </tbody>
               <tfoot>
                 <tr className="total-bloc">
@@ -664,6 +667,34 @@ export function PrevisionnelPage() {
                                       >
                                         <option value="">— quel jeu ?</option>
                                         {jeuxCatalogue.map(j => <option key={j} value={j}>{j}</option>)}
+                                      </select>
+                                    )}
+                                    {/* Une immobilisation ne s'amortit pas
+                                        toujours sur cinq ans : la durée se
+                                        choisit ligne par ligne, et c'est elle
+                                        qui commande la dotation. */}
+                                    {sec.cle === 'immos' && estMontant && (
+                                      <select
+                                        className="text-[10px] px-0.5 rounded shrink-0"
+                                        style={{ width: 62, backgroundColor: '#eef4fb', color: 'var(--bbg-blue-dark)' }}
+                                        value={String(dureePrevue(l, refs))}
+                                        title={`Amortie sur ${dureePrevue(l, refs)} ans — c'est cette durée qui étale la dotation`}
+                                        onChange={ev => {
+                                          const v = ev.target.value;
+                                          if (v === 'autre') {
+                                            const saisi = prompt('Durée d\'amortissement, en années ?',
+                                              String(dureePrevue(l, refs)));
+                                            const n = Number(saisi);
+                                            if (n > 0) updatePrevLigne(exercice, l.id, { dureeAns: n });
+                                            return;
+                                          }
+                                          updatePrevLigne(exercice, l.id, { dureeAns: Number(v) });
+                                        }}
+                                      >
+                                        {[...new Set([...DUREES_COURANTES, dureePrevue(l, refs)])]
+                                          .sort((a, b) => a - b)
+                                          .map(n => <option key={n} value={n}>{n} ans</option>)}
+                                        <option value="autre">autre…</option>
                                       </select>
                                     )}
                                     {l.unite && (

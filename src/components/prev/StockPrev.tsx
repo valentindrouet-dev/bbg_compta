@@ -6,7 +6,7 @@
  * chiffre d'affaires, le coût des exemplaires vendus, la marge, et la variation
  * de stock qui remet chaque coût en face de la vente qui lui correspond.
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Plus, Trash2, ExternalLink, AlertTriangle } from 'lucide-react';
 import { useStore } from '../../store';
 import type { LigneStock } from '../../types';
@@ -14,9 +14,13 @@ import { labelMois } from '../../utils/dates';
 import { euros, euros0, r2 } from '../../utils/money';
 import { couleurJeu, encreSur, voileSur } from '../../utils/jeux';
 import { CANAUX_DEFAUT, stocksExercice, type StockJeu } from '../../utils/stock';
-import { Card, Btn, MoneyInput, StatCard } from '../ui';
+import { Card, Btn, MoneyInput, StatCard, BandeauJeu, styleBloc } from '../ui';
+import { teinteBloc } from '../../utils/blocs';
 
 const AUCUN_JEU: string[] = [];
+
+/** Largeur de la colonne des libellés : elle doit loger un canal entier. */
+const LARGEUR_LIBELLE = 330;
 
 export function StockPrev({ exercice, moisList }: { exercice: string; moisList: string[] }) {
   const stocks = useStore(s => s.stocks);
@@ -26,6 +30,13 @@ export function StockPrev({ exercice, moisList }: { exercice: string; moisList: 
   const updateLigneStock = useStore(s => s.updateLigneStock);
   const removeLigneStock = useStore(s => s.removeLigneStock);
   const [nouveau, setNouveau] = useState('');
+
+  const assurerContinuiteStock = useStore(s => s.assurerContinuiteStock);
+
+  // Un jeu qui a du stock continue d'un exercice à l'autre : dès qu'on ouvre
+  // l'onglet, sa ligne est reprise avec son coût de revient et ses canaux, et
+  // le stock de clôture précédent devient l'ouverture.
+  useEffect(() => { assurerContinuiteStock(exercice); }, [exercice, assurerContinuiteStock]);
 
   const lignes = useMemo(
     () => stocksExercice(stocks, exercice, jeux), [stocks, exercice, jeux]);
@@ -109,6 +120,8 @@ function TableauJeu({ s, moisList, couleur, lienProd, onPatch, onRemove }: {
   const updateCanal = useStore(st => st.updateCanal);
   const removeCanal = useStore(st => st.removeCanal);
   const setStockFabrique = useStore(st => st.setStockFabrique);
+  const couleursBloc = useStore(st => st.blocCouleurs);
+  const teinte = teinteBloc('immos', couleursBloc);
   const encre = encreSur(couleur);
   const voile = voileSur(couleur, 0.2);
   const l = s.ligne;
@@ -187,16 +200,18 @@ function TableauJeu({ s, moisList, couleur, lienProd, onPatch, onRemove }: {
         </div>
       }
     >
-      <div className="overflow-x-auto -mx-4 px-4">
+      <div className="overflow-x-auto -mx-4 px-4" style={styleBloc(teinte)}>
         <table data-table={`stockprev:${l.jeu}`} className="sheet text-sm border-collapse w-full">
           <thead>
             <tr className="text-left" style={{ color: '#5c5280' }}>
-              <th className="min-w-64">Mouvement</th>
+              <th style={{ minWidth: LARGEUR_LIBELLE, width: LARGEUR_LIBELLE }}>Mouvement</th>
               {moisList.map(m => <th key={m} className="text-right">{labelMois(m)}</th>)}
-              <th className="text-right" style={{ backgroundColor: voile }}>Total</th>
+              <th className="text-right bg-[var(--bloc-total)]">Total</th>
             </tr>
           </thead>
           <tbody>
+            <BandeauJeu jeu={l.jeu} couleur={couleur} colSpan={moisList.length + 2}
+              droite={`${s.total.stockFin} en stock · ${euros(s.total.marge)} de marge`} />
             <tr>
               <td title="Exemplaires sortis d'usine ce mois-là">Fabriqués (exemplaires)</td>
               {moisList.map((m, i) => (
@@ -220,17 +235,21 @@ function TableauJeu({ s, moisList, couleur, lienProd, onPatch, onRemove }: {
               return (
                 <tr key={c.id} className="group/canal">
                   <td>
-                    <div className="flex items-center gap-1 flex-wrap">
+                    {/* Largeur fixée : sans quoi le nom, le prix et la bascule
+                        déborderaient sur les colonnes de mois. */}
+                    <div className="flex items-center gap-1 flex-wrap"
+                      style={{ width: LARGEUR_LIBELLE - 12 }}>
                       <input
-                        className="border border-transparent hover:border-[#ddd6ef] rounded px-1 py-0.5 bg-transparent font-medium w-28"
+                        className="border border-transparent hover:border-[#ddd6ef] rounded px-1 py-0.5 bg-transparent font-medium"
+                        style={{ width: 118 }}
                         value={c.nom}
                         title={CANAUX_DEFAUT.find(x => x.nom === c.nom)?.aide ?? 'Nom du canal de vente'}
                         onChange={e => updateCanal(l.id, c.id, { nom: e.target.value })}
                       />
-                      <MoneyInput value={c.prix || null} className="w-20"
+                      <MoneyInput value={c.prix || null} className="!w-[70px] shrink-0 text-right"
                         placeholder="prix"
                         onCommit={v => updateCanal(l.id, c.id, { prix: v ?? 0 })} />
-                      <span className="flex rounded border overflow-hidden text-[11px]"
+                      <span className="flex rounded border overflow-hidden text-[11px] shrink-0"
                         style={{ borderColor: 'var(--bbg-border)' }}>
                         {([['nombre', '#'], ['pourcentage', '%']] as const).map(([m, lab]) => (
                           <button
@@ -248,8 +267,8 @@ function TableauJeu({ s, moisList, couleur, lienProd, onPatch, onRemove }: {
                       </span>
                       {pct && (
                         <select
-                          className="border rounded px-1 py-0.5 text-[11px] bg-white"
-                          style={{ borderColor: 'var(--bbg-border)' }}
+                          className="border rounded px-1 py-0.5 text-[11px] bg-white shrink-0"
+                          style={{ borderColor: 'var(--bbg-border)', width: 92 }}
                           value={c.base ?? 'tirage'}
                           title="Sur quoi porte le pourcentage"
                           onChange={e => updateCanal(l.id, c.id, { base: e.target.value as 'tirage' | 'disponible' })}
@@ -350,13 +369,22 @@ function TableauJeu({ s, moisList, couleur, lienProd, onPatch, onRemove }: {
             <Ligne label="Variation de stock" signe
               aide="(stock fin − stock début) × coût de revient : elle neutralise le coût des exemplaires encore en carton"
               get={i => s.mois[i].variationStock} total={s.total.variationStock} />
-            <Ligne label="MARGE SUR VENTES" fort signe
-              aide="Ventes − coût des exemplaires vendus. C'est l'effet net du stock sur le résultat."
-              get={i => s.mois[i].marge} total={s.total.marge} />
             <Ligne label="Valeur du stock à la clôture du mois"
               aide="Stock × coût de revient — c'est ce qui figure à l'actif"
               get={i => s.mois[i].valeurStock} total={s.total.valeurStock} />
           </tbody>
+          <tfoot>
+            <tr className="total-bloc">
+              <td title="Ventes − coût des exemplaires vendus. C'est l'effet net du stock sur le résultat.">
+                MARGE SUR VENTES — {l.jeu.toUpperCase()}
+              </td>
+              {moisList.map((m, i) => {
+                const v = s.mois[i].marge;
+                return <td key={m} className="text-right tabular-nums">{v ? euros0(v) : '·'}</td>;
+              })}
+              <td className="text-right tabular-nums grand">{euros(s.total.marge)}</td>
+            </tr>
+          </tfoot>
         </table>
       </div>
     </Card>

@@ -409,10 +409,23 @@ export function ordreAffichage(lignes: PrevLigne[], refs: Referentiels): PrevLig
     return [jeu ? 1 + rang(jeux, jeu) : 0, rang(refDe(l), l.categorie), i];
   };
 
+  // Le bloc d'une ligne suit sa CATÉGORIE, pas ce qui a été enregistré le jour
+  // où elle a été créée : basculer une catégorie en immobilisation dans l'onglet
+  // Catégories la déplace ici aussi, comme dans la synthèse. Sans quoi le même
+  // poste serait une charge d'un côté et un investissement de l'autre.
+  const connues = new Set([
+    ...refs.categoriesProduits, ...refs.categoriesDepenses, ...refs.categoriesJeux,
+  ]);
+  const recale = (l: PrevLigne): PrevLigne => {
+    if (l.unite || !connues.has(l.categorie)) return l;
+    const sec = sectionDeCategorie(l.categorie, refs);
+    return sec === l.section ? l : { ...l, section: sec };
+  };
+
   const trie = lignes
     .map((l, i) => ({ l, k: clef(l, i) }))
     .sort((a, b) => a.k[0] - b.k[0] || a.k[1] - b.k[1] || a.k[2] - b.k[2])
-    .map(x => x.l);
+    .map(x => recale(x.l));
 
   // Chaque ligne de quantités remonte juste avant celle qui s'en sert.
   const out = [...trie];

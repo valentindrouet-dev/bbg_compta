@@ -69,7 +69,12 @@ sont recalculés en direct à partir des écritures.
     **une ligne par jeu et par canal**. Ces dernières ne se saisissent pas :
     elles sont le produit des exemplaires vendus par le prix de leur canal, dans
     l'onglet Stock
-  - **Immobilisations** — ce qui s'inscrit à l'actif et s'amortit
+  - **Immobilisations** — ce qui s'inscrit à l'actif et s'amortit. Chaque ligne
+    porte sa **durée d'amortissement** (3, 5, 10 ans ou libre) : c'est elle qui
+    étale la dotation, et un ordinateur ne s'amortit pas comme des travaux. Ces
+    montants **ne passent pas au compte de résultat** — seules leurs dotations
+    le font ; ils sortent en revanche de la trésorerie en totalité, le mois où
+    ils sont engagés
   - **Stock** — jeu par jeu. Une ligne pour ce qui sort d'usine, puis **une ligne
     par canal de vente** : un jeu ne part pas au même prix chez un
     **Distributeur**, en **Boutique** ou chez un **Éditeur**, alors chaque canal
@@ -84,9 +89,13 @@ sont recalculés en direct à partir des écritures.
     en carton, si bien que **seul le coût de ce qui est vendu pèse sur le
     résultat**. Un badge prévient si le stock passe sous zéro. Le coût de revient
     unitaire se recopie depuis le Production Calculator — c'est lui qui tient les
-    devis usine
+    devis usine. Un jeu qui a du stock **continue d'un exercice à l'autre** :
+    en ouvrant l'onglet de l'année suivante, sa ligne est reprise avec son coût
+    de revient et ses canaux, et le stock de clôture devient l'ouverture
   - **Total** — tout le prévisionnel de l'exercice d'un seul tenant et
-    **non modifiable** : chaque bloc, le stock, puis le compte de résultat
+    **non modifiable** : chaque bloc, le stock, puis le compte de résultat.
+    Même mise en forme que les onglets de saisie — les postes généraux d'abord,
+    puis un **bandeau par jeu** avec ses lignes et ses ventes
 - Dans les onglets de saisie : mêmes blocs, même ordre, mêmes catégories et mêmes couleurs
   que la synthèse annuelle, avec Prévu / Réel / Écart par ligne, les mêmes boutons **HT / TTC** et
   **détaillée / simplifiée**, et des alarmes quand une ligne ne correspond
@@ -102,7 +111,8 @@ sont recalculés en direct à partir des écritures.
   décalage d'encaissement se choisit (mois même, mois suivant, +2, +3). C'est
   ainsi que les *workshops* sont calculés : payés au début du mois suivant.
 - **Vue 5 ans** — les cinq exercices côte à côte : prévu, réel, compte de
-  résultat et trajectoire
+  résultat et trajectoire. Le prévu y compte le stock, comme l'onglet Total :
+  les deux pages lisent le même calcul
 - **Réel vs Prévu** — le réalisé vient du journal, sans IMPORTRANGE
 - **Trésorerie prévisionnelle vs réalisée** — par exercice. Le prévisionnel n'est
   plus recopié à la main : chaque ligne est la somme d'un bloc du prévisionnel,
