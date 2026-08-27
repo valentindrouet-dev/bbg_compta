@@ -80,8 +80,9 @@ export function Dashboard({ onNavigate }: { onNavigate: (p: Page) => void }) {
         <StatCard label="Résultat simplifié" value={euros0(resultat)} tone={resultat >= 0 ? 'good' : 'bad'}
           sub="produits − charges − jeux" />
         <StatCard label="Trésorerie disponible" value={euros0(soldeActuel)} tone={soldeActuel >= 0 ? 'good' : 'bad'} />
-        <StatCard label={data.soldeTVA >= 0 ? 'TVA à reverser (exercice)' : 'Crédit de TVA (exercice)'}
-          value={euros0(Math.abs(data.soldeTVA))} tone={data.soldeTVA >= 0 ? 'bad' : 'good'} />
+        <StatCard label={data.soldeTVA > 0 ? 'TVA à reverser (exercice)' : 'Crédit de TVA (exercice)'}
+          value={euros0(Math.abs(data.soldeTVA))} tone={data.soldeTVA > 0 ? 'bad' : 'good'}
+          sub={data.soldeTVA > 0 ? 'dû à l\'État' : 'l\'État te le doit'} />
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">

@@ -175,7 +175,7 @@ export function CategoriesPage() {
       <div className="grid lg:grid-cols-[1fr_320px] gap-4 items-start">
         <Card title={`${rows.length} catégories`}>
           <div className="overflow-x-auto -mx-4 px-4">
-            <table className="sheet text-sm">
+            <table data-table="categories" className="sheet text-sm">
               <thead>
                 <tr>
                   <th className="text-center" style={{ width: 34 }}>

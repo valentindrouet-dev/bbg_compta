@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Plus, Upload, RotateCcw } from 'lucide-react';
+import { Plus, Upload, RotateCcw, Columns3 } from 'lucide-react';
 import { useStore } from '../../store';
 import { importBackup, exportBackup } from '../../utils/export';
 import { PageHeader, Card, Btn } from '../ui';
@@ -7,6 +7,8 @@ import { PageHeader, Card, Btn } from '../ui';
 export function SettingsPage() {
   const state = useStore();
   const { referentiels, addPaiement, addComptePlanComptable, restoreAll, resetToSeed, entries } = state;
+  const resetColWidths = useStore(s => s.resetColWidths);
+  const nbTableauxRedimensionnes = Object.keys(useStore(s => s.colWidths)).length;
   const fileRef = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -56,6 +58,30 @@ export function SettingsPage() {
             et les justificatifs dans sa base de fichiers. La sauvegarde JSON embarque les deux :
             fais-en une régulièrement, et avant de changer de navigateur ou de machine.
           </p>
+        </Card>
+
+        <Card title="Affichage des tableaux">
+          <p className="text-sm text-[#5c5280] mb-3">
+            Chaque colonne de l'application se redimensionne : attrape le <b>bord droit de son
+            en-tête</b> et tire vers la gauche ou la droite. La largeur est enregistrée et
+            retrouvée à la prochaine ouverture. Un <b>double-clic</b> sur ce même bord rend au
+            tableau ses largeurs automatiques.
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <Btn onClick={() => {
+              resetColWidths();
+              setMessage('Toutes les colonnes sont revenues à leur largeur automatique.');
+            }} disabled={!nbTableauxRedimensionnes}>
+              <span className="inline-flex items-center gap-1">
+                <Columns3 size={14} /> Réinitialiser toutes les largeurs
+              </span>
+            </Btn>
+            <span className="text-xs text-[#9a92b5]">
+              {nbTableauxRedimensionnes
+                ? `${nbTableauxRedimensionnes} tableau(x) avec des largeurs personnalisées`
+                : 'Aucune largeur personnalisée pour l\'instant'}
+            </span>
+          </div>
         </Card>
 
         <div className="grid md:grid-cols-2 gap-4">

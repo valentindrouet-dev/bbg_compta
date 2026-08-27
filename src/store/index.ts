@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type {
   JournalEntry, FinanceEntry, BudgetExercice, ChronoEvent, TresoPrevLine, Referentiels, CategorieMeta,
-  PrevLigne, PrevSection,
+  JeuMeta, PrevLigne, PrevSection,
 } from '../types';
 import { migrerBudgets, sectionDeCategorie } from '../utils/previsionnel';
 import { moisExercice } from '../utils/dates';
@@ -41,6 +41,12 @@ export interface ColFormat {
 
 export type CatKind = 'categoriesDepenses' | 'categoriesJeux' | 'categoriesProduits';
 
+/**
+ * Largeurs de colonnes d'un tableau, en pixels, dans l'ordre des colonnes.
+ * Un tableau absent de la table garde ses largeurs automatiques.
+ */
+export type ColWidths = Record<string, number[]>;
+
 /** Clés dont la modification est enregistrée dans l'historique d'annulation. */
 const DATA_KEYS = ['entries', 'finances', 'referentiels', 'budgets', 'previsionnels', 'chronologie', 'tresoPrev', 'journalFormats'] as const;
 type DataKey = typeof DATA_KEYS[number];
@@ -57,6 +63,8 @@ export interface AppState {
   tresoPrev: TresoPrevLine[];
   /** Mise en forme par colonne des tableaux, indexée par « table:colonne ». */
   journalFormats: Record<string, ColFormat>;
+  /** Largeurs de colonnes redimensionnées à la souris, par tableau. */
+  colWidths: ColWidths;
 
   // Historique (non persisté) : profondeur disponible pour annuler / rétablir.
   undoDepth: number;
@@ -65,6 +73,10 @@ export interface AppState {
   redo: () => void;
   setColFormat: (col: string, patch: ColFormat) => void;
   resetColFormat: (col: string) => void;
+  /** Enregistre les largeurs d'un tableau (hors historique d'annulation). */
+  setColWidths: (table: string, widths: number[]) => void;
+  /** Rend ses largeurs automatiques à un tableau, ou à tous si non précisé. */
+  resetColWidths: (table?: string) => void;
 
   addEntry: (e: Omit<JournalEntry, 'id'>) => string;
   updateEntry: (id: string, patch: Partial<JournalEntry>) => void;
@@ -113,10 +125,12 @@ export interface AppState {
   addJeu: (name: string) => void;
   renameJeu: (ancien: string, nouveau: string) => void;
   removeJeu: (name: string) => void;
+  /** Fiche d'un jeu : lien vers le Production Calculator, notes. */
+  setJeuMeta: (jeu: string, patch: JeuMeta) => void;
   addPaiement: (name: string) => void;
   addComptePlanComptable: (name: string) => void;
 
-  restoreAll: (data: Partial<Pick<AppState, 'entries' | 'finances' | 'referentiels' | 'budgets' | 'previsionnels' | 'chronologie' | 'tresoPrev'>>) => void;
+  restoreAll: (data: Partial<Pick<AppState, 'entries' | 'finances' | 'referentiels' | 'budgets' | 'previsionnels' | 'chronologie' | 'tresoPrev' | 'journalFormats' | 'colWidths'>>) => void;
   resetToSeed: () => void;
 }
 
@@ -135,6 +149,7 @@ function seedState() {
     chronologie: structuredClone(seedChronologie) as ChronoEvent[],
     tresoPrev: structuredClone(seedTresorerie.previsionnel) as TresoPrevLine[],
     journalFormats: {} as Record<string, ColFormat>,
+    colWidths: {} as ColWidths,
   };
 }
 
@@ -207,6 +222,24 @@ export const useStore = create<AppState>()(
         delete next[col];
         return { journalFormats: next };
       }),
+
+      // Redimensionner une colonne n'est pas une modification de données :
+      // ça ne remplit pas la pile d'annulation (Cmd+Z reste utile).
+      setColWidths: (table, widths) => {
+        suspendHistory = true;
+        set(s => ({ colWidths: { ...s.colWidths, [table]: widths } }));
+        suspendHistory = false;
+      },
+      resetColWidths: (table) => {
+        suspendHistory = true;
+        set(s => {
+          if (!table) return { colWidths: {} };
+          const next = { ...s.colWidths };
+          delete next[table];
+          return { colWidths: next };
+        });
+        suspendHistory = false;
+      },
 
       addEntry: (e) => {
         const id = uid();
@@ -448,18 +481,29 @@ export const useStore = create<AppState>()(
         const n = nouveau.trim();
         const jeux = s.referentiels.jeux ?? JEUX_PAR_DEFAUT;
         if (!n || n === ancien) return s;
+        // La fiche du jeu (lien Production Calculator, notes) suit le nom.
+        const meta = { ...(s.referentiels.jeuxMeta ?? {}) };
+        if (meta[ancien]) { meta[n] = meta[ancien]; delete meta[ancien]; }
         return {
-          referentiels: { ...s.referentiels, jeux: jeux.map(j => j === ancien ? n : j) },
+          referentiels: { ...s.referentiels, jeux: jeux.map(j => j === ancien ? n : j), jeuxMeta: meta },
           entries: s.entries.map(e => e.jeu === ancien ? { ...e, jeu: n } : e),
         };
       }),
       removeJeu: (name) => set(s => {
         const jeux = s.referentiels.jeux ?? JEUX_PAR_DEFAUT;
+        const meta = { ...(s.referentiels.jeuxMeta ?? {}) };
+        delete meta[name];
         return {
-          referentiels: { ...s.referentiels, jeux: jeux.filter(j => j !== name) },
+          referentiels: { ...s.referentiels, jeux: jeux.filter(j => j !== name), jeuxMeta: meta },
           entries: s.entries.map(e => e.jeu === name ? { ...e, jeu: '' } : e),
         };
       }),
+      setJeuMeta: (jeu, patch) => set(s => ({
+        referentiels: {
+          ...s.referentiels,
+          jeuxMeta: { ...(s.referentiels.jeuxMeta ?? {}), [jeu]: { ...(s.referentiels.jeuxMeta ?? {})[jeu], ...patch } },
+        },
+      })),
       addPaiement: (name) => set(s => {
         if (!name.trim() || s.referentiels.paiements.includes(name.trim())) return s;
         return { referentiels: { ...s.referentiels, paiements: [...s.referentiels.paiements, name.trim()] } };
@@ -475,7 +519,7 @@ export const useStore = create<AppState>()(
     },
     {
       name: 'bbg-compta-v1',
-      version: 3,
+      version: 4,
       // v2 : ajout de la liste des jeux et rattachement des dépenses de
       // développement au jeu concerné (déduit des mots clés / de la catégorie).
       migrate: (persisted, version) => {
@@ -489,6 +533,8 @@ export const useStore = create<AppState>()(
           // v3 : le prévisionnel est réécrit sur les catégories de la synthèse.
           s.previsionnels = migrerBudgets(s.budgets, s.referentiels);
         }
+        // v4 : largeurs de colonnes redimensionnables.
+        if (version < 4) s.colWidths = s.colWidths ?? {};
         return s;
       },
       // Seules les données sont persistées : l'historique repart à zéro
@@ -497,7 +543,7 @@ export const useStore = create<AppState>()(
         entries: s.entries, finances: s.finances, referentiels: s.referentiels,
         budgets: s.budgets, previsionnels: s.previsionnels,
         chronologie: s.chronologie, tresoPrev: s.tresoPrev,
-        journalFormats: s.journalFormats,
+        journalFormats: s.journalFormats, colWidths: s.colWidths,
       }) as unknown as AppState,
     },
   ),

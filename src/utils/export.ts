@@ -6,7 +6,8 @@ import type { JournalEntry } from '../types';
 import { labelMois, formatDateFR, compareMois, moisCourant, moisExercice } from './dates';
 import { r2 } from './money';
 import { syntheseExercice, immoInfos, tableauTVA, tableauTreso, moisTresorerie } from './calc';
-import { exporterFichiers, importerFichiers, type FichierSerialise } from './files';
+import { exporterFichiers, importerFichiers, listFiles, type FichierSerialise } from './files';
+import { creerZip, nomSur, type FichierZip } from './zip';
 
 function download(name: string, blob: Blob) {
   const url = URL.createObjectURL(blob);
@@ -42,7 +43,7 @@ function journalRows(entries: JournalEntry[]) {
     }));
 }
 
-export function exportExcel(state: AppState, exercice: string) {
+export function blobExcel(state: AppState, exercice: string): Blob {
   const wb = XLSX.utils.book_new();
   const { entries, referentiels, previsionnels, chronologie, finances } = state;
 
@@ -131,17 +132,21 @@ export function exportExcel(state: AppState, exercice: string) {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(chronoRows), 'Chronologie');
 
   const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-  download(`BBG_Compta_${today()}.xlsx`, new Blob([out], {
+  return new Blob([out], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  }));
+  });
+}
+
+export function exportExcel(state: AppState, exercice: string) {
+  download(`BBG_Compta_${today()}.xlsx`, blobExcel(state, exercice));
 }
 
 // -------------------------------------------------------------------- CSV ---
 
 /** CSV « à la française » : séparateur ; virgule décimale, BOM UTF-8. */
-export function exportCSV(entries: JournalEntry[]) {
+export function blobCSV(entries: JournalEntry[]): Blob | null {
   const rows = journalRows(entries);
-  if (!rows.length) return;
+  if (!rows.length) return null;
   const headers = Object.keys(rows[0]);
   const fmt = (v: string | number) => {
     if (typeof v === 'number') return String(v).replace('.', ',');
@@ -149,7 +154,12 @@ export function exportCSV(entries: JournalEntry[]) {
     return /[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
   const csv = [headers.join(';'), ...rows.map(r => headers.map(h => fmt(r[h as keyof typeof r] as string | number)).join(';'))].join('\r\n');
-  download(`BBG_Journal_${today()}.csv`, new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
+  return new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+}
+
+export function exportCSV(entries: JournalEntry[]) {
+  const blob = blobCSV(entries);
+  if (blob) download(`BBG_Journal_${today()}.csv`, blob);
 }
 
 // -------------------------------------------------------------------- PDF ---
@@ -157,7 +167,7 @@ export function exportCSV(entries: JournalEntry[]) {
 const eurosPDF = (v: number) =>
   v.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
 
-export function exportPDF(state: AppState, exercice: string) {
+function documentPDF(state: AppState, exercice: string): jsPDF {
   const { entries, referentiels, finances } = state;
   const doc = new jsPDF({ orientation: 'landscape' });
   const syn = syntheseExercice(entries, exercice, referentiels.categoriesJeux);
@@ -250,12 +260,20 @@ export function exportPDF(state: AppState, exercice: string) {
     columnStyles: { 0: { halign: 'left' } },
   });
 
-  doc.save(`BBG_Rapport_${exercice}_${today()}.pdf`);
+  return doc;
+}
+
+export function blobPDF(state: AppState, exercice: string): Blob {
+  return documentPDF(state, exercice).output('blob');
+}
+
+export function exportPDF(state: AppState, exercice: string) {
+  documentPDF(state, exercice).save(`BBG_Rapport_${exercice}_${today()}.pdf`);
 }
 
 // ---------------------------------------------------------------- Sauvegarde -
 
-export async function exportBackup(state: AppState, avecFichiers = true) {
+export async function blobBackup(state: AppState, avecFichiers = true): Promise<Blob> {
   // Les justificatifs vivent dans IndexedDB : on les embarque en base64 pour
   // que la sauvegarde soit vraiment complète (et restaurable sur une autre machine).
   const fichiers = avecFichiers ? await exporterFichiers() : [];
@@ -271,10 +289,120 @@ export async function exportBackup(state: AppState, avecFichiers = true) {
     chronologie: state.chronologie,
     tresoPrev: state.tresoPrev,
     journalFormats: state.journalFormats,
+    colWidths: state.colWidths,
     fichiers,
   };
-  download(`BBG_Compta_sauvegarde_${today()}.json`,
-    new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' }));
+  return new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' });
+}
+
+export async function exportBackup(state: AppState, avecFichiers = true) {
+  download(`BBG_Compta_sauvegarde_${today()}.json`, await blobBackup(state, avecFichiers));
+}
+
+// ------------------------------------------------------- Export groupé ZIP --
+
+export interface ResultatZip { nom: string; taille: number; fichiers: string[] }
+
+/**
+ * Les quatre exports d'un coup, dans une seule archive : le classeur Excel,
+ * le rapport PDF, le CSV du journal et la sauvegarde JSON complète.
+ * Un fichier « Lisez-moi.txt » rappelle à quoi sert chaque pièce.
+ */
+export async function exportTout(state: AppState, exercice: string,
+  options: { avecFactures?: boolean } = {}): Promise<ResultatZip> {
+  const jour = today();
+  const pieces: FichierZip[] = [
+    { nom: `BBG_Compta_${exercice}.xlsx`, data: blobExcel(state, exercice) },
+    { nom: `BBG_Rapport_${exercice}.pdf`, data: blobPDF(state, exercice) },
+  ];
+  const csv = blobCSV(state.entries);
+  if (csv) pieces.push({ nom: 'BBG_Journal.csv', data: csv });
+  // La sauvegarde embarque déjà les justificatifs en base64 : inutile de les
+  // dupliquer en fichiers séparés quand le dossier Factures est demandé.
+  pieces.push({
+    nom: 'BBG_Compta_sauvegarde.json',
+    data: await blobBackup(state, !options.avecFactures),
+  });
+
+  let nbFactures = 0;
+  if (options.avecFactures) {
+    for (const f of await fichiersFactures(state.entries)) { pieces.push(f); nbFactures++; }
+  }
+
+  pieces.push({ nom: 'Lisez-moi.txt', data: lisezMoi(exercice, jour, nbFactures) });
+
+  const zip = await creerZip(pieces);
+  const nom = `BBG_Compta_${exercice}_${jour}.zip`;
+  download(nom, zip);
+  return { nom, taille: zip.size, fichiers: pieces.map(p => p.nom) };
+}
+
+function lisezMoi(exercice: string, jour: string, nbFactures: number): string {
+  const pieces: [string, string[]][] = [
+    [`BBG_Compta_${exercice}.xlsx`, [
+      'Classeur complet : journal, synthèse, produits, immobilisations,',
+      'trésorerie, TVA, prévisionnel et chronologie.',
+      'S\'importe dans Google Sheets par Fichier > Importer.',
+    ]],
+    [`BBG_Rapport_${exercice}.pdf`, [
+      'Rapport imprimable : synthèse par catégorie, journal détaillé,',
+      'TVA et trésorerie.',
+    ]],
+    ['BBG_Journal.csv', [
+      'Toutes les écritures (séparateur « ; », virgule décimale),',
+      'pour l\'expert-comptable.',
+    ]],
+    ['BBG_Compta_sauvegarde.json', [
+      'Sauvegarde restaurable dans BBG Compta',
+      '(Paramètres > Restaurer une sauvegarde).',
+    ]],
+  ];
+  if (nbFactures) {
+    pieces.push(['Factures/', [`${nbFactures} justificatif(s), rangés par mois comptable.`]]);
+  }
+  const largeur = Math.max(...pieces.map(p => p[0].length)) + 3;
+  const bloc = pieces.flatMap(([nom, lignes]) => lignes.map((l, i) =>
+    (i === 0 ? nom.padEnd(largeur) : ' '.repeat(largeur)) + l));
+
+  return [
+    `Big Budi Games — export comptable du ${formatDateFR(jour)}`,
+    `Exercice ${exercice} (1er octobre → 30 septembre)`,
+    '',
+    ...bloc,
+    '',
+    'Tous les totaux sont recalculés écriture par écriture : aucun n\'est saisi à la main.',
+  ].join('\n');
+}
+
+/** Les justificatifs stockés, rangés « Factures/<mois>/<fournisseur> — <libellé>.pdf ». */
+export async function fichiersFactures(entries: JournalEntry[]): Promise<FichierZip[]> {
+  const stockes = await listFiles();
+  const parId = new Map(entries.filter(e => e.factureFileId).map(e => [e.factureFileId!, e]));
+  const utilises = new Set<string>();
+  return stockes.map(f => {
+    const e = parId.get(f.id);
+    const ext = (f.name.match(/\.[a-z0-9]+$/i)?.[0] ?? '').toLowerCase();
+    const base = e
+      ? nomSur([e.fournisseur, e.description].filter(Boolean).join(' - ')) || nomSur(f.name)
+      : nomSur(f.name.replace(/\.[a-z0-9]+$/i, ''));
+    const dossier = e ? `Factures/${nomSur(labelMois(e.mois))}` : 'Factures/Non rattachees';
+    // Deux factures du même fournisseur le même mois : on suffixe pour ne pas
+    // écraser l'une par l'autre dans l'archive.
+    let nom = `${dossier}/${base}${ext}`;
+    let n = 2;
+    while (utilises.has(nom.toLowerCase())) nom = `${dossier}/${base} (${n++})${ext}`;
+    utilises.add(nom.toLowerCase());
+    return { nom, data: f.blob };
+  });
+}
+
+/** Toutes les factures dans une archive, pour la page Factures. */
+export async function exportFactures(entries: JournalEntry[]): Promise<ResultatZip> {
+  const pieces = await fichiersFactures(entries);
+  const zip = await creerZip(pieces);
+  const nom = `BBG_Factures_${today()}.zip`;
+  download(nom, zip);
+  return { nom, taille: zip.size, fichiers: pieces.map(p => p.nom) };
 }
 
 export async function importBackup(file: File): Promise<{
@@ -294,6 +422,8 @@ export async function importBackup(file: File): Promise<{
       previsionnels: data.previsionnels,
       chronologie: data.chronologie ?? [],
       tresoPrev: data.tresoPrev ?? [],
+      ...(data.journalFormats ? { journalFormats: data.journalFormats } : {}),
+      ...(data.colWidths ? { colWidths: data.colWidths } : {}),
     },
     nbFichiers,
   };

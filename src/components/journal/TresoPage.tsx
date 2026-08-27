@@ -59,7 +59,7 @@ export function TresoPage() {
             </Btn>
           }
         >
-          <table className="sheet text-sm border-collapse w-full">
+          <table data-table="treso:mouvements" className="sheet text-sm border-collapse w-full">
             <thead>
               <tr className="text-left text-[#5c5280]">
                 <th>Date</th><th>Libellé</th><th>Type</th>
@@ -101,7 +101,7 @@ export function TresoPage() {
 
       <Card title="Trésorerie mensuelle">
         <div className="overflow-x-auto -mx-4 px-4">
-          <table className="sheet text-sm border-collapse w-full">
+          <table data-table="treso:mensuel" className="sheet text-sm border-collapse w-full">
             <thead>
               <tr className="text-left text-[#5c5280]">
                 <th>Mois</th>

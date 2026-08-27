@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, LabelList,
 } from 'recharts';
-import { Plus, Trash2, Gamepad2 } from 'lucide-react';
+import { Plus, Trash2, Gamepad2, ExternalLink, Link2 } from 'lucide-react';
 import { useStore } from '../../store';
 import { labelMois, formatDateFR, compareMois, EXERCICES } from '../../utils/dates';
 import { euros, euros0, r2, pourcent } from '../../utils/money';
@@ -13,6 +13,9 @@ import { PageHeader, Card, StatCard, Btn, useSort, sortBy, ThSort } from '../ui'
 const C_REEL = '#e69138';
 const C_PREVU = '#674ea7';
 const GRID = '#ddd6ef';
+
+/** Le Production Calculator : coûts de fabrication, devis usines, scénarios de vente. */
+export const PROD_CALCULATOR = 'https://valentindrouet-dev.github.io/boardgame_prod_calculator/';
 
 const kEuros = (v: number) => Math.abs(v) >= 1000
   ? `${(v / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} k€`
@@ -25,9 +28,12 @@ export function JeuxPage() {
   const addJeu = useStore(s => s.addJeu);
   const renameJeu = useStore(s => s.renameJeu);
   const removeJeu = useStore(s => s.removeJeu);
+  const setJeuMeta = useStore(s => s.setJeuMeta);
   const updateEntry = useStore(s => s.updateEntry);
 
   const jeux = refs.jeux ?? [];
+  const jeuxMeta = refs.jeuxMeta ?? {};
+  const lienDe = (jeu: string) => jeuxMeta[jeu]?.lienProd?.trim() || '';
   const [nouveau, setNouveau] = useState('');
   const [actif, setActif] = useState<string | null>(null);
   const { sort, toggle } = useSort({ key: 'date', dir: 'asc' });
@@ -98,7 +104,7 @@ export function JeuxPage() {
         <div className="space-y-4">
           <Card title="Vue d'ensemble par jeu">
             <div className="overflow-x-auto -mx-4 px-4">
-              <table className="sheet text-sm">
+              <table data-table="jeux:bilan" className="sheet text-sm">
                 <thead>
                   <tr>
                     <th className="text-left">Jeu</th>
@@ -127,6 +133,16 @@ export function JeuxPage() {
                           <span className="inline-flex items-center gap-1.5">
                             <Gamepad2 size={14} style={{ color: 'var(--bbg-orange-dark)' }} />
                             {b.jeu}
+                            {lienDe(b.jeu) && (
+                              <a
+                                href={lienDe(b.jeu)} target="_blank" rel="noopener noreferrer"
+                                title={`Ouvrir ${b.jeu} dans le Production Calculator`}
+                                style={{ color: 'var(--bbg-purple-dark)' }}
+                                onClick={ev => ev.stopPropagation()}
+                              >
+                                <ExternalLink size={13} />
+                              </a>
+                            )}
                           </span>
                         </td>
                         <td className="text-right tabular-nums">{b.nb}</td>
@@ -191,8 +207,26 @@ export function JeuxPage() {
 
           {jeuActif && (
             <>
+              {lienDe(jeuActif.jeu) ? (
+                <Card title={`${jeuActif.jeu} — fabrication`}>
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <p className="text-sm" style={{ color: '#5c5280' }}>
+                      Les devis usines, les coûts unitaires et les scénarios de vente de{' '}
+                      <b>{jeuActif.jeu}</b> sont tenus dans le Production Calculator.
+                    </p>
+                    <a
+                      href={lienDe(jeuActif.jeu)} target="_blank" rel="noopener noreferrer"
+                      className="px-3 py-1.5 rounded-md text-sm font-semibold text-white inline-flex items-center gap-1.5 shrink-0"
+                      style={{ backgroundColor: 'var(--bbg-purple-dark)' }}
+                    >
+                      <ExternalLink size={14} /> Ouvrir dans le Production Calculator
+                    </a>
+                  </div>
+                </Card>
+              ) : null}
+
               <Card title={`${jeuActif.jeu} — dépenses par catégorie (HT)`}>
-                <table className="sheet text-sm">
+                <table data-table="jeux:categories" className="sheet text-sm">
                   <thead>
                     <tr><th className="text-left">Catégorie</th><th className="num">Montant HT</th><th className="num">Part</th></tr>
                   </thead>
@@ -213,7 +247,7 @@ export function JeuxPage() {
 
               <Card title={`${jeuActif.jeu} — répartition mensuelle (HT)`}>
                 <div className="overflow-x-auto -mx-4 px-4">
-                  <table className="sheet text-xs">
+                  <table data-table={`jeux:mois:${jeuActif.parMois.size}`} className="sheet text-xs">
                     <thead>
                       <tr>
                         {[...jeuActif.parMois.keys()].sort(compareMois).map(m => (
@@ -234,7 +268,7 @@ export function JeuxPage() {
 
               <Card title={`${jeuActif.jeu} — ${rowsEcritures.length} écritures`}>
                 <div className="overflow-x-auto -mx-4 px-4">
-                  <table className="sheet text-sm">
+                  <table data-table="jeux:ecritures" className="sheet text-sm">
                     <thead>
                       <tr>
                         <ThSort label="Date" k="date" sort={sort} onToggle={toggle} />
@@ -276,26 +310,57 @@ export function JeuxPage() {
 
         <div className="space-y-4">
           <Card title="Catalogue des jeux">
-            <ul className="space-y-1 mb-3">
+            <ul className="space-y-2.5 mb-3">
               {jeux.map(j => (
-                <li key={j} className="flex items-center gap-1 group">
-                  <input
-                    className="flex-1 border rounded px-2 py-1 text-sm"
-                    style={{ borderColor: 'var(--bbg-border-soft)' }}
-                    defaultValue={j}
-                    onBlur={ev => { const v = ev.target.value.trim(); if (v && v !== j) renameJeu(j, v); }}
-                    onKeyDown={ev => { if (ev.key === 'Enter') (ev.target as HTMLInputElement).blur(); }}
-                  />
-                  <button
-                    className="opacity-0 group-hover:opacity-100 shrink-0" style={{ color: '#d98b86' }}
-                    title="Retirer du catalogue (les écritures sont conservées, sans rattachement)"
-                    onClick={() => { if (confirm(`Retirer « ${j} » du catalogue ?`)) removeJeu(j); }}
-                  >
-                    <Trash2 size={13} />
-                  </button>
+                <li key={j} className="group">
+                  <div className="flex items-center gap-1">
+                    <input
+                      className="flex-1 border rounded px-2 py-1 text-sm font-medium"
+                      style={{ borderColor: 'var(--bbg-border-soft)' }}
+                      defaultValue={j}
+                      onBlur={ev => { const v = ev.target.value.trim(); if (v && v !== j) renameJeu(j, v); }}
+                      onKeyDown={ev => { if (ev.key === 'Enter') (ev.target as HTMLInputElement).blur(); }}
+                    />
+                    {lienDe(j) && (
+                      <a
+                        href={lienDe(j)} target="_blank" rel="noopener noreferrer" className="shrink-0"
+                        title={`Ouvrir ${j} dans le Production Calculator`}
+                        style={{ color: 'var(--bbg-purple-dark)' }}
+                      >
+                        <ExternalLink size={14} />
+                      </a>
+                    )}
+                    <button
+                      className="opacity-0 group-hover:opacity-100 shrink-0" style={{ color: '#d98b86' }}
+                      title="Retirer du catalogue (les écritures sont conservées, sans rattachement)"
+                      onClick={() => { if (confirm(`Retirer « ${j} » du catalogue ?`)) removeJeu(j); }}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-1 mt-1">
+                    <Link2 size={12} className="shrink-0" style={{ color: '#9a92b5' }} />
+                    <input
+                      className="flex-1 border rounded px-2 py-0.5 text-[11px]"
+                      style={{ borderColor: 'var(--bbg-border-soft)', color: '#5c5280' }}
+                      placeholder="Lien Production Calculator…"
+                      title="Colle ici l'adresse de ce jeu dans le Production Calculator"
+                      defaultValue={jeuxMeta[j]?.lienProd ?? ''}
+                      onBlur={ev => setJeuMeta(j, { lienProd: ev.target.value.trim() })}
+                      onKeyDown={ev => { if (ev.key === 'Enter') (ev.target as HTMLInputElement).blur(); }}
+                    />
+                  </div>
                 </li>
               ))}
             </ul>
+            <p className="text-[11px] mb-2" style={{ color: '#9a92b5' }}>
+              Pas encore de lien par jeu ?{' '}
+              <a href={PROD_CALCULATOR} target="_blank" rel="noopener noreferrer"
+                className="underline" style={{ color: 'var(--bbg-purple-dark)' }}>
+                Ouvrir le Production Calculator
+              </a>{' '}
+              et coller l'adresse de la fiche du jeu ci-dessus.
+            </p>
             <div className="flex gap-1">
               <input
                 className="flex-1 border rounded px-2 py-1 text-sm"
@@ -319,8 +384,9 @@ export function JeuxPage() {
               <br /><br />
               Cette page couvre le <b>développement</b> : illustrations, direction artistique,
               prototypage, avances sur droits d'auteur. Les <b>coûts de fabrication</b> (devis usines,
-              composants, transport) restent dans le Production Calculator — les deux seront reliés
-              plus tard.
+              composants, transport) restent dans le Production Calculator : colle son adresse dans le
+              champ « lien » de chaque jeu, et la flèche <ExternalLink size={11} className="inline" />{' '}
+              t'y emmène directement depuis le tableau.
             </p>
           </Card>
         </div>

@@ -1,6 +1,7 @@
 import {
   Coins, LayoutDashboard, NotebookPen, Table2, Building2, Wallet, Percent,
   UserRound, Target, GitCompareArrows, Landmark, CalendarRange, FileDown, Settings, Store, Tags, Gamepad2,
+  ReceiptText,
 } from 'lucide-react';
 import type { Page } from '../../App';
 import { APP_VERSION } from '../../version';
@@ -25,6 +26,7 @@ const NAV: { section: string; items: { page: Page; label: string; icon: typeof C
       { page: 'tva', label: 'TVA', icon: Percent },
       { page: 'jeux', label: 'Jeux', icon: Gamepad2 },
       { page: 'fournisseurs', label: 'Fournisseurs', icon: Store },
+      { page: 'factures', label: 'Factures', icon: ReceiptText },
     ],
   },
   {

@@ -1,13 +1,30 @@
 import { useState } from 'react';
-import { FileSpreadsheet, FileText, FileJson, Table } from 'lucide-react';
+import { FileSpreadsheet, FileText, FileJson, Table, FileArchive, Loader2 } from 'lucide-react';
 import { useStore } from '../../store';
 import { EXERCICES } from '../../utils/dates';
-import { exportExcel, exportCSV, exportPDF, exportBackup } from '../../utils/export';
+import { exportExcel, exportCSV, exportPDF, exportBackup, exportTout } from '../../utils/export';
+import { formatTaille } from '../../utils/files';
 import { PageHeader, Card, Btn } from '../ui';
 
 export function ExportsPage() {
   const state = useStore();
   const [exercice, setExercice] = useState('2025-26');
+  const [avecFactures, setAvecFactures] = useState(true);
+  const [enCours, setEnCours] = useState(false);
+  const [resultat, setResultat] = useState<string | null>(null);
+
+  async function toutExporter() {
+    setEnCours(true);
+    setResultat(null);
+    try {
+      const r = await exportTout(state, exercice, { avecFactures });
+      setResultat(`${r.nom} — ${r.fichiers.length} fichiers, ${formatTaille(r.taille)}`);
+    } catch (err) {
+      setResultat(`Échec de l'export : ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setEnCours(false);
+    }
+  }
 
   return (
     <div className="p-6 max-w-3xl">
@@ -26,13 +43,54 @@ export function ExportsPage() {
       />
 
       <div className="space-y-4">
+        <Card
+          className="border-2"
+          title={
+            <span className="inline-flex items-center gap-2">
+              <FileArchive size={18} style={{ color: 'var(--bbg-purple-dark)' }} />
+              Tout exporter d'un coup (.zip)
+            </span>
+          }
+        >
+          <p className="text-sm text-[#5c5280] mb-3">
+            Une seule archive contenant les <b>quatre exports</b> de l'exercice {exercice} :
+            le classeur <b>.xlsx</b>, le rapport <b>.pdf</b>, le journal <b>.csv</b> et la
+            sauvegarde <b>.json</b> — plus un « Lisez-moi » qui rappelle à quoi sert chaque fichier.
+            C'est le format à envoyer à l'expert-comptable.
+          </p>
+          <label className="flex items-center gap-2 text-sm mb-3 text-[#3f3268]">
+            <input
+              type="checkbox"
+              checked={avecFactures}
+              onChange={ev => setAvecFactures(ev.target.checked)}
+            />
+            Ajouter un dossier <b>Factures/</b> avec les justificatifs, rangés par mois
+          </label>
+          <div className="flex items-center gap-3">
+            <Btn variant="primary" onClick={toutExporter} disabled={enCours}>
+              <span className="inline-flex items-center gap-1.5">
+                {enCours ? <Loader2 size={14} className="animate-spin" /> : <FileArchive size={14} />}
+                {enCours ? 'Préparation de l\'archive…' : 'Télécharger l\'archive complète'}
+              </span>
+            </Btn>
+            {resultat && <span className="text-xs text-[#38761d]">{resultat}</span>}
+          </div>
+          {avecFactures && (
+            <p className="text-xs text-[#9a92b5] mt-2">
+              Avec le dossier Factures, la sauvegarde .json de l'archive n'embarque pas une seconde
+              fois les fichiers : les justificatifs sont là, en clair, une seule fois. Pour une
+              sauvegarde autonome et restaurable, prends celle du bloc plus bas.
+            </p>
+          )}
+        </Card>
+
         <Card title={<span className="inline-flex items-center gap-2"><FileSpreadsheet size={18} className="text-[#38761d]" /> Excel / Google Sheets</span>}>
           <p className="text-sm text-[#5c5280] mb-3">
             Classeur <b>.xlsx</b> complet : journal, synthèse {exercice}, produits, immobilisations,
-            trésorerie, TVA, budgets 2025-30 et chronologie. S'ouvre dans Excel, et s'importe dans
+            trésorerie, TVA, prévisionnel 2025-30 et chronologie. S'ouvre dans Excel, et s'importe dans
             Google Sheets via <i>Fichier → Importer</i>.
           </p>
-          <Btn variant="primary" onClick={() => exportExcel(state, exercice)}>Télécharger le classeur .xlsx</Btn>
+          <Btn onClick={() => exportExcel(state, exercice)}>Télécharger le classeur .xlsx</Btn>
         </Card>
 
         <Card title={<span className="inline-flex items-center gap-2"><Table size={18} className="text-sky-600" /> CSV (journal)</span>}>
@@ -52,8 +110,8 @@ export function ExportsPage() {
 
         <Card title={<span className="inline-flex items-center gap-2"><FileJson size={18} className="text-amber-600" /> Sauvegarde complète</span>}>
           <p className="text-sm text-[#5c5280] mb-3">
-            Fichier JSON contenant <b>toutes</b> les données (journal, budgets, référentiels, chronologie)
-            <b> et les justificatifs joints</b>.
+            Fichier JSON contenant <b>toutes</b> les données (journal, prévisionnel, référentiels, chronologie,
+            mises en forme) <b>et les justificatifs joints</b>.
             À conserver précieusement : c'est ta sauvegarde. Elle se restaure depuis l'onglet Paramètres.
           </p>
           <Btn onClick={() => { void exportBackup(state); }}>Télécharger la sauvegarde</Btn>

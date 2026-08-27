@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties, type DragEvent } from 'react';
 import {
-  Plus, Copy, Trash2, AlertTriangle, Search, ClipboardPaste, X, CopyPlus,
+  Plus, Copy, Trash2, AlertTriangle, Search, ClipboardPaste, X, CopyPlus, FileDown,
 } from 'lucide-react';
 import { useStore } from '../../store';
 import type { JournalEntry } from '../../types';
@@ -12,6 +12,8 @@ import { sumTTH, sumParCategorie } from '../../utils/calc';
 import { PageHeader, Card, MonthTabs, Btn, useSort, sortBy, ThSort, type SortState } from '../ui';
 import { DateCell, MoneyCell, AutoCompleteCell, FactureCell, ColFormatMenu, colStyle } from './cells';
 import type { ColFormat } from '../../store';
+import { saveFile, deleteFile } from '../../utils/files';
+import { fichiersDeposes, transporteDesFichiers, libelleDepuisNom, fournisseurDepuisNom } from '../../utils/depot';
 
 type SectionKind = 'depenses' | 'jeux' | 'produits';
 
@@ -253,11 +255,14 @@ function Section({
 }) {
   const refs = useStore(s => s.referentiels);
   const addEntry = useStore(s => s.addEntry);
+  const updateEntry = useStore(s => s.updateEntry);
   const pasteInto = useStore(s => s.pasteInto);
   const formats = useStore(s => s.journalFormats);
   const jeux = useStore(s => s.referentiels.jeux ?? []);
   const setColFormat = useStore(s => s.setColFormat);
   const resetColFormat = useStore(s => s.resetColFormat);
+  const [survolZone, setSurvolZone] = useState(false);
+  const [flash, setFlash] = useState<string | null>(null);
   const fmtMenu = (col: string) => (
     <ColFormatMenu
       col={col} format={formats[col]}
@@ -300,6 +305,58 @@ function Section({
   const bandeau = kind === 'produits' ? 'var(--bbg-green)'
     : kind === 'jeux' ? 'var(--bbg-yellow)' : 'var(--bbg-orange)';
 
+  function annoncer(msg: string) {
+    setFlash(msg);
+    setTimeout(() => setFlash(f => (f === msg ? null : f)), 6000);
+  }
+
+  /** Crée une écriture par fichier déposé, avec le justificatif déjà attaché. */
+  async function creerDepuisFichiers(files: File[]): Promise<number> {
+    for (const f of files) {
+      const stocke = await saveFile(f);
+      const id = nouvelleLigne();
+      updateEntry(id, {
+        factureFileId: stocke.id,
+        facture: f.name,
+        description: libelleDepuisNom(f.name),
+        fournisseur: fournisseurDepuisNom(f.name, fournisseurs),
+      });
+    }
+    return files.length;
+  }
+
+  /** Dépôt sur une ligne : le premier fichier s'y attache, les autres créent des lignes. */
+  async function deposerSurLigne(e: JournalEntry, files: File[]) {
+    if (!files.length) return;
+    const [premier, ...suite] = files;
+    if (e.factureFileId) {
+      if (!confirm(`Cette ligne a déjà un justificatif. Le remplacer par « ${premier.name} » ?`)) return;
+      await deleteFile(e.factureFileId);
+    }
+    const stocke = await saveFile(premier);
+    updateEntry(e.id, {
+      factureFileId: stocke.id,
+      facture: premier.name,
+      description: e.description || libelleDepuisNom(premier.name),
+      fournisseur: e.fournisseur || fournisseurDepuisNom(premier.name, fournisseurs),
+    });
+    if (suite.length) {
+      await creerDepuisFichiers(suite);
+      annoncer(`« ${premier.name} » attaché à la ligne ; ${suite.length} autre(s) fichier(s) ont créé autant de lignes.`);
+    } else {
+      annoncer(`« ${premier.name} » attaché à la ligne.`);
+    }
+  }
+
+  async function deposerEnNouvellesLignes(ev: DragEvent) {
+    ev.preventDefault();
+    setSurvolZone(false);
+    const files = fichiersDeposes(ev);
+    if (!files.length) { annoncer('Aucun PDF ni image dans ce qui a été déposé.'); return; }
+    const n = await creerDepuisFichiers(files);
+    annoncer(`${n} ligne(s) créée(s) avec leur justificatif.`);
+  }
+
   return (
     <Card
       title={
@@ -322,11 +379,21 @@ function Section({
         </>
       }
     >
+      {flash && (
+        <div
+          className="mb-2 px-3 py-1.5 rounded-md text-sm border"
+          style={{ backgroundColor: 'var(--bbg-green-light)', borderColor: 'var(--bbg-green)', color: '#1c5236' }}
+        >
+          {flash}
+        </div>
+      )}
+
       {rows.length === 0 ? (
-        <p className="text-sm italic" style={{ color: '#9a92b5' }}>Aucune écriture ce mois-ci.</p>
+        <p className="text-sm italic mb-2" style={{ color: '#9a92b5' }}>Aucune écriture ce mois-ci.</p>
       ) : (
         <div className="overflow-x-auto -mx-4 px-4">
           <table
+            data-table={`journal:${kind}`}
             className={`sheet text-[13px] ${kind === 'jeux' ? 'sheet-jeux' : kind === 'produits' ? 'sheet-produits' : ''}`}
             style={{ tableLayout: 'fixed', minWidth: 1150 }}
           >
@@ -368,7 +435,7 @@ function Section({
                   clip={clip} onCopy={onCopy}
                   onPasteHere={() => clip && pasteInto(e.id, clip)}
                   fournisseurs={fournisseurs} formats={formats} anneeRef={anneeRef}
-                  jeux={jeux}
+                  jeux={jeux} onDepot={deposerSurLigne}
                 />
               ))}
               {/* En mode collage, une ligne d'accueil est toujours disponible en bas :
@@ -403,6 +470,24 @@ function Section({
         </div>
       )}
 
+      {/* Dépôt de factures : sur une ligne pour l'y attacher, ici pour créer
+          une ligne par fichier. */}
+      <div
+        className="mt-2 rounded-md border-2 border-dashed text-center text-xs py-2 px-3 transition-colors"
+        style={survolZone
+          ? { borderColor: 'var(--bbg-purple-dark)', backgroundColor: 'var(--bbg-purple-light)', color: 'var(--bbg-purple-darker)' }
+          : { borderColor: 'var(--bbg-border)', backgroundColor: 'transparent', color: '#9a92b5' }}
+        onDragOver={ev => { if (transporteDesFichiers(ev)) { ev.preventDefault(); ev.dataTransfer.dropEffect = 'copy'; setSurvolZone(true); } }}
+        onDragLeave={() => setSurvolZone(false)}
+        onDrop={deposerEnNouvellesLignes}
+      >
+        <span className="inline-flex items-center gap-1.5">
+          <FileDown size={13} />
+          Glisse des factures (PDF, photos) <b>sur une ligne</b> pour les y attacher,
+          ou <b>ici</b> pour créer une ligne par fichier.
+        </span>
+      </div>
+
       {parCat.size > 0 && (
         <div className="flex flex-wrap gap-1.5 mt-3">
           {[...parCat.entries()].sort((a, b) => b[1] - a[1]).map(([cat, ht]) => (
@@ -435,15 +520,17 @@ function tauxImplique(e: JournalEntry): number | 'manuel' {
   return 'manuel';
 }
 
-function Row({ e, kind, categories, isSelected, onToggleRow, clip, onCopy, onPasteHere, fournisseurs, formats, anneeRef, jeux }: {
+function Row({ e, kind, categories, isSelected, onToggleRow, clip, onCopy, onPasteHere, fournisseurs, formats, anneeRef, jeux, onDepot }: {
   e: JournalEntry; kind: SectionKind; categories: string[];
   isSelected: boolean; onToggleRow: (id: string) => void;
   clip: JournalEntry | null; onCopy: (e: JournalEntry | null) => void; onPasteHere: () => void;
   fournisseurs: string[]; formats: Record<string, ColFormat>; anneeRef: number; jeux: string[];
+  onDepot: (e: JournalEntry, files: File[]) => void | Promise<void>;
 }) {
   const update = useStore(s => s.updateEntry);
   const remove = useStore(s => s.removeEntry);
   const refs = useStore(s => s.referentiels);
+  const [survol, setSurvol] = useState(false);
 
   const taux = tauxImplique(e);
   const dateHorsMois = e.mois !== PRE_IMMAT && e.date.slice(0, 7) !== e.mois;
@@ -470,9 +557,27 @@ function Row({ e, kind, categories, isSelected, onToggleRow, clip, onCopy, onPas
 
   return (
     <tr
-      className={`group ${isSelected ? 'is-selected' : ''}`}
+      className={`group ${isSelected ? 'is-selected' : ''} ${survol ? 'depot-actif' : ''}`}
       onClick={clip ? onPasteHere : undefined}
-      title={clip ? 'Cliquer pour coller la ligne copiée ici' : undefined}
+      title={clip ? 'Cliquer pour coller la ligne copiée ici' : 'Glisse une facture (PDF, image) sur cette ligne pour l\'y attacher'}
+      onDragOver={ev => {
+        if (!transporteDesFichiers(ev)) return;
+        ev.preventDefault();
+        ev.dataTransfer.dropEffect = 'copy';
+        setSurvol(true);
+      }}
+      onDragLeave={ev => {
+        // Le survol des cellules filles ne doit pas éteindre le surlignage.
+        if (!ev.currentTarget.contains(ev.relatedTarget as Node)) setSurvol(false);
+      }}
+      onDrop={ev => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        setSurvol(false);
+        const files = fichiersDeposes(ev);
+        if (files.length) void onDepot(e, files);
+        else alert('Seuls les PDF et les images (PNG, JPG…) peuvent servir de justificatif.');
+      }}
     >
       <td className="text-center">
         <input

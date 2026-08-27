@@ -59,7 +59,7 @@ export function TresoPrevPage() {
 
       <Card title="Prévisionnel (TTC) — éditable" className="mb-6">
         <div className="overflow-x-auto -mx-4 px-4">
-          <table className="sheet text-sm border-collapse w-full">
+          <table data-table="tresoprev:previsionnel" className="sheet text-sm border-collapse w-full">
             <thead>
               <tr className="text-left text-[#5c5280]">
                 <th className="min-w-56">Catégories (TTC)</th>
@@ -98,7 +98,7 @@ export function TresoPrevPage() {
 
       <Card title="Réalisé (TTC) — calculé depuis le journal">
         <div className="overflow-x-auto -mx-4 px-4">
-          <table className="sheet text-sm border-collapse w-full">
+          <table data-table="tresoprev:realise" className="sheet text-sm border-collapse w-full">
             <thead>
               <tr className="text-left text-[#5c5280]">
                 <th className="min-w-56">Catégories (TTC)</th>

@@ -44,6 +44,22 @@ export function uidFichier(): string {
   return 'f-' + crypto.randomUUID();
 }
 
+// Les fichiers ne vivent pas dans le store Zustand : on prévient nous-mêmes
+// les écrans qui les affichent (page Factures, paramètres) quand ça bouge.
+const abonnes = new Set<() => void>();
+
+export function surChangementFichiers(cb: () => void): () => void {
+  abonnes.add(cb);
+  return () => { abonnes.delete(cb); };
+}
+function prevenir() { for (const cb of [...abonnes]) cb(); }
+
+/** Types acceptés comme justificatif. */
+export function estJustificatif(file: File): boolean {
+  return /^(image\/|application\/pdf)/.test(file.type)
+    || /\.(pdf|png|jpe?g|webp|heic|gif|avif)$/i.test(file.name);
+}
+
 /** Enregistre un fichier et renvoie son identifiant. */
 export async function saveFile(file: File): Promise<StoredFile> {
   const entry: StoredFile = {
@@ -55,6 +71,7 @@ export async function saveFile(file: File): Promise<StoredFile> {
     blob: file,
   };
   await tx('readwrite', s => s.put(entry));
+  prevenir();
   return entry;
 }
 
@@ -65,6 +82,7 @@ export async function getFile(id: string): Promise<StoredFile | null> {
 
 export async function deleteFile(id: string): Promise<void> {
   await tx('readwrite', s => s.delete(id));
+  prevenir();
 }
 
 export async function listFiles(): Promise<StoredFile[]> {
@@ -131,5 +149,19 @@ export async function importerFichiers(files: FichierSerialise[]): Promise<numbe
     await tx('readwrite', s => s.put(entry));
     n++;
   }
+  prevenir();
   return n;
+}
+
+/** Télécharge un justificatif sous son nom d'origine. */
+export async function downloadFile(id: string, nom?: string): Promise<boolean> {
+  const f = await getFile(id);
+  if (!f) return false;
+  const url = URL.createObjectURL(f.blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = nom || f.name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  return true;
 }

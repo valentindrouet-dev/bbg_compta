@@ -120,7 +120,7 @@ export function FournisseursPage() {
 
       <Card title={`${rows.length} fournisseur${rows.length > 1 ? 's' : ''}`}>
         <div className="overflow-x-auto -mx-4 px-4">
-          <table className="sheet text-sm">
+          <table data-table="fournisseurs" className="sheet text-sm">
             <thead>
               <tr>
                 <ThSort label="Fournisseur" k="nom" sort={sort} onToggle={toggle} />

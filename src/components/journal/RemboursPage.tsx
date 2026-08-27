@@ -55,7 +55,7 @@ export function RemboursPage() {
 
       <Card>
         <div className="overflow-x-auto -mx-4 px-4">
-          <table className="sheet text-sm border-collapse w-full">
+          <table data-table="rembours" className="sheet text-sm border-collapse w-full">
             <thead>
               <tr className="text-left text-[#5c5280]">
                 <ThSort label="Date" k="date" sort={sort} onToggle={toggle} />

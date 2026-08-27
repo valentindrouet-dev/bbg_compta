@@ -106,6 +106,13 @@ export interface CategorieMeta {
   groupe?: string;
 }
 
+/** Fiche d'un jeu : lien vers le Production Calculator et note libre. */
+export interface JeuMeta {
+  /** URL du jeu dans le Production Calculator (devis usine, scénarios de vente). */
+  lienProd?: string;
+  note?: string;
+}
+
 export interface Referentiels {
   categoriesDepenses: string[];
   categoriesJeux: string[];
@@ -120,4 +127,6 @@ export interface Referentiels {
   groupes?: string[];
   /** Jeux du catalogue, pour ventiler les dépenses de développement. */
   jeux?: string[];
+  /** Fiche par jeu (lien Production Calculator…), indexée par nom. */
+  jeuxMeta?: Record<string, JeuMeta>;
 }

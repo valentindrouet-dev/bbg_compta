@@ -17,22 +17,46 @@ sont recalculés en direct à partir des écritures.
 - **Immobilisations** — durées, dotations, VNC et fin d'amortissement calculées
 - **Trésorerie** — encaissements/décaissements TTC, mouvements financiers
   (capital, CCA, placements, intérêts) inclus
-- **TVA** — collectée / déductible / solde par mois, calculée écriture par écriture
+- **TVA** — collectée / déductible / solde par mois, calculée écriture par écriture ;
+  rouge = dû à l'État, vert = crédit de TVA en ta faveur
+- **Jeux** — bilan comptable par jeu, comparaison au prévisionnel, lien vers la
+  fiche du jeu dans le Production Calculator
+- **Fournisseurs** — totaux signés, nombre de transactions, historique
+- **Factures** — tous les justificatifs déposés, groupés par mois comptable,
+  en liste ou en vignettes, avec rattachement des pièces orphelines et
+  téléchargement groupé (.zip)
 - **Remboursements Val** — dépenses avancées sur carte personnelle
 
 **Prévisionnel 2025-30**
-- **Budgets annuels** — compte de résultat prévisionnel par exercice
-  (CA, coûts de dev par jeu, charges externes avec imprévus 10 %, personnel,
-  EBE / REX / RC / IS / RN et bloc TVA recalculés)
+- **Prévisionnel** — mêmes lignes, catégories, groupes et blocs que la synthèse
+  annuelle, avec Prévu / Réel / Écart par ligne et des alarmes quand une ligne ne
+  correspond à rien dans la synthèse
 - **Réel vs Prévu** — le réalisé vient du journal, sans IMPORTRANGE
 - **Trésorerie prévisionnelle vs réalisée** — par exercice
 - **Chronologie** — frise 2025-30 des projets (dev, tirages, sorties, ventes)
 
 **Outils**
-- **Exports** — classeur Excel complet (`.xlsx`, importable dans Google Sheets),
-  CSV du journal (format français), rapport PDF, sauvegarde JSON intégrale
+- **Exports** — les quatre exports d'un coup dans une archive `.zip`
+  (Excel, PDF, CSV, JSON + un « Lisez-moi », et si tu veux un dossier
+  `Factures/` rangé par mois), ou chacun séparément : classeur Excel complet
+  (`.xlsx`, importable dans Google Sheets), CSV du journal (format français),
+  rapport PDF, sauvegarde JSON intégrale
 - **Paramètres** — catégories, moyens de paiement, plan comptable,
   sauvegarde / restauration / réinitialisation
+
+## Gestes utiles
+
+- **Glisser-déposer une facture** : lâche un PDF ou une photo **sur une ligne du
+  journal** pour l'y attacher ; lâche-en plusieurs sur la **zone en bas d'un
+  tableau** pour créer une ligne par fichier (le nom du fichier sert de libellé,
+  et le fournisseur est reconnu s'il est déjà connu).
+- **Redimensionner une colonne** : attrape le **bord droit de son en-tête** et
+  tire. La largeur est enregistrée et retrouvée à la prochaine ouverture ;
+  un **double-clic** au même endroit rend au tableau ses largeurs automatiques
+  (Paramètres → Affichage des tableaux pour tout réinitialiser).
+- **Mise en forme d'une colonne** : la palette qui apparaît au survol de
+  l'en-tête (gras, italique, alignement, couleur).
+- **Cmd+Z / Ctrl+Z** annule, **Cmd+Maj+Z / Ctrl+Y** rétablit.
 
 ## Données
 
@@ -45,8 +69,9 @@ Lors de l'import, plusieurs anomalies des tableurs ont été détectées et corr
 voir [`RAPPORT_ANOMALIES.md`](./RAPPORT_ANOMALIES.md).
 
 Les fonctions de calcul de coûts de production restent dans le
-[Production Calculator](https://valentindrouet-dev.github.io/boardgame_prod_calculator/) —
-les deux sites pourront être liés plus tard.
+[Production Calculator](https://valentindrouet-dev.github.io/boardgame_prod_calculator/).
+Chaque jeu de l'onglet **Jeux** peut porter un lien direct vers sa fiche là-bas ;
+un partage de données entre les deux sites reste à faire.
 
 ## Développement
 
@@ -57,7 +82,9 @@ npm run build     # tsc + vite build → docs/
 ```
 
 Stack : React 18 + TypeScript + Vite + Tailwind CSS 4 + Zustand (persistance
-localStorage) + Recharts (graphiques) + SheetJS / jsPDF (exports).
+localStorage) + Recharts (graphiques) + SheetJS / jsPDF (exports). Les
+justificatifs sont stockés dans IndexedDB et l'archive `.zip` est écrite
+sans dépendance (`src/utils/zip.ts`, compression `deflate-raw` native).
 
 ## Déploiement (GitHub Pages)
 

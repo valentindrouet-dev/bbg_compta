@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 import { Sidebar } from './components/layout/Sidebar';
 import { UndoBar } from './components/layout/UndoBar';
 import { useStore } from './store';
+import { appliquerLargeurs, installerResize } from './utils/colresize';
 import { Dashboard } from './components/dashboard/Dashboard';
 import { JournalPage } from './components/journal/JournalPage';
 import { SynthesePage } from './components/journal/SynthesePage';
@@ -11,6 +12,7 @@ import { TVAPage } from './components/journal/TVAPage';
 import { RemboursPage } from './components/journal/RemboursPage';
 import { FournisseursPage } from './components/journal/FournisseursPage';
 import { JeuxPage } from './components/journal/JeuxPage';
+import { FacturesPage } from './components/journal/FacturesPage';
 import { PrevisionnelPage } from './components/prev/PrevisionnelPage';
 import { ReelVsPrevuPage } from './components/prev/ReelVsPrevuPage';
 import { TresoPrevPage } from './components/prev/TresoPrevPage';
@@ -21,7 +23,7 @@ import { CategoriesPage } from './components/settings/CategoriesPage';
 
 export type Page =
   | 'dashboard'
-  | 'journal' | 'synthese' | 'immos' | 'treso' | 'tva' | 'rembours' | 'fournisseurs' | 'jeux'
+  | 'journal' | 'synthese' | 'immos' | 'treso' | 'tva' | 'rembours' | 'fournisseurs' | 'jeux' | 'factures'
   | 'budgets' | 'reelprevu' | 'tresoprev' | 'chrono'
   | 'exports' | 'categories' | 'settings';
 
@@ -29,6 +31,18 @@ export default function App() {
   const [page, setPage] = useState<Page>('dashboard');
   const undo = useStore(s => s.undo);
   const redo = useStore(s => s.redo);
+  const colWidths = useStore(s => s.colWidths);
+  const setColWidths = useStore(s => s.setColWidths);
+  const resetColWidths = useStore(s => s.resetColWidths);
+
+  // Largeurs de colonnes : la feuille de style est régénérée à chaque
+  // changement, et l'écouteur global rend chaque en-tête « attrapable ».
+  useLayoutEffect(() => { appliquerLargeurs(colWidths); }, [colWidths, page]);
+  useEffect(() => installerResize({
+    lire: () => useStore.getState().colWidths,
+    enregistrer: setColWidths,
+    reinitialiser: resetColWidths,
+  }), [setColWidths, resetColWidths]);
 
   // Cmd+Z / Ctrl+Z annule, Cmd+Maj+Z / Ctrl+Y rétablit — partout dans l'app.
   useEffect(() => {
@@ -48,6 +62,20 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, [undo, redo]);
 
+  // Un fichier lâché à côté d'une zone de dépôt ne doit pas quitter l'app
+  // (le navigateur ouvrirait le PDF et ferait perdre la page).
+  useEffect(() => {
+    function neutraliser(ev: DragEvent) {
+      if ([...(ev.dataTransfer?.types ?? [])].includes('Files')) ev.preventDefault();
+    }
+    window.addEventListener('dragover', neutraliser);
+    window.addEventListener('drop', neutraliser);
+    return () => {
+      window.removeEventListener('dragover', neutraliser);
+      window.removeEventListener('drop', neutraliser);
+    };
+  }, []);
+
   return (
     <div className="flex h-screen overflow-hidden" style={{ backgroundColor: '#f6f4fc' }}>
       <Sidebar page={page} onNavigate={setPage} />
@@ -62,6 +90,7 @@ export default function App() {
         {page === 'rembours' && <RemboursPage />}
         {page === 'fournisseurs' && <FournisseursPage />}
         {page === 'jeux' && <JeuxPage />}
+        {page === 'factures' && <FacturesPage />}
         {page === 'budgets' && <PrevisionnelPage />}
         {page === 'reelprevu' && <ReelVsPrevuPage />}
         {page === 'tresoprev' && <TresoPrevPage />}

@@ -130,7 +130,7 @@ export function ChronoPage() {
 
       {vue === 'liste' && (
         <Card>
-          <table className="sheet text-sm border-collapse w-full">
+          <table data-table="chrono" className="sheet text-sm border-collapse w-full">
             <thead>
               <tr className="text-left text-[#5c5280]">
                 <ThSort label="Projet" k="projet" sort={sort} onToggle={toggle} />

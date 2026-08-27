@@ -104,7 +104,7 @@ export function ImmosPage() {
 
       <Card>
         <div className="overflow-x-auto -mx-4 px-4">
-          <table className="sheet text-[13px]" style={{ tableLayout: 'fixed', minWidth: 1200 }}>
+          <table data-table="immos" className="sheet text-[13px]" style={{ tableLayout: 'fixed', minWidth: 1200 }}>
             <colgroup>{COLS.map((w, i) => <col key={i} style={{ width: `${w}%` }} />)}</colgroup>
             <thead>
               <tr>

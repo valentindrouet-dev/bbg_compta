@@ -185,7 +185,7 @@ export function PrevisionnelPage() {
       {/* Tableau : une section par bloc de la synthèse */}
       <Card title={`Prévisionnel ${exercice} (HT)`}>
         <div className="overflow-x-auto -mx-4 px-4">
-          <table className="sheet text-xs" style={{ tableLayout: 'fixed', minWidth: 1050 }}>
+          <table data-table={`previsionnel:${moisList.length}`} className="sheet text-xs" style={{ tableLayout: 'fixed', minWidth: 1050 }}>
             <colgroup>
               {/* Largeurs figées : le tableau tient à l'écran quel que soit le contenu. */}
               <col style={{ width: '13%' }} />

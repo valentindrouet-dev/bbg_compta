@@ -180,7 +180,7 @@ export function SynthesePage() {
           return (
             <Card key={bloc.cle} title={bloc.titre}>
               <div className="overflow-x-auto -mx-4 px-4">
-                <table className="sheet text-xs" style={{ minWidth: 900 }}>
+                <table data-table={`synthese:${bloc.cle}:${syn.moisList.length}`} className="sheet text-xs" style={{ minWidth: 900 }}>
                   <thead>
                     <tr>
                       <th className="text-left" style={{ minWidth: 230 }}>Catégorie</th>
@@ -317,7 +317,7 @@ export function SynthesePage() {
         {syn.jeuxParJeu.size > 0 && (
           <Card title={`Dépenses Jeux par jeu (${unite})`}>
             <div className="overflow-x-auto -mx-4 px-4">
-              <table className="sheet text-xs" style={{ minWidth: 900 }}>
+              <table data-table={`synthese:jeux-par-jeu:${syn.moisList.length}`} className="sheet text-xs" style={{ minWidth: 900 }}>
                 <thead>
                   <tr>
                     <th className="text-left" style={{ minWidth: 230 }}>Jeu</th>
@@ -371,7 +371,7 @@ export function SynthesePage() {
 
         <Card title="Dotations aux amortissements">
           <div className="overflow-x-auto -mx-4 px-4">
-            <table className="sheet text-xs" style={{ minWidth: 900 }}>
+            <table data-table={`synthese:dotations:${syn.moisList.length}`} className="sheet text-xs" style={{ minWidth: 900 }}>
               <thead>
                 <tr>
                   <th className="text-left" style={{ minWidth: 230 }}>Dotations</th>

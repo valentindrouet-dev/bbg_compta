@@ -85,7 +85,7 @@ export function ReelVsPrevuPage() {
 
       <Card title="Comparaison mensuelle (HT)" className="mb-5">
         <div className="overflow-x-auto -mx-4 px-4">
-          <table className="sheet text-xs" style={{ minWidth: 1000 }}>
+          <table data-table={`reelprevu:mensuel:${moisList.length}`} className="sheet text-xs" style={{ minWidth: 1000 }}>
             <thead>
               <tr>
                 <th className="text-left" style={{ minWidth: 200 }}></th>
@@ -104,7 +104,7 @@ export function ReelVsPrevuPage() {
 
       <Card title="Écarts par catégorie (HT)">
         <div className="overflow-x-auto -mx-4 px-4">
-          <table className="sheet text-sm">
+          <table data-table="reelprevu:categories" className="sheet text-sm">
             <thead>
               <tr>
                 <th className="text-left">Catégorie</th>
