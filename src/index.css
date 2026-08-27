@@ -134,14 +134,44 @@ input[type="number"]::-webkit-outer-spin-button { opacity: 0.5; }
 /* En-tête de colonne active pour le tri */
 .sheet th.sorted { background: var(--bbg-purple-dark); }
 
-/* Blocs colorés du journal : les pastels du tableur, avec un texte foncé
-   (un fond pastel + texte blanc serait illisible). */
-.sheet-jeux th            { background: var(--bbg-orange); color: #7a3e00; border-color: #e8a765; }
-.sheet-jeux th.sorted     { background: #f5b97e; }
-.sheet-jeux tfoot td      { background: var(--bbg-orange-light); border-color: var(--bbg-orange); color: #7a3e00; }
-.sheet-produits th        { background: var(--bbg-green); color: #1c5236; border-color: #93cdb2; }
-.sheet-produits th.sorted { background: #a5d8c1; }
-.sheet-produits tfoot td  { background: var(--bbg-green-light); border-color: var(--bbg-green); color: #1c5236; }
+/* ------------------------------------------------------------------ */
+/*  Blocs colorés : une seule teinte majeure, toutes les nuances suivent */
+/*  (les variables --bloc-* sont posées sur le tableau par le composant) */
+/* ------------------------------------------------------------------ */
+.sheet[data-bloc] th {
+  background: var(--bloc);
+  color: var(--bloc-fonce);
+  border-color: var(--bloc-bord);
+}
+.sheet[data-bloc] th.sorted { background: var(--bloc-bord); color: #fff; }
+.sheet[data-bloc] tbody tr:nth-child(even) > td { background: var(--bloc-tres-clair); }
+.sheet[data-bloc] tbody tr:hover > td { background: var(--bloc-clair); }
+.sheet[data-bloc] tbody tr.is-selected > td { background: var(--bloc-clair); }
+.sheet[data-bloc] tfoot td {
+  background: var(--bloc-total);
+  border-color: var(--bloc-bord);
+  color: var(--bloc-fonce);
+}
+/* Bandeau de groupe et sous-totaux, dans la teinte du bloc */
+.sheet[data-bloc] tr.band-bloc > td {
+  background: var(--bloc-clair) !important;
+  color: var(--bloc-fonce);
+  font-weight: 700;
+}
+.sheet[data-bloc] td.col-total { background: var(--bloc-clair); }
+
+/* GROS TOTAL d'un bloc : la ligne qu'on doit lire sans chercher */
+.sheet tfoot tr.total-bloc > td {
+  font-size: 1.02rem;
+  font-weight: 800;
+  padding-top: 0.4rem;
+  padding-bottom: 0.4rem;
+  border-top: 3px solid var(--bloc-bord, var(--bbg-purple-dark));
+}
+.sheet tfoot tr.total-bloc > td.grand {
+  font-size: 1.12rem;
+  letter-spacing: -0.01em;
+}
 
 /* Bouton de date (affichage « 26 août ») */
 .sheet button.w-full { font-size: inherit; font-family: inherit; }

@@ -3,10 +3,12 @@ import { useStore } from '../../store';
 import type { PrevLigne, PrevSection } from '../../types';
 import { EXERCICES, labelMois, moisExercice } from '../../utils/dates';
 import { euros, euros0, r2, pourcent } from '../../utils/money';
-import { reelParCategorie, reelParCategorieEtMois, SECTIONS } from '../../utils/previsionnel';
+import {
+  reelParCategorie, reelParCategorieEtMois, sectionDeCategorie, SECTIONS, SECTIONS_DEPENSES,
+} from '../../utils/previsionnel';
 import { PageHeader, Card, StatCard } from '../ui';
 
-const DEPENSES: PrevSection[] = ['charges', 'jeux', 'immos'];
+const DEPENSES: PrevSection[] = SECTIONS_DEPENSES;
 
 export function ReelVsPrevuPage() {
   const entries = useStore(s => s.entries);
@@ -48,7 +50,7 @@ export function ReelVsPrevuPage() {
         .reduce((s, l) => s + l.valeurs.reduce<number>((a, v) => a + (v ?? 0), 0), 0));
       const r = reel.get(cat) ?? 0;
       const section = lignes.find(l => l.categorie === cat)?.section
-        ?? (estProduit(cat) ? 'produits' : refs.categoriesJeux.includes(cat) ? 'jeux' : 'charges');
+        ?? sectionDeCategorie(cat, refs);
       return { cat, prevu, reel: r, ecart: r2(r - prevu), section: section as PrevSection };
     }).sort((a, b) => Math.abs(b.ecart) - Math.abs(a.ecart));
   }, [lignes, reel, refs]);

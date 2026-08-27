@@ -51,7 +51,7 @@ export function blobExcel(state: AppState, exercice: string): Blob {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(journalRows(entries)), 'Journal');
 
   // Synthèse charges par mois × catégorie
-  const syn = syntheseExercice(entries, exercice, referentiels.categoriesJeux);
+  const syn = syntheseExercice(entries, exercice, referentiels);
   const cats = referentiels.categoriesDepenses.filter(c => syn.charges.has(c));
   const synRows = syn.moisList.map(m => {
     const row: Record<string, string | number> = { 'Mois': labelMois(m) };
@@ -170,7 +170,7 @@ const eurosPDF = (v: number) =>
 function documentPDF(state: AppState, exercice: string): jsPDF {
   const { entries, referentiels, finances } = state;
   const doc = new jsPDF({ orientation: 'landscape' });
-  const syn = syntheseExercice(entries, exercice, referentiels.categoriesJeux);
+  const syn = syntheseExercice(entries, exercice, referentiels);
 
   doc.setFontSize(18);
   doc.text(`Big Budi Games — Rapport comptable ${exercice}`, 14, 16);

@@ -12,8 +12,10 @@ sont recalculés en direct à partir des écritures.
 - **Journal du mois** — saisie des dépenses, dépenses jeux et produits, mois par mois
   (TVA automatique par taux 20 / 10 / 5,5 / 0 % ou saisie manuelle, HT calculé,
   catégories, plan comptable, mots clés, factures, alerte si la date sort du mois)
-- **Synthèse annuelle** — charges par mois × catégorie, dépenses jeux, produits,
-  dotations aux amortissements (équivalent des feuilles `export*`)
+- **Synthèse annuelle** — les blocs dans l'ordre de lecture : **Produits, Charges,
+  Personnel, Jeux** (un sous-bloc par jeu, toutes ses catégories listées),
+  **Immobilisations**, puis le **compte de résultat** (EBE → REX → RC → IS → RN,
+  barème PME) et la **TVA**. Chaque bloc porte son gros total en en-tête
 - **Immobilisations** — durées, dotations, VNC et fin d'amortissement calculées
 - **Trésorerie** — encaissements/décaissements TTC, mouvements financiers
   (capital, CCA, placements, intérêts) inclus
@@ -28,9 +30,10 @@ sont recalculés en direct à partir des écritures.
 - **Remboursements Val** — dépenses avancées sur carte personnelle
 
 **Prévisionnel 2025-30**
-- **Prévisionnel** — mêmes lignes, catégories, groupes et blocs que la synthèse
-  annuelle, avec Prévu / Réel / Écart par ligne et des alarmes quand une ligne ne
-  correspond à rien dans la synthèse
+- **Prévisionnel** — mêmes blocs, même ordre, mêmes catégories et mêmes couleurs
+  que la synthèse annuelle, avec Prévu / Réel / Écart par ligne, un compte de
+  résultat prévisionnel identique, et des alarmes quand une ligne ne correspond
+  à rien dans la synthèse
 - **Réel vs Prévu** — le réalisé vient du journal, sans IMPORTRANGE
 - **Trésorerie prévisionnelle vs réalisée** — par exercice
 - **Chronologie** — frise 2025-30 des projets (dev, tirages, sorties, ventes)
@@ -50,6 +53,10 @@ sont recalculés en direct à partir des écritures.
   journal** pour l'y attacher ; lâche-en plusieurs sur la **zone en bas d'un
   tableau** pour créer une ligne par fichier (le nom du fichier sert de libellé,
   et le fournisseur est reconnu s'il est déjà connu).
+- **Recolorer un bloc** : la palette dans l'en-tête d'un bloc. Une teinte majeure
+  suffit — en-tête, bandes de groupe, lignes alternées blanc / très clair et ligne
+  de total s'en déduisent, et la même teinte s'applique au journal, à la synthèse
+  et au prévisionnel.
 - **Redimensionner une colonne** : attrape le **bord droit de son en-tête** et
   tire. La largeur est enregistrée et retrouvée à la prochaine ouverture ;
   un **double-clic** au même endroit rend au tableau ses largeurs automatiques

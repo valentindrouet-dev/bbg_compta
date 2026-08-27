@@ -4,7 +4,8 @@ import type {
   JournalEntry, FinanceEntry, BudgetExercice, ChronoEvent, TresoPrevLine, Referentiels, CategorieMeta,
   JeuMeta, PrevLigne, PrevSection,
 } from '../types';
-import { migrerBudgets, sectionDeCategorie } from '../utils/previsionnel';
+import { estLigneCalculee, migrerBudgets, sectionDeCategorie } from '../utils/previsionnel';
+import { CATEGORIES_PERSONNEL_INITIALES, GROUPE_PERSONNEL } from '../utils/blocs';
 import { moisExercice } from '../utils/dates';
 import seedJournal from '../data/journal.json';
 import seedReferentiels from '../data/referentiels.json';
@@ -48,7 +49,7 @@ export type CatKind = 'categoriesDepenses' | 'categoriesJeux' | 'categoriesProdu
 export type ColWidths = Record<string, number[]>;
 
 /** Clés dont la modification est enregistrée dans l'historique d'annulation. */
-const DATA_KEYS = ['entries', 'finances', 'referentiels', 'budgets', 'previsionnels', 'chronologie', 'tresoPrev', 'journalFormats'] as const;
+const DATA_KEYS = ['entries', 'finances', 'referentiels', 'budgets', 'previsionnels', 'chronologie', 'tresoPrev', 'journalFormats', 'blocCouleurs'] as const;
 type DataKey = typeof DATA_KEYS[number];
 type Snapshot = Pick<AppState, DataKey>;
 
@@ -65,6 +66,8 @@ export interface AppState {
   journalFormats: Record<string, ColFormat>;
   /** Largeurs de colonnes redimensionnées à la souris, par tableau. */
   colWidths: ColWidths;
+  /** Teinte majeure choisie pour chaque bloc (produits, charges, jeux…). */
+  blocCouleurs: Record<string, string>;
 
   // Historique (non persisté) : profondeur disponible pour annuler / rétablir.
   undoDepth: number;
@@ -77,6 +80,10 @@ export interface AppState {
   setColWidths: (table: string, widths: number[]) => void;
   /** Rend ses largeurs automatiques à un tableau, ou à tous si non précisé. */
   resetColWidths: (table?: string) => void;
+  /** Recolore un bloc à partir d'une teinte majeure (toutes les pages suivent). */
+  setBlocCouleur: (bloc: string, hex: string) => void;
+  /** Rend au bloc sa teinte d'origine, ou à tous les blocs si non précisé. */
+  resetBlocCouleur: (bloc?: string) => void;
 
   addEntry: (e: Omit<JournalEntry, 'id'>) => string;
   updateEntry: (id: string, patch: Partial<JournalEntry>) => void;
@@ -100,7 +107,7 @@ export interface AppState {
 
   // ----- Prévisionnel -----
   setPrevCell: (exercice: string, ligneId: string, moisIdx: number, value: number | null) => void;
-  addPrevLigne: (exercice: string, categorie: string, section?: PrevSection) => void;
+  addPrevLigne: (exercice: string, categorie: string, section?: PrevSection, jeu?: string) => void;
   updatePrevLigne: (exercice: string, ligneId: string, patch: Partial<PrevLigne>) => void;
   removePrevLigne: (exercice: string, ligneId: string) => void;
   /** Recopie une valeur sur tous les mois restants de l'exercice. */
@@ -130,12 +137,12 @@ export interface AppState {
   addPaiement: (name: string) => void;
   addComptePlanComptable: (name: string) => void;
 
-  restoreAll: (data: Partial<Pick<AppState, 'entries' | 'finances' | 'referentiels' | 'budgets' | 'previsionnels' | 'chronologie' | 'tresoPrev' | 'journalFormats' | 'colWidths'>>) => void;
+  restoreAll: (data: Partial<Pick<AppState, 'entries' | 'finances' | 'referentiels' | 'budgets' | 'previsionnels' | 'chronologie' | 'tresoPrev' | 'journalFormats' | 'colWidths' | 'blocCouleurs'>>) => void;
   resetToSeed: () => void;
 }
 
 function seedState() {
-  const refs = structuredClone(seedReferentiels) as Referentiels;
+  const refs = avecGroupePersonnel(structuredClone(seedReferentiels) as Referentiels);
   refs.jeux = refs.jeux ?? JEUX_PAR_DEFAUT;
   const entries = (structuredClone(seedJournal) as JournalEntry[]).map(e =>
     e.jeu ? e : { ...e, jeu: deduireJeu(e, refs.jeux!) });
@@ -150,6 +157,26 @@ function seedState() {
     tresoPrev: structuredClone(seedTresorerie.previsionnel) as TresoPrevLine[],
     journalFormats: {} as Record<string, ColFormat>,
     colWidths: {} as ColWidths,
+    blocCouleurs: {} as Record<string, string>,
+  };
+}
+
+/**
+ * Le bloc Personnel existe dès le départ, même sans écriture : les cotisations
+ * du gérant (TNS) y sont rattachées, et les salaires viendront s'y ranger.
+ */
+function avecGroupePersonnel(refs: Referentiels): Referentiels {
+  const groupes = refs.groupes ?? [];
+  const meta = { ...(refs.categoriesMeta ?? {}) };
+  for (const c of CATEGORIES_PERSONNEL_INITIALES) {
+    if (refs.categoriesDepenses.includes(c) && !meta[c]?.groupe) {
+      meta[c] = { ...meta[c], groupe: GROUPE_PERSONNEL };
+    }
+  }
+  return {
+    ...refs,
+    groupes: groupes.includes(GROUPE_PERSONNEL) ? groupes : [...groupes, GROUPE_PERSONNEL],
+    categoriesMeta: meta,
   };
 }
 
@@ -165,7 +192,7 @@ function snapshot(s: AppState): Snapshot {
     entries: s.entries, finances: s.finances, referentiels: s.referentiels,
     budgets: s.budgets, previsionnels: s.previsionnels,
     chronologie: s.chronologie, tresoPrev: s.tresoPrev,
-    journalFormats: s.journalFormats,
+    journalFormats: s.journalFormats, blocCouleurs: s.blocCouleurs,
   };
 }
 function donneesModifiees(a: Snapshot, b: Snapshot): boolean {
@@ -230,6 +257,15 @@ export const useStore = create<AppState>()(
         set(s => ({ colWidths: { ...s.colWidths, [table]: widths } }));
         suspendHistory = false;
       },
+      setBlocCouleur: (bloc, hex) => set(s => ({
+        blocCouleurs: { ...s.blocCouleurs, [bloc]: hex },
+      })),
+      resetBlocCouleur: (bloc) => set(s => {
+        if (!bloc) return { blocCouleurs: {} };
+        const next = { ...s.blocCouleurs };
+        delete next[bloc];
+        return { blocCouleurs: next };
+      }),
       resetColWidths: (table) => {
         suspendHistory = true;
         set(s => {
@@ -349,12 +385,13 @@ export const useStore = create<AppState>()(
             : l),
         },
       })),
-      addPrevLigne: (exercice, categorie, section) => set(s => {
+      addPrevLigne: (exercice, categorie, section, jeu) => set(s => {
         const nMois = moisExercice(exercice).length;
         const ligne: PrevLigne = {
           id: uid(),
           categorie,
           section: section ?? sectionDeCategorie(categorie, s.referentiels),
+          ...(jeu ? { jeu } : {}),
           valeurs: new Array<number | null>(nMois).fill(null),
         };
         return {
@@ -519,7 +556,7 @@ export const useStore = create<AppState>()(
     },
     {
       name: 'bbg-compta-v1',
-      version: 4,
+      version: 6,
       // v2 : ajout de la liste des jeux et rattachement des dépenses de
       // développement au jeu concerné (déduit des mots clés / de la catégorie).
       migrate: (persisted, version) => {
@@ -535,6 +572,18 @@ export const useStore = create<AppState>()(
         }
         // v4 : largeurs de colonnes redimensionnables.
         if (version < 4) s.colWidths = s.colWidths ?? {};
+        // v5 : blocs recolorables et bloc Personnel dans la synthèse.
+        if (version < 5) {
+          s.blocCouleurs = s.blocCouleurs ?? {};
+          if (s.referentiels) s.referentiels = avecGroupePersonnel(s.referentiels);
+        }
+        // v6 : les dotations et les produits financiers sont recalculés, plus
+        // budgétés en charges — sinon ils comptaient double dans l'EBE.
+        if (version < 6 && s.previsionnels) {
+          s.previsionnels = Object.fromEntries(
+            Object.entries(s.previsionnels).map(([ex, lignes]) =>
+              [ex, (lignes ?? []).filter(l => !estLigneCalculee(l.categorie))]));
+        }
         return s;
       },
       // Seules les données sont persistées : l'historique repart à zéro
@@ -544,6 +593,7 @@ export const useStore = create<AppState>()(
         budgets: s.budgets, previsionnels: s.previsionnels,
         chronologie: s.chronologie, tresoPrev: s.tresoPrev,
         journalFormats: s.journalFormats, colWidths: s.colWidths,
+        blocCouleurs: s.blocCouleurs,
       }) as unknown as AppState,
     },
   ),

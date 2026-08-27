@@ -27,7 +27,7 @@ export function Dashboard({ onNavigate }: { onNavigate: (p: Page) => void }) {
   const [exercice, setExercice] = useState('2025-26');
 
   const data = useMemo(() => {
-    const syn = syntheseExercice(entries, exercice, refs.categoriesJeux);
+    const syn = syntheseExercice(entries, exercice, refs);
     const parMois = syn.moisList.map(m => ({
       mois: labelMois(m),
       produits: r2(syn.totalProduitsParMois.get(m) ?? 0),

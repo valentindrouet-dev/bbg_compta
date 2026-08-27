@@ -9,7 +9,11 @@ import {
 } from '../../utils/dates';
 import { euros, r2, tvaDepuisTTC } from '../../utils/money';
 import { sumTTH, sumParCategorie } from '../../utils/calc';
-import { PageHeader, Card, MonthTabs, Btn, useSort, sortBy, ThSort, type SortState } from '../ui';
+import {
+  PageHeader, Card, MonthTabs, Btn, useSort, sortBy, ThSort, BlocColorMenu, TotalBloc,
+  styleBloc, type SortState,
+} from '../ui';
+import { teinteBloc, type BlocCle } from '../../utils/blocs';
 import { DateCell, MoneyCell, AutoCompleteCell, FactureCell, ColFormatMenu, colStyle } from './cells';
 import type { ColFormat } from '../../store';
 import { saveFile, deleteFile } from '../../utils/files';
@@ -261,8 +265,12 @@ function Section({
   const jeux = useStore(s => s.referentiels.jeux ?? []);
   const setColFormat = useStore(s => s.setColFormat);
   const resetColFormat = useStore(s => s.resetColFormat);
+  const couleurs = useStore(s => s.blocCouleurs);
   const [survolZone, setSurvolZone] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
+  // Le journal, la synthèse et le prévisionnel partagent la teinte de chaque bloc.
+  const bloc: BlocCle = kind === 'produits' ? 'produits' : kind === 'jeux' ? 'jeux' : 'charges';
+  const t = teinteBloc(bloc, couleurs);
   const fmtMenu = (col: string) => (
     <ColFormatMenu
       col={col} format={formats[col]}
@@ -302,8 +310,6 @@ function Section({
     });
   }
 
-  const bandeau = kind === 'produits' ? 'var(--bbg-green)'
-    : kind === 'jeux' ? 'var(--bbg-yellow)' : 'var(--bbg-orange)';
 
   function annoncer(msg: string) {
     setFlash(msg);
@@ -361,13 +367,15 @@ function Section({
     <Card
       title={
         <span className="inline-flex items-center gap-2">
-          <span className="inline-block w-3 h-3 rounded-sm" style={{ backgroundColor: bandeau }} />
+          <span className="inline-block w-3 h-3 rounded-sm" style={{ backgroundColor: t.base }} />
           {title}
           <span style={{ color: '#9a92b5', fontWeight: 400 }}>— {rows.length} ligne{rows.length > 1 ? 's' : ''}</span>
         </span>
       }
       actions={
         <>
+          <TotalBloc label="Total HT" valeur={euros(tot.ht)} t={t} />
+          <BlocColorMenu bloc={bloc} />
           {clip && (
             <Btn onClick={() => { const id = nouvelleLigne(); onPaste(id, clip); }}>
               <span className="inline-flex items-center gap-1"><ClipboardPaste size={14} /> Coller en nouvelle ligne</span>
@@ -393,9 +401,9 @@ function Section({
       ) : (
         <div className="overflow-x-auto -mx-4 px-4">
           <table
-            data-table={`journal:${kind}`}
-            className={`sheet text-[13px] ${kind === 'jeux' ? 'sheet-jeux' : kind === 'produits' ? 'sheet-produits' : ''}`}
-            style={{ tableLayout: 'fixed', minWidth: 1150 }}
+            data-table={`journal:${kind}`} data-bloc={bloc}
+            className="sheet text-[13px]"
+            style={{ tableLayout: 'fixed', minWidth: 1150, ...styleBloc(t) }}
           >
             <colgroup>
               {cols.map((w, i) => <col key={i} style={{ width: `${w}%` }} />)}
@@ -457,12 +465,12 @@ function Section({
               )}
             </tbody>
             <tfoot>
-              <tr>
-                <td colSpan={kind === 'jeux' ? 6 : 5} className="text-right">Totaux</td>
+              <tr className="total-bloc">
+                <td colSpan={kind === 'jeux' ? 6 : 5} className="text-right">TOTAUX</td>
                 <td className="text-right tabular-nums">{euros(tot.ttc)}</td>
                 <td></td>
                 <td className="text-right tabular-nums">{euros(tot.tva)}</td>
-                <td className="text-right tabular-nums">{euros(tot.ht)}</td>
+                <td className="text-right tabular-nums grand">{euros(tot.ht)}</td>
                 <td colSpan={isProduits ? 5 : 6}></td>
               </tr>
             </tfoot>
@@ -494,9 +502,8 @@ function Section({
             <span
               key={cat} className="text-xs rounded-full px-2.5 py-1"
               style={{
-                backgroundColor: isProduits ? 'var(--bbg-green-light)'
-                  : kind === 'jeux' ? 'var(--bbg-yellow-light)' : 'var(--bbg-orange-light)',
-                color: '#4a4363',
+                backgroundColor: t.clair,
+                color: t.fonce,
               }}
             >
               {cat} : <b className="tabular-nums">{euros(r2(ht))}</b> HT

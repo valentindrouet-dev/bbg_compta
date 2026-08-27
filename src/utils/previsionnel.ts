@@ -1,4 +1,5 @@
 import type { BudgetExercice, JournalEntry, PrevLigne, PrevSection, Referentiels } from '../types';
+import { BLOCS, blocDeCategorie, blocDeEcriture } from './blocs';
 import { moisExercice, PREMIER_EXERCICE } from './dates';
 import { r2 } from './money';
 
@@ -18,9 +19,24 @@ const ALIAS: Record<string, string> = {
   "chiffre d'affaires formation artfx": 'workshops',
   'frais lancement* (voir tableau)': 'Autres',
   'cfe': 'Autres',
-  'salaires bruts': 'Autres',
-  'charges patronales': 'Autres',
 };
+
+/**
+ * Lignes du tableur qui sont des *résultats de calcul*, pas des hypothèses :
+ * l'app les recalcule elle-même (dotations depuis les immobilisations,
+ * produits financiers depuis les mouvements de trésorerie). Les reprendre en
+ * charges les compterait deux fois et fausserait l'EBE.
+ */
+const LIGNES_CALCULEES = [
+  'dotations aux amortissements',
+  'produit financier (interets)',
+  'produits financiers',
+];
+
+export function estLigneCalculee(label: string): boolean {
+  const n = normalise(label);
+  return LIGNES_CALCULEES.some(l => n === l || n.startsWith(l));
+}
 
 /** Cherche la catégorie du référentiel qui correspond à un libellé de budget. */
 export function categoriePour(label: string, refs: Referentiels): string | null {
@@ -38,18 +54,21 @@ export function categoriePour(label: string, refs: Referentiels): string | null 
 
 /** Section d'affichage d'une catégorie, alignée sur les blocs de la synthèse. */
 export function sectionDeCategorie(categorie: string, refs: Referentiels): PrevSection {
-  if (refs.categoriesProduits.includes(categorie)) return 'produits';
-  if (refs.categoriesJeux.includes(categorie)) return 'jeux';
-  return 'charges';
+  return blocDeCategorie(categorie, refs) as PrevSection;
 }
 
-export const SECTIONS: { cle: PrevSection; titre: string; couleur: string }[] = [
-  { cle: 'produits', titre: 'Produits', couleur: 'var(--bbg-green-light)' },
-  { cle: 'charges', titre: 'Charges', couleur: 'var(--bbg-orange-light)' },
-  { cle: 'jeux', titre: 'Dépenses Jeux', couleur: 'var(--bbg-yellow-light)' },
-  { cle: 'immos', titre: 'Immobilisations', couleur: 'var(--bbg-purple-light)' },
-  { cle: 'indicateurs', titre: 'Indicateurs (non monétaires)', couleur: '#eef1f7' },
+/**
+ * Les sections du prévisionnel sont exactement les blocs de la synthèse, dans
+ * le même ordre — plus les indicateurs non monétaires du tableur d'origine.
+ */
+export const SECTIONS: { cle: PrevSection; titre: string }[] = [
+  ...BLOCS.filter(b => b.cle !== 'resultat' && b.cle !== 'tva')
+    .map(b => ({ cle: b.cle as PrevSection, titre: b.titre })),
+  { cle: 'indicateurs', titre: 'Indicateurs (non monétaires)' },
 ];
+
+/** Les sections qui constituent une dépense (par opposition aux produits). */
+export const SECTIONS_DEPENSES: PrevSection[] = ['charges', 'personnel', 'jeux', 'immos'];
 
 /**
  * Convertit les budgets importés du tableur vers le nouveau modèle, aligné
@@ -74,14 +93,20 @@ export function migrerBudgets(
         if (idx < nMois) valeurs[idx] = v;
       });
       if (valeurs.every(v => v == null || v === 0)) continue;  // ligne vide : inutile de la reprendre
+      if (estLigneCalculee(l.label)) continue;  // recalculée par l'app, pas budgétée
 
       const estMontant = l.kind === 'montant';
       const cat = estMontant ? categoriePour(l.label, refs) : null;
       // Une ligne de coûts de développement garde son groupe dans le libellé.
       const libelle = cat ?? (l.groupe && l.section === 'couts_dev' ? `${l.groupe} — ${l.label}` : l.label);
+      // Les lignes de coûts de développement portent le nom du jeu dans leur
+      // libellé : on le récupère pour les ranger sous le bon jeu.
+      const jeu = (refs.jeux ?? []).find(j =>
+        normalise(`${l.groupe} ${l.label}`).includes(normalise(j)));
       lignes.push({
         id: `prev-${ex}-${++seq}`,
         categorie: libelle,
+        ...(jeu ? { jeu } : {}),
         section: !estMontant ? 'indicateurs' : cat ? sectionDeCategorie(cat, refs) : (l.section === 'couts_dev' ? 'jeux' : 'charges'),
         unite: estMontant ? undefined : (l.kind as PrevLigne['unite']),
         valeurs,
@@ -118,10 +143,7 @@ export interface AlarmePrev {
  * découpage des deux côtés, sinon la comparaison n'aurait pas de sens.
  */
 export function sectionDeEcriture(e: JournalEntry, refs: Referentiels): PrevSection {
-  if (e.type === 'produit') return 'produits';
-  if (refs.categoriesJeux.includes(e.categorie)) return 'jeux';
-  if (e.type === 'immo') return 'immos';
-  return 'charges';
+  return blocDeEcriture(e, refs) as PrevSection;
 }
 
 /** Somme du réel par catégorie sur l'exercice (base HT), éventuellement par bloc. */
@@ -134,6 +156,23 @@ export function reelParCategorie(
     if (!moisSet.has(e.mois)) continue;
     if (section && refs && sectionDeEcriture(e, refs) !== section) continue;
     m.set(e.categorie, r2((m.get(e.categorie) ?? 0) + e.ht));
+  }
+  return m;
+}
+
+/** Réel par jeu puis par catégorie sur l'exercice (base HT). */
+export function reelParJeuEtCategorie(
+  entries: JournalEntry[], exercice: string, refs: Referentiels,
+): Map<string, Map<string, number>> {
+  const moisSet = new Set(moisExercice(exercice));
+  const m = new Map<string, Map<string, number>>();
+  for (const e of entries) {
+    if (!moisSet.has(e.mois)) continue;
+    if (!refs.categoriesJeux.includes(e.categorie) || e.type === 'produit') continue;
+    const jeu = e.jeu || '— non rattaché —';
+    if (!m.has(jeu)) m.set(jeu, new Map());
+    const row = m.get(jeu)!;
+    row.set(e.categorie, r2((row.get(e.categorie) ?? 0) + e.ht));
   }
   return m;
 }

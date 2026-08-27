@@ -1,4 +1,5 @@
-import type { JournalEntry, FinanceEntry } from '../types';
+import type { JournalEntry, FinanceEntry, Referentiels } from '../types';
+import { estChargeFinanciere, estPersonnel } from './blocs';
 import { compareMois, moisExercice, addYears, PRE_IMMAT } from './dates';
 import { r2 } from './money';
 
@@ -103,6 +104,29 @@ export function dotationDuMois(infos: ImmoInfo[], mois: string): number {
   return r2(total);
 }
 
+/** Dotations mensuelles sur une plage de mois. */
+export function dotationsParMois(infos: ImmoInfo[], moisList: string[]): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const mois of moisList) m.set(mois, dotationDuMois(infos, mois));
+  return m;
+}
+
+/** Intérêts et produits de placement encaissés, par mois comptable. */
+export function produitsFinanciersParMois(
+  finances: FinanceEntry[], moisList: string[],
+): Map<string, number> {
+  const dedans = new Set(moisList);
+  const m = new Map<string, number>();
+  for (const mois of moisList) m.set(mois, 0);
+  for (const f of finances) {
+    if (f.type !== 'produit_financier') continue;
+    const mois = moisDeFinance(f);
+    if (!dedans.has(mois)) continue;
+    m.set(mois, r2((m.get(mois) ?? 0) + f.montant));
+  }
+  return m;
+}
+
 // ----- TVA ---------------------------------------------------------------
 
 export interface TvaMois {
@@ -177,13 +201,16 @@ export type BaseMontant = 'ht' | 'ttc';
 export interface SyntheseExercice {
   moisList: string[];
   base: BaseMontant;
-  /** catégorie -> (mois -> HT) pour les charges hors jeux. */
+  /** catégorie -> (mois -> HT) pour les charges hors jeux et hors personnel. */
   charges: Map<string, Map<string, number>>;
+  /** idem pour les charges de personnel (cotisations, salaires). */
+  personnel: Map<string, Map<string, number>>;
   /** idem pour les catégories jeux. */
   jeux: Map<string, Map<string, number>>;
   /** idem pour les produits. */
   produits: Map<string, Map<string, number>>;
   totalChargesParMois: Map<string, number>;
+  totalPersonnelParMois: Map<string, number>;
   totalTTCParMois: Map<string, number>;
   totalJeuxParMois: Map<string, number>;
   totalProduitsParMois: Map<string, number>;
@@ -193,19 +220,32 @@ export interface SyntheseExercice {
   immos: Map<string, Map<string, number>>;
   /** Dépenses jeux ventilées par jeu puis par mois. */
   jeuxParJeu: Map<string, Map<string, number>>;
+  /** Dépenses jeux ventilées par jeu, puis par catégorie, puis par mois. */
+  jeuxParJeuEtCategorie: Map<string, Map<string, Map<string, number>>>;
+  /** Charges financières par mois : elles sortent de l'excédent brut. */
+  chargesFinancieresParMois: Map<string, number>;
+  /** Base HT portant de la TVA, côté dépenses puis côté produits. */
+  baseTVADepensesParMois: Map<string, number>;
+  baseTVAProduitsParMois: Map<string, number>;
+  /** TVA elle-même, indépendante du bouton HT / TTC. */
+  tvaDeductibleParMois: Map<string, number>;
+  tvaCollecteeParMois: Map<string, number>;
 }
 
 export function syntheseExercice(
-  entries: JournalEntry[], exercice: string, categoriesJeux: string[],
+  entries: JournalEntry[], exercice: string, refs: Referentiels,
   base: BaseMontant = 'ht',
 ): SyntheseExercice {
+  const categoriesJeux = refs.categoriesJeux;
   const moisList = moisExercice(exercice);
   /** Montant retenu selon la base choisie (bouton HT / TTC de la synthèse). */
   const montant = (e: JournalEntry) => base === 'ttc' ? e.ttc : e.ht;
   const charges = new Map<string, Map<string, number>>();
+  const personnel = new Map<string, Map<string, number>>();
   const jeux = new Map<string, Map<string, number>>();
   const produits = new Map<string, Map<string, number>>();
   const totalChargesParMois = new Map<string, number>();
+  const totalPersonnelParMois = new Map<string, number>();
   const totalTTCParMois = new Map<string, number>();
   const totalJeuxParMois = new Map<string, number>();
   const totalProduitsParMois = new Map<string, number>();
@@ -213,6 +253,12 @@ export function syntheseExercice(
   const immoParMois = new Map<string, number>();
   const immos = new Map<string, Map<string, number>>();
   const jeuxParJeu = new Map<string, Map<string, number>>();
+  const jeuxParJeuEtCategorie = new Map<string, Map<string, Map<string, number>>>();
+  const chargesFinancieresParMois = new Map<string, number>();
+  const baseTVADepensesParMois = new Map<string, number>();
+  const baseTVAProduitsParMois = new Map<string, number>();
+  const tvaDeductibleParMois = new Map<string, number>();
+  const tvaCollecteeParMois = new Map<string, number>();
 
   const add = (m: Map<string, Map<string, number>>, cat: string, mois: string, v: number) => {
     if (!m.has(cat)) m.set(cat, new Map());
@@ -228,28 +274,154 @@ export function syntheseExercice(
       add(produits, e.categorie, e.mois, v);
       bump(totalProduitsParMois, e.mois, v);
       bump(totalProduitsTTCParMois, e.mois, e.ttc);
+      if (e.tva) bump(baseTVAProduitsParMois, e.mois, e.ht);
+      bump(tvaCollecteeParMois, e.mois, e.tva);
     } else if (categoriesJeux.includes(e.categorie)) {
       add(jeux, e.categorie, e.mois, v);
       add(jeuxParJeu, e.jeu || '— non rattaché —', e.mois, v);
+      const jeu = e.jeu || '— non rattaché —';
+      if (!jeuxParJeuEtCategorie.has(jeu)) jeuxParJeuEtCategorie.set(jeu, new Map());
+      add(jeuxParJeuEtCategorie.get(jeu)!, e.categorie, e.mois, v);
       bump(totalJeuxParMois, e.mois, v);
       bump(totalTTCParMois, e.mois, e.ttc);
+      if (e.tva) bump(baseTVADepensesParMois, e.mois, e.ht);
+      bump(tvaDeductibleParMois, e.mois, e.tva);
     } else if (e.type === 'immo') {
       // Une immobilisation n'est pas une charge de l'exercice : elle est
       // suivie à part, et c'est sa dotation annuelle qui pèse sur le résultat.
       add(immos, e.categorie, e.mois, v);
       bump(immoParMois, e.mois, v);
       bump(totalTTCParMois, e.mois, e.ttc);
+      if (e.tva) bump(baseTVADepensesParMois, e.mois, e.ht);
+      bump(tvaDeductibleParMois, e.mois, e.tva);
+    } else if (estPersonnel(e.categorie, refs)) {
+      add(personnel, e.categorie, e.mois, v);
+      bump(totalPersonnelParMois, e.mois, v);
+      bump(totalTTCParMois, e.mois, e.ttc);
+      if (e.tva) bump(baseTVADepensesParMois, e.mois, e.ht);
+      bump(tvaDeductibleParMois, e.mois, e.tva);
     } else {
       add(charges, e.categorie, e.mois, v);
       bump(totalChargesParMois, e.mois, v);
       bump(totalTTCParMois, e.mois, e.ttc);
+      if (e.tva) bump(baseTVADepensesParMois, e.mois, e.ht);
+      bump(tvaDeductibleParMois, e.mois, e.tva);
+      // Les charges financières restent affichées avec les charges, mais on
+      // les isole : elles se retranchent au résultat courant, pas à l'EBE.
+      if (estChargeFinanciere(e.categorie)) bump(chargesFinancieresParMois, e.mois, e.ht);
     }
   }
   return {
-    moisList, base, charges, jeux, produits, totalChargesParMois, totalTTCParMois,
+    moisList, base, charges, personnel, jeux, produits,
+    totalChargesParMois, totalPersonnelParMois, totalTTCParMois,
     totalJeuxParMois, totalProduitsParMois, totalProduitsTTCParMois, immoParMois,
-    immos, jeuxParJeu,
+    immos, jeuxParJeu, jeuxParJeuEtCategorie, chargesFinancieresParMois,
+    baseTVADepensesParMois, baseTVAProduitsParMois,
+    tvaDeductibleParMois, tvaCollecteeParMois,
   };
+}
+
+// ----- Compte de résultat ------------------------------------------------
+
+/**
+ * Impôt sur les sociétés, barème PME : 15 % jusqu'à 42 500 € de bénéfice,
+ * 25 % au-delà. Le taux réduit suppose un CA HT < 10 M€ et un capital
+ * entièrement libéré détenu à 75 % au moins par des personnes physiques —
+ * c'est le cas de Big Budi Games.
+ */
+export const PLAFOND_IS_REDUIT = 42_500;
+export const TAUX_IS_REDUIT = 0.15;
+export const TAUX_IS_NORMAL = 0.25;
+
+export function impotSocietes(benefice: number): number {
+  if (benefice <= 0) return 0;
+  const reduit = Math.min(benefice, PLAFOND_IS_REDUIT) * TAUX_IS_REDUIT;
+  const normal = Math.max(0, benefice - PLAFOND_IS_REDUIT) * TAUX_IS_NORMAL;
+  return r2(reduit + normal);
+}
+
+export type NiveauResultat = 'detail' | 'agregat' | 'final';
+
+export interface LigneResultat {
+  cle: string;
+  label: string;
+  aide: string;
+  /** Valeur par mois ; vide pour les lignes qui n'ont de sens qu'à l'année. */
+  parMois: Map<string, number> | null;
+  total: number;
+  niveau: NiveauResultat;
+  /** Un résultat négatif se lit en rouge, un positif en vert. */
+  signe: boolean;
+}
+
+export interface EntreesResultat {
+  moisList: string[];
+  /** Produits d'exploitation HT (ventes, prestations, subventions). */
+  produits: Map<string, number>;
+  /** Charges d'exploitation HT hors personnel, hors jeux, hors financières. */
+  charges: Map<string, number>;
+  personnel: Map<string, number>;
+  jeux: Map<string, number>;
+  dotations: Map<string, number>;
+  produitsFinanciers: Map<string, number>;
+  chargesFinancieres: Map<string, number>;
+}
+
+const somme = (m: Map<string, number>, moisList: string[]) =>
+  r2(moisList.reduce((s, x) => s + (m.get(x) ?? 0), 0));
+
+/**
+ * Le compte de résultat, dans l'ordre du plan comptable français :
+ * EBE, puis résultat d'exploitation, courant, et net après impôt.
+ *
+ * Les dépenses de développement des jeux sont ici des charges d'exploitation
+ * (elles ne sont pas immobilisées) : elles pèsent donc dans l'EBE.
+ */
+export function compteResultat(e: EntreesResultat): LigneResultat[] {
+  const { moisList } = e;
+  const parMois = (calc: (m: string) => number) => {
+    const out = new Map<string, number>();
+    for (const m of moisList) out.set(m, r2(calc(m)));
+    return out;
+  };
+  const g = (m: Map<string, number>, mois: string) => m.get(mois) ?? 0;
+
+  const chargesExploit = parMois(m =>
+    g(e.charges, m) - g(e.chargesFinancieres, m) + g(e.personnel, m) + g(e.jeux, m));
+  const ebe = parMois(m => g(e.produits, m) - g(chargesExploit, m));
+  const rex = parMois(m => g(ebe, m) - g(e.dotations, m));
+  const rc = parMois(m => g(rex, m) + g(e.produitsFinanciers, m) - g(e.chargesFinancieres, m));
+
+  const totalRC = somme(rc, moisList);
+  const is = impotSocietes(totalRC);
+  const rn = r2(totalRC - is);
+
+  const l = (cle: string, label: string, aide: string, m: Map<string, number> | null,
+    total: number, niveau: NiveauResultat, signe = false): LigneResultat =>
+    ({ cle, label, aide, parMois: m, total, niveau, signe });
+
+  return [
+    l('produits', "Produits d'exploitation", 'Ventes, prestations et subventions, hors taxes.',
+      e.produits, somme(e.produits, moisList), 'detail'),
+    l('charges', "Charges d'exploitation", 'Charges externes, personnel et dépenses jeux — hors charges financières et hors dotations.',
+      chargesExploit, somme(chargesExploit, moisList), 'detail'),
+    l('ebe', 'EBE — Excédent brut d\'exploitation', "Ce que l'activité dégage avant amortissements et frais financiers.",
+      ebe, somme(ebe, moisList), 'agregat', true),
+    l('dotations', 'Dotations aux amortissements', "L'usure des immobilisations, étalée sur leur durée de vie.",
+      e.dotations, somme(e.dotations, moisList), 'detail'),
+    l('rex', 'REX — Résultat d\'exploitation', 'EBE moins les dotations aux amortissements.',
+      rex, somme(rex, moisList), 'agregat', true),
+    l('pf', 'Produits financiers', 'Intérêts perçus sur les placements et comptes rémunérés.',
+      e.produitsFinanciers, somme(e.produitsFinanciers, moisList), 'detail'),
+    l('cf', 'Charges financières', 'Agios, frais bancaires et intérêts d\'emprunt.',
+      e.chargesFinancieres, somme(e.chargesFinancieres, moisList), 'detail'),
+    l('rc', 'RC — Résultat courant avant impôt', 'Résultat d\'exploitation, corrigé du financier.',
+      rc, totalRC, 'agregat', true),
+    l('is', 'IS — Impôt sur les sociétés', `15 % jusqu'à ${PLAFOND_IS_REDUIT.toLocaleString('fr-FR')} € de bénéfice, 25 % au-delà. Calculé sur l'année, pas mois par mois.`,
+      null, is, 'detail'),
+    l('rn', 'RN — Résultat net', 'Ce qui reste après impôt : le résultat de l\'exercice.',
+      null, rn, 'final', true),
+  ];
 }
 
 /** Écritures qui composent une cellule de la synthèse (pour l'aperçu au survol). */

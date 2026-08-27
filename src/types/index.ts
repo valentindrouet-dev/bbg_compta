@@ -66,7 +66,7 @@ export interface BudgetExercice {
 }
 
 /** Bloc d'affichage d'une ligne prévisionnelle, calqué sur la synthèse annuelle. */
-export type PrevSection = 'produits' | 'charges' | 'jeux' | 'immos' | 'indicateurs';
+export type PrevSection = 'produits' | 'charges' | 'personnel' | 'jeux' | 'immos' | 'indicateurs';
 
 /**
  * Ligne du prévisionnel : une catégorie (celles de la synthèse) et ses montants
@@ -76,6 +76,8 @@ export interface PrevLigne {
   id: string;
   categorie: string;
   section: PrevSection;
+  /** Jeu concerné, pour les lignes du bloc Jeux (comme la colonne du journal). */
+  jeu?: string;
   /** Absent = montant en euros ; sinon indicateur non monétaire. */
   unite?: 'heures' | 'jours' | 'pourcentage' | 'volume';
   /** Une valeur par mois de l'exercice, dans l'ordre de moisExercice(). */

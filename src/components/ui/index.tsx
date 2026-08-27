@@ -1,6 +1,9 @@
-import { useState, type ReactNode } from 'react';
-import { ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Palette, RotateCcw } from 'lucide-react';
 import { parseMontant, r2 } from '../../utils/money';
+import { useStore } from '../../store';
+import { BLOC_PAR_CLE, teinteBloc, type BlocCle } from '../../utils/blocs';
+import { TEINTES_MAJEURES, variablesTeinte, type Teinte } from '../../utils/couleurs';
 
 export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: ReactNode }) {
   return (
@@ -33,6 +36,122 @@ export function Card({ title, children, className = '', actions }: {
       )}
       <div className="p-4">{children}</div>
     </div>
+  );
+}
+
+// ----- Blocs colorés -----------------------------------------------------
+
+/** Teinte d'un bloc, telle que réglée dans l'app (hook, pour les composants). */
+export function useTeinte(bloc: BlocCle): Teinte {
+  return teinteBloc(bloc, useStore(s => s.blocCouleurs));
+}
+
+/** Variables CSS à poser sur un tableau pour qu'il prenne les couleurs du bloc. */
+export function styleBloc(t: Teinte): CSSProperties {
+  return variablesTeinte(t) as CSSProperties;
+}
+
+/**
+ * Le petit bouton de recoloration : une teinte majeure, et tout le bloc suit —
+ * en-tête, bandes de groupe, lignes, ligne de total — ici comme dans le journal
+ * et le prévisionnel.
+ */
+export function BlocColorMenu({ bloc }: { bloc: BlocCle }) {
+  const couleurs = useStore(s => s.blocCouleurs);
+  const setBlocCouleur = useStore(s => s.setBlocCouleur);
+  const resetBlocCouleur = useStore(s => s.resetBlocCouleur);
+  const [ouvert, setOuvert] = useState(false);
+  const boxRef = useRef<HTMLSpanElement>(null);
+  const def = BLOC_PAR_CLE.get(bloc);
+  const courante = couleurs[bloc] || def?.defaut || '';
+  const t = teinteBloc(bloc, couleurs);
+
+  useEffect(() => {
+    if (!ouvert) return;
+    const clic = (ev: MouseEvent) => {
+      if (boxRef.current && !boxRef.current.contains(ev.target as Node)) setOuvert(false);
+    };
+    document.addEventListener('mousedown', clic);
+    return () => document.removeEventListener('mousedown', clic);
+  }, [ouvert]);
+
+  return (
+    <span className="relative inline-flex" ref={boxRef}>
+      <button
+        type="button"
+        title={`Recolorer le bloc « ${def?.titre ?? bloc} »`}
+        className="inline-flex items-center gap-1 px-1.5 py-1 rounded border text-xs"
+        style={{ backgroundColor: t.base, borderColor: t.bord, color: t.fonce }}
+        onClick={() => setOuvert(o => !o)}
+      >
+        <Palette size={13} />
+      </button>
+      {ouvert && (
+        <div
+          className="absolute right-0 top-8 z-50 bg-white rounded-md shadow-lg border p-2 font-normal"
+          style={{ borderColor: 'var(--bbg-border)', width: 196 }}
+        >
+          <div className="text-[11px] uppercase tracking-wide mb-1.5" style={{ color: '#9a92b5' }}>
+            Teinte du bloc {def?.titre ?? bloc}
+          </div>
+          <div className="grid grid-cols-3 gap-1.5 mb-2">
+            {TEINTES_MAJEURES.map(c => (
+              <button
+                key={c.nom} type="button" title={c.nom}
+                className="h-8 rounded border flex items-end justify-center pb-0.5 text-[9px] font-semibold"
+                style={{
+                  backgroundColor: c.hex,
+                  color: '#3f3268',
+                  borderColor: courante.toLowerCase() === c.hex ? '#3f3268' : 'transparent',
+                  borderWidth: courante.toLowerCase() === c.hex ? 2 : 1,
+                }}
+                onClick={() => { setBlocCouleur(bloc, c.hex); setOuvert(false); }}
+              >
+                {c.nom}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1 mb-2">
+            <input
+              type="color" className="w-8 h-7 p-0 border rounded cursor-pointer"
+              style={{ borderColor: 'var(--bbg-border-soft)' }}
+              value={courante || '#b4a7d6'}
+              onChange={ev => setBlocCouleur(bloc, ev.target.value)}
+              title="Teinte libre"
+            />
+            <span className="text-[11px]" style={{ color: '#6f6690' }}>Teinte libre</span>
+          </div>
+          <div className="flex gap-1 mb-2">
+            {(['base', 'clair', 'tresClair', 'total', 'fonce'] as const).map(k => (
+              <span key={k} className="flex-1 h-4 rounded-sm border"
+                style={{ backgroundColor: t[k], borderColor: 'var(--bbg-border-soft)' }} title={k} />
+            ))}
+          </div>
+          <button
+            type="button"
+            className="w-full inline-flex items-center justify-center gap-1 py-1 rounded hover:bg-[#f4f1fb] text-xs"
+            style={{ color: '#6f6690' }}
+            onClick={() => { resetBlocCouleur(bloc); setOuvert(false); }}
+          >
+            <RotateCcw size={12} /> Teinte d'origine
+          </button>
+        </div>
+      )}
+    </span>
+  );
+}
+
+/** Le gros total d'un bloc, à lire d'un coup d'œil dans son en-tête. */
+export function TotalBloc({ label, valeur, t }: { label: string; valeur: string; t: Teinte }) {
+  return (
+    <span
+      className="inline-flex items-baseline gap-2 px-3 py-1 rounded-md border"
+      style={{ backgroundColor: t.total, borderColor: t.bord, color: t.fonce }}
+      title={label}
+    >
+      <span className="text-[11px] uppercase tracking-wide opacity-80">{label}</span>
+      <b className="text-base tabular-nums">{valeur}</b>
+    </span>
   );
 }
 

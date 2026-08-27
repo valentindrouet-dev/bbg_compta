@@ -1,13 +1,16 @@
 import { Fragment, useMemo, useState } from 'react';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Gamepad2, Info } from 'lucide-react';
 import { useStore } from '../../store';
 import { EXERCICES, labelMois, formatDateFR } from '../../utils/dates';
-import { euros, r2 } from '../../utils/money';
-import { syntheseExercice, immoInfos, dotationDuMois, ecrituresDeCellule, type BaseMontant } from '../../utils/calc';
-import { PageHeader, Card, Btn } from '../ui';
-import type { JournalEntry } from '../../types';
+import { euros, euros0, r2 } from '../../utils/money';
+import {
+  syntheseExercice, immoInfos, dotationDuMois, dotationsParMois, produitsFinanciersParMois,
+  compteResultat, ecrituresDeCellule, type BaseMontant, type LigneResultat,
+} from '../../utils/calc';
+import { teinteBloc, type BlocCle } from '../../utils/blocs';
 
-type Bloc = 'charges' | 'jeux' | 'immos' | 'produits';
+import { PageHeader, Card, Btn, BlocColorMenu, TotalBloc, styleBloc } from '../ui';
+import type { JournalEntry } from '../../types';
 
 /** Petit panneau listant les écritures derrière une valeur de la synthèse. */
 function ApercuCellule({ ecritures, titre, x, y }: {
@@ -54,7 +57,9 @@ function ApercuCellule({ ecritures, titre, x, y }: {
 
 export function SynthesePage() {
   const entries = useStore(s => s.entries);
+  const finances = useStore(s => s.finances);
   const refs = useStore(s => s.referentiels);
+  const couleurs = useStore(s => s.blocCouleurs);
   const [exercice, setExercice] = useState('2025-26');
   const [base, setBase] = useState<BaseMontant>('ht');
   const [apercuActif, setApercuActif] = useState(
@@ -71,9 +76,10 @@ export function SynthesePage() {
   }
 
   const syn = useMemo(
-    () => syntheseExercice(entries, exercice, refs.categoriesJeux, base),
-    [entries, exercice, refs.categoriesJeux, base],
+    () => syntheseExercice(entries, exercice, refs, base),
+    [entries, exercice, refs, base],
   );
+  const immos = useMemo(() => immoInfos(entries), [entries]);
 
   /** Prépare l'aperçu d'une cellule (catégorie ou jeu × mois). */
   function survol(
@@ -86,7 +92,6 @@ export function SynthesePage() {
     setApercu({ titre, ecritures, x: ev.clientX, y: ev.clientY });
   }
   const quitte = () => setApercu(null);
-  const immos = useMemo(() => immoInfos(entries), [entries]);
   const meta = refs.categoriesMeta ?? {};
   const groupes = refs.groupes ?? [];
 
@@ -95,27 +100,30 @@ export function SynthesePage() {
     ref.filter(c => source.has(c)).concat([...source.keys()].filter(c => !ref.includes(c)));
 
   const unite = base === 'ttc' ? 'TTC' : 'HT';
-  const blocs: { cle: Bloc; titre: string; cats: string[]; data: Map<string, Map<string, number>>;
-    totaux: Map<string, number>; couleur: string; entete: string; }[] = [
-    {
-      cle: 'charges', titre: `Charges par catégorie (${unite})`,
-      cats: catsDe(syn.charges, refs.categoriesDepenses), data: syn.charges,
-      totaux: syn.totalChargesParMois, couleur: 'var(--bbg-orange-light)', entete: 'var(--bbg-orange)',
-    },
-    {
-      cle: 'jeux', titre: `Dépenses Jeux par catégorie (${unite})`,
-      cats: catsDe(syn.jeux, refs.categoriesJeux), data: syn.jeux,
-      totaux: syn.totalJeuxParMois, couleur: 'var(--bbg-yellow-light)', entete: 'var(--bbg-yellow)',
-    },
-    {
-      cle: 'immos', titre: `Immobilisations — investissements (${unite})`,
-      cats: [...syn.immos.keys()], data: syn.immos,
-      totaux: syn.immoParMois, couleur: 'var(--bbg-purple-light)', entete: 'var(--bbg-purple-light)',
-    },
+
+  /** Les blocs de catégories, dans l'ordre de lecture demandé. */
+  const blocs: {
+    cle: BlocCle; titre: string; cats: string[];
+    data: Map<string, Map<string, number>>; totaux: Map<string, number>;
+    typeApercu: 'charges' | 'immo' | 'produit'; vide?: string;
+  }[] = [
     {
       cle: 'produits', titre: `Produits par catégorie (${unite})`,
       cats: catsDe(syn.produits, refs.categoriesProduits), data: syn.produits,
-      totaux: syn.totalProduitsParMois, couleur: 'var(--bbg-green-light)', entete: 'var(--bbg-green)',
+      totaux: syn.totalProduitsParMois, typeApercu: 'produit',
+    },
+    {
+      cle: 'charges', titre: `Charges par catégorie (${unite})`,
+      cats: catsDe(syn.charges, refs.categoriesDepenses), data: syn.charges,
+      totaux: syn.totalChargesParMois, typeApercu: 'charges',
+    },
+    {
+      cle: 'personnel', titre: `Personnel & rémunérations (${unite})`,
+      cats: catsDe(syn.personnel, refs.categoriesDepenses), data: syn.personnel,
+      totaux: syn.totalPersonnelParMois, typeApercu: 'charges',
+      vide: 'Aucune charge de personnel sur cet exercice. Les cotisations du gérant, '
+        + 'les salaires bruts et les charges patronales viendront se ranger ici : il suffit '
+        + 'de mettre leur catégorie dans le groupe « Personnel » (onglet Catégories).',
     },
   ];
 
@@ -125,12 +133,28 @@ export function SynthesePage() {
 
   const totalLigne = (data: Map<string, Map<string, number>>, cat: string) =>
     r2([...(data.get(cat)?.values() ?? [])].reduce((s, v) => s + v, 0));
+  const totalDe = (m: Map<string, number>) => r2([...m.values()].reduce((s, v) => s + v, 0));
+
+  // ----- Compte de résultat, sur la base HT quoi qu'affiche le bouton -----
+  const resultat: LigneResultat[] = useMemo(() => {
+    const ht = base === 'ht' ? syn : syntheseExercice(entries, exercice, refs, 'ht');
+    return compteResultat({
+      moisList: ht.moisList,
+      produits: ht.totalProduitsParMois,
+      charges: ht.totalChargesParMois,
+      personnel: ht.totalPersonnelParMois,
+      jeux: ht.totalJeuxParMois,
+      dotations: dotationsParMois(immos, ht.moisList),
+      produitsFinanciers: produitsFinanciersParMois(finances, ht.moisList),
+      chargesFinancieres: ht.chargesFinancieresParMois,
+    });
+  }, [syn, entries, exercice, refs, base, immos, finances]);
 
   return (
     <div className="p-4 w-full">
       <PageHeader
         title="Synthèse annuelle"
-        subtitle="Catégories en lignes, mois en colonnes — recalculé en direct depuis le journal"
+        subtitle="Produits, charges, personnel, jeux, immobilisations, puis le résultat — recalculé en direct depuis le journal"
         actions={
           <>
             <div className="flex rounded-md border overflow-hidden text-sm" style={{ borderColor: 'var(--bbg-border)' }}>
@@ -153,20 +177,24 @@ export function SynthesePage() {
                 Aperçu {apercuActif ? 'activé' : 'désactivé'}
               </span>
             </Btn>
-          <select
-            className="border rounded-md px-2 py-1.5 text-sm bg-white font-medium"
-            style={{ borderColor: 'var(--bbg-border)', color: 'var(--bbg-purple-darker)' }}
-            value={exercice}
-            onChange={ev => setExercice(ev.target.value)}
-          >
-            {EXERCICES.map(ex => <option key={ex} value={ex}>Exercice {ex}</option>)}
-          </select>
+            <select
+              className="border rounded-md px-2 py-1.5 text-sm bg-white font-medium"
+              style={{ borderColor: 'var(--bbg-border)', color: 'var(--bbg-purple-darker)' }}
+              value={exercice}
+              onChange={ev => setExercice(ev.target.value)}
+            >
+              {EXERCICES.map(ex => <option key={ex} value={ex}>Exercice {ex}</option>)}
+            </select>
           </>
         }
       />
 
       <div className="space-y-5">
-        {blocs.filter(b => b.cats.length > 0).map(bloc => {
+        {blocs.map(bloc => {
+          const t = teinteBloc(bloc.cle, couleurs);
+          const grandTotal = totalDe(bloc.totaux);
+          if (!bloc.cats.length && !bloc.vide) return null;
+
           // Répartition des catégories par groupe, dans l'ordre défini en paramètres.
           const parGroupe = new Map<string, string[]>();
           for (const c of bloc.cats) {
@@ -178,236 +206,568 @@ export function SynthesePage() {
           const avecGroupes = ordreGroupes.length > 1 || (ordreGroupes.length === 1 && ordreGroupes[0] !== '');
 
           return (
-            <Card key={bloc.cle} title={bloc.titre}>
-              <div className="overflow-x-auto -mx-4 px-4">
-                <table data-table={`synthese:${bloc.cle}:${syn.moisList.length}`} className="sheet text-xs" style={{ minWidth: 900 }}>
-                  <thead>
-                    <tr>
-                      <th className="text-left" style={{ minWidth: 230 }}>Catégorie</th>
-                      {syn.moisList.map(m => (
-                        <th key={m} className="num" style={{ minWidth: 74 }}>{labelMois(m)}</th>
-                      ))}
-                      <th className="num" style={{ minWidth: 96, backgroundColor: bloc.entete, color: '#3f3268' }}>Total</th>
-                      <th className="num" style={{ minWidth: 84, backgroundColor: bloc.entete, color: '#3f3268' }}>/ mois</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {ordreGroupes.map(g => (
-                      <Fragment key={`grp-${g}`}>
-                        {avecGroupes && (
-                          <tr className="band-soft">
-                            <td colSpan={syn.moisList.length + 3} className="py-1">
-                              {g || '— sans groupe —'}
-                            </td>
-                          </tr>
-                        )}
-                        {parGroupe.get(g)!.map(cat => {
-                          const tot = totalLigne(bloc.data, cat);
-                          return (
-                            <tr key={cat}>
-                              <td>
-                                <span className="inline-flex items-center gap-1.5">
-                                  <span
-                                    className="inline-block w-2.5 h-2.5 rounded-sm shrink-0"
-                                    style={{ backgroundColor: meta[cat]?.couleur || bloc.couleur }}
-                                  />
-                                  {cat}
-                                </span>
-                              </td>
-                              {syn.moisList.map(m => {
-                                const v = bloc.data.get(cat)?.get(m) ?? 0;
-                                return (
-                                  <td
-                                    key={m} className="text-right tabular-nums"
-                                    onMouseEnter={ev => survol(ev, m, `${cat} — ${labelMois(m)}`, {
-                                      categorie: cat,
-                                      type: bloc.cle === 'immos' ? 'immo' : bloc.cle === 'produits' ? 'produit' : 'charges',
-                                    })}
-                                    onMouseLeave={quitte}
-                                  >
-                                    {v ? euros(r2(v)) : '·'}
-                                  </td>
-                                );
-                              })}
-                              <td className="text-right tabular-nums font-semibold" style={{ backgroundColor: bloc.couleur }}>
-                                {euros(tot)}
-                              </td>
-                              <td className="text-right tabular-nums" style={{ backgroundColor: bloc.couleur, color: '#5c5280' }}>
-                                {euros(r2(tot / nbMois))}
+            <Card
+              key={bloc.cle} title={bloc.titre}
+              actions={
+                <>
+                  <TotalBloc label={`Total ${unite}`} valeur={euros(grandTotal)} t={t} />
+                  <BlocColorMenu bloc={bloc.cle} />
+                </>
+              }
+            >
+              {!bloc.cats.length ? (
+                <p className="text-sm italic" style={{ color: '#9a92b5' }}>{bloc.vide}</p>
+              ) : (
+                <div className="overflow-x-auto -mx-4 px-4">
+                  <table
+                    data-table={`synthese:${bloc.cle}:${syn.moisList.length}`} data-bloc={bloc.cle}
+                    className="sheet text-xs" style={{ minWidth: 900, ...styleBloc(t) }}
+                  >
+                    <thead>
+                      <tr>
+                        <th className="text-left" style={{ minWidth: 230 }}>Catégorie</th>
+                        {syn.moisList.map(m => (
+                          <th key={m} className="num" style={{ minWidth: 74 }}>{labelMois(m)}</th>
+                        ))}
+                        <th className="num" style={{ minWidth: 96 }}>Total</th>
+                        <th className="num" style={{ minWidth: 84 }}>/ mois</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ordreGroupes.map(g => (
+                        <Fragment key={`grp-${g}`}>
+                          {avecGroupes && (
+                            <tr className="band-bloc">
+                              <td colSpan={syn.moisList.length + 3} className="py-1">
+                                {g || '— sans groupe —'}
                               </td>
                             </tr>
-                          );
-                        })}
-                        {avecGroupes && parGroupe.get(g)!.length > 1 && (
-                          <tr style={{ fontStyle: 'italic' }}>
-                            <td style={{ color: '#6f6690' }}>Sous-total {g || 'sans groupe'}</td>
-                            {syn.moisList.map(m => {
-                              const v = parGroupe.get(g)!.reduce((s, c) => s + (bloc.data.get(c)?.get(m) ?? 0), 0);
-                              return <td key={m} className="text-right tabular-nums" style={{ color: '#6f6690' }}>{v ? euros(r2(v)) : '·'}</td>;
-                            })}
-                            <td className="text-right tabular-nums" style={{ backgroundColor: bloc.couleur, color: '#5c5280' }}>
-                              {euros(r2(parGroupe.get(g)!.reduce((s, c) => s + totalLigne(bloc.data, c), 0)))}
-                            </td>
-                            <td style={{ backgroundColor: bloc.couleur }}></td>
-                          </tr>
-                        )}
-                      </Fragment>
-                    ))}
-
-                  </tbody>
-                  <tfoot>
-                    <tr>
-                      <td>Total {bloc.cle === 'produits' ? 'produits' : bloc.cle === 'jeux' ? 'jeux' : 'charges'} (HT)</td>
-                      {syn.moisList.map(m => (
-                        <td key={m} className="text-right tabular-nums">{euros(r2(bloc.totaux.get(m) ?? 0))}</td>
+                          )}
+                          {parGroupe.get(g)!.map(cat => {
+                            const tot = totalLigne(bloc.data, cat);
+                            return (
+                              <tr key={cat}>
+                                <td>
+                                  <span className="inline-flex items-center gap-1.5">
+                                    <span
+                                      className="inline-block w-2.5 h-2.5 rounded-sm shrink-0"
+                                      style={{ backgroundColor: meta[cat]?.couleur || t.base }}
+                                    />
+                                    {cat}
+                                  </span>
+                                </td>
+                                {syn.moisList.map(m => {
+                                  const v = bloc.data.get(cat)?.get(m) ?? 0;
+                                  return (
+                                    <td
+                                      key={m} className="text-right tabular-nums"
+                                      onMouseEnter={ev => survol(ev, m, `${cat} — ${labelMois(m)}`, {
+                                        categorie: cat, type: bloc.typeApercu,
+                                      })}
+                                      onMouseLeave={quitte}
+                                    >
+                                      {v ? euros(r2(v)) : '·'}
+                                    </td>
+                                  );
+                                })}
+                                <td className="text-right tabular-nums font-semibold col-total">{euros(tot)}</td>
+                                <td className="text-right tabular-nums col-total" style={{ color: '#5c5280' }}>
+                                  {euros(r2(tot / nbMois))}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                          {avecGroupes && parGroupe.get(g)!.length > 1 && (
+                            <tr style={{ fontStyle: 'italic' }}>
+                              <td style={{ color: '#6f6690' }}>Sous-total {g || 'sans groupe'}</td>
+                              {syn.moisList.map(m => {
+                                const v = parGroupe.get(g)!.reduce((s, c) => s + (bloc.data.get(c)?.get(m) ?? 0), 0);
+                                return <td key={m} className="text-right tabular-nums" style={{ color: '#6f6690' }}>{v ? euros(r2(v)) : '·'}</td>;
+                              })}
+                              <td className="text-right tabular-nums col-total" style={{ color: '#5c5280' }}>
+                                {euros(r2(parGroupe.get(g)!.reduce((s, c) => s + totalLigne(bloc.data, c), 0)))}
+                              </td>
+                              <td className="col-total"></td>
+                            </tr>
+                          )}
+                        </Fragment>
                       ))}
-                      <td className="text-right tabular-nums">
-                        {euros(r2([...bloc.totaux.values()].reduce((s, v) => s + v, 0)))}
-                      </td>
-                      <td className="text-right tabular-nums">
-                        {euros(r2([...bloc.totaux.values()].reduce((s, v) => s + v, 0) / nbMois))}
-                      </td>
-                    </tr>
-                    {bloc.cle === 'charges' && (
-                      <tr>
-                        <td>Total dépenses (TTC)</td>
+                    </tbody>
+                    <tfoot>
+                      <tr className="total-bloc">
+                        <td>TOTAL {bloc.cle === 'produits' ? 'PRODUITS' : bloc.cle === 'personnel' ? 'PERSONNEL' : 'CHARGES'} ({unite})</td>
                         {syn.moisList.map(m => (
-                          <td key={m} className="text-right tabular-nums">{euros(r2(syn.totalTTCParMois.get(m) ?? 0))}</td>
+                          <td key={m} className="text-right tabular-nums">
+                            {bloc.totaux.get(m) ? euros0(r2(bloc.totaux.get(m)!)) : '·'}
+                          </td>
                         ))}
-                        <td className="text-right tabular-nums">
-                          {euros(r2([...syn.totalTTCParMois.values()].reduce((s, v) => s + v, 0)))}
-                        </td>
-                        <td></td>
+                        <td className="text-right tabular-nums grand">{euros(grandTotal)}</td>
+                        <td className="text-right tabular-nums">{euros0(r2(grandTotal / nbMois))}</td>
                       </tr>
-                    )}
-                    {bloc.cle === 'produits' && (
-                      <tr>
-                        <td>Total produits (TTC)</td>
-                        {syn.moisList.map(m => (
-                          <td key={m} className="text-right tabular-nums">{euros(r2(syn.totalProduitsTTCParMois.get(m) ?? 0))}</td>
-                        ))}
-                        <td className="text-right tabular-nums">
-                          {euros(r2([...syn.totalProduitsTTCParMois.values()].reduce((s, v) => s + v, 0)))}
-                        </td>
-                        <td></td>
-                      </tr>
-                    )}
-                  </tfoot>
-                </table>
-              </div>
+                      {bloc.cle === 'produits' && (
+                        <tr>
+                          <td>Total produits (TTC)</td>
+                          {syn.moisList.map(m => (
+                            <td key={m} className="text-right tabular-nums">{euros(r2(syn.totalProduitsTTCParMois.get(m) ?? 0))}</td>
+                          ))}
+                          <td className="text-right tabular-nums">{euros(totalDe(syn.totalProduitsTTCParMois))}</td>
+                          <td></td>
+                        </tr>
+                      )}
+                      {bloc.cle === 'charges' && (
+                        <tr>
+                          <td title="Charges + personnel + dépenses jeux + immobilisations, toutes taxes comprises">
+                            Total dépenses (TTC)
+                          </td>
+                          {syn.moisList.map(m => (
+                            <td key={m} className="text-right tabular-nums">{euros(r2(syn.totalTTCParMois.get(m) ?? 0))}</td>
+                          ))}
+                          <td className="text-right tabular-nums">{euros(totalDe(syn.totalTTCParMois))}</td>
+                          <td></td>
+                        </tr>
+                      )}
+                    </tfoot>
+                  </table>
+                </div>
+              )}
               {bloc.cle === 'charges' && (
                 <p className="text-xs mt-2" style={{ color: '#9a92b5' }}>
                   « / mois » = moyenne sur les {nbMois} mois qui portent des écritures.
-                  Les couleurs et les groupes se règlent dans l'onglet Catégories.
-                </p>
-              )}
-              {bloc.cle === 'immos' && (
-                <p className="text-xs mt-2" style={{ color: '#9a92b5' }}>
-                  Une immobilisation n'est <b>pas une charge de l'exercice</b> : c'est un investissement
-                  (travaux, matériel) inscrit à l'actif. Le montant apparaît ici le mois de l'achat, mais
-                  ce qui pèse sur le résultat, c'est la <b>dotation aux amortissements</b> — étalée sur la
-                  durée de vie du bien, dans le tableau ci-dessous. Le détail bien par bien est dans
-                  l'onglet Immobilisations.
+                  Les couleurs et les groupes des catégories se règlent dans l'onglet Catégories ;
+                  la teinte du bloc, avec la palette ci-dessus.
                 </p>
               )}
             </Card>
           );
         })}
 
-        {syn.jeuxParJeu.size > 0 && (
-          <Card title={`Dépenses Jeux par jeu (${unite})`}>
-            <div className="overflow-x-auto -mx-4 px-4">
-              <table data-table={`synthese:jeux-par-jeu:${syn.moisList.length}`} className="sheet text-xs" style={{ minWidth: 900 }}>
-                <thead>
-                  <tr>
-                    <th className="text-left" style={{ minWidth: 230 }}>Jeu</th>
-                    {syn.moisList.map(m => <th key={m} className="num" style={{ minWidth: 74 }}>{labelMois(m)}</th>)}
-                    <th className="num" style={{ minWidth: 96, backgroundColor: 'var(--bbg-yellow)', color: '#3f3268' }}>Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...syn.jeuxParJeu.entries()]
-                    .sort((a, b) => [...b[1].values()].reduce((s, v) => s + v, 0) - [...a[1].values()].reduce((s, v) => s + v, 0))
-                    .map(([jeu, parMois]) => (
-                    <tr key={jeu}>
-                      <td className="font-medium">{jeu}</td>
+        {/* ---------------------------------------------------- Jeux ----- */}
+        <BlocJeux
+          syn={syn} refs={refs} couleurs={couleurs} unite={unite}
+          survol={survol} quitte={quitte} nbMois={nbMois}
+        />
+
+        {/* -------------------------------------------- Immobilisations -- */}
+        <BlocImmos
+          syn={syn} couleurs={couleurs} unite={unite} meta={meta}
+          survol={survol} quitte={quitte} immos={immos}
+        />
+
+        {/* ------------------------------------------------- Résultat ---- */}
+        <BlocResultat lignes={resultat} moisList={syn.moisList} couleurs={couleurs} />
+
+        {/* ------------------------------------------------------ TVA ---- */}
+        <BlocTVA syn={syn} couleurs={couleurs} />
+      </div>
+
+      {apercu && <ApercuCellule {...apercu} />}
+    </div>
+  );
+}
+
+// ------------------------------------------------------------- Bloc Jeux ---
+
+type Survol = (ev: React.MouseEvent, mois: string, titre: string,
+  opts: { categorie?: string; jeu?: string; type?: 'charges' | 'immo' | 'produit' }) => void;
+
+/**
+ * Un jeu par groupe de lignes, et sous chaque jeu toutes les catégories de
+ * dépenses possibles — y compris celles encore à zéro, pour voir d'un coup
+ * d'œil ce qui reste à engager.
+ */
+function BlocJeux({ syn, refs, couleurs, unite, survol, quitte, nbMois }: {
+  syn: ReturnType<typeof syntheseExercice>;
+  refs: { categoriesJeux: string[]; jeux?: string[] };
+  couleurs: Record<string, string>; unite: string;
+  survol: Survol; quitte: () => void; nbMois: number;
+}) {
+  const t = teinteBloc('jeux', couleurs);
+  const cats = refs.categoriesJeux;
+  // Les jeux du catalogue, plus ceux qui portent des dépenses sans y figurer.
+  const jeux = [...new Set([...(refs.jeux ?? []), ...syn.jeuxParJeuEtCategorie.keys()])]
+    .filter(j => (refs.jeux ?? []).includes(j) || syn.jeuxParJeuEtCategorie.has(j));
+  const grandTotal = r2([...syn.totalJeuxParMois.values()].reduce((s, v) => s + v, 0));
+
+  const valeur = (jeu: string, cat: string, m: string) =>
+    syn.jeuxParJeuEtCategorie.get(jeu)?.get(cat)?.get(m) ?? 0;
+  const totalJeuMois = (jeu: string, m: string) =>
+    cats.reduce((s, c) => s + valeur(jeu, c, m), 0);
+  const totalJeu = (jeu: string) => r2(syn.moisList.reduce((s, m) => s + totalJeuMois(jeu, m), 0));
+
+  if (!jeux.length) return null;
+
+  return (
+    <Card
+      title={`Dépenses Jeux — un bloc par jeu (${unite})`}
+      actions={
+        <>
+          <TotalBloc label={`Total ${unite}`} valeur={euros(grandTotal)} t={t} />
+          <BlocColorMenu bloc="jeux" />
+        </>
+      }
+    >
+      <div className="overflow-x-auto -mx-4 px-4">
+        <table
+          data-table={`synthese:jeux:${syn.moisList.length}`} data-bloc="jeux"
+          className="sheet text-xs" style={{ minWidth: 900, ...styleBloc(t) }}
+        >
+          <thead>
+            <tr>
+              <th className="text-left" style={{ minWidth: 230 }}>Jeu / poste de dépense</th>
+              {syn.moisList.map(m => <th key={m} className="num" style={{ minWidth: 74 }}>{labelMois(m)}</th>)}
+              <th className="num" style={{ minWidth: 96 }}>Total</th>
+              <th className="num" style={{ minWidth: 84 }}>/ mois</th>
+            </tr>
+          </thead>
+          <tbody>
+            {jeux.map(jeu => (
+              <Fragment key={jeu}>
+                <tr className="band-bloc">
+                  <td colSpan={syn.moisList.length + 3} className="py-1">
+                    <span className="inline-flex items-center gap-1.5">
+                      <Gamepad2 size={13} /> {jeu}
+                    </span>
+                  </td>
+                </tr>
+                {cats.map(cat => {
+                  const tot = r2(syn.moisList.reduce((s, m) => s + valeur(jeu, cat, m), 0));
+                  return (
+                    <tr key={`${jeu}-${cat}`} style={tot ? undefined : { color: '#b3aecb' }}>
+                      <td className="pl-4">{cat}</td>
                       {syn.moisList.map(m => {
-                        const v = parMois.get(m) ?? 0;
+                        const v = valeur(jeu, cat, m);
                         return (
                           <td
                             key={m} className="text-right tabular-nums"
-                            onMouseEnter={ev => survol(ev, m, `${jeu} — ${labelMois(m)}`, { jeu })}
+                            onMouseEnter={ev => survol(ev, m, `${jeu} · ${cat} — ${labelMois(m)}`, { jeu, categorie: cat })}
                             onMouseLeave={quitte}
                           >
                             {v ? euros(r2(v)) : '·'}
                           </td>
                         );
                       })}
-                      <td className="text-right tabular-nums font-semibold" style={{ backgroundColor: 'var(--bbg-yellow-light)' }}>
-                        {euros(r2([...parMois.values()].reduce((s, v) => s + v, 0)))}
+                      <td className="text-right tabular-nums font-semibold col-total">{tot ? euros(tot) : '·'}</td>
+                      <td className="text-right tabular-nums col-total" style={{ color: '#5c5280' }}>
+                        {tot ? euros(r2(tot / nbMois)) : '·'}
                       </td>
                     </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr>
-                    <td>Total jeux ({unite})</td>
-                    {syn.moisList.map(m => (
-                      <td key={m} className="text-right tabular-nums">{euros(r2(syn.totalJeuxParMois.get(m) ?? 0))}</td>
-                    ))}
-                    <td className="text-right tabular-nums">
-                      {euros(r2([...syn.totalJeuxParMois.values()].reduce((s, v) => s + v, 0)))}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-            <p className="text-xs mt-2" style={{ color: '#9a92b5' }}>
-              Le rattachement à un jeu se fait dans la colonne « Jeu » du journal (section Dépenses Jeux).
-              Le détail complet par jeu est dans l'onglet Jeux.
-            </p>
-          </Card>
-        )}
-
-        <Card title="Dotations aux amortissements">
-          <div className="overflow-x-auto -mx-4 px-4">
-            <table data-table={`synthese:dotations:${syn.moisList.length}`} className="sheet text-xs" style={{ minWidth: 900 }}>
-              <thead>
-                <tr>
-                  <th className="text-left" style={{ minWidth: 230 }}>Dotations</th>
-                  {syn.moisList.map(m => <th key={m} className="num" style={{ minWidth: 74 }}>{labelMois(m)}</th>)}
-                  <th className="num" style={{ minWidth: 96 }}>Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>Dotation du mois</td>
+                  );
+                })}
+                <tr style={{ fontWeight: 700 }}>
+                  <td className="pl-4">Total {jeu}</td>
                   {syn.moisList.map(m => {
-                    const d = dotationDuMois(immos, m);
-                    return <td key={m} className="text-right tabular-nums">{d ? euros(d) : '·'}</td>;
+                    const v = r2(totalJeuMois(jeu, m));
+                    return <td key={m} className="text-right tabular-nums">{v ? euros(v) : '·'}</td>;
                   })}
-                  <td className="text-right tabular-nums font-semibold">
-                    {euros(r2(syn.moisList.reduce((s, m) => s + dotationDuMois(immos, m), 0)))}
-                  </td>
+                  <td className="text-right tabular-nums col-total">{euros(totalJeu(jeu))}</td>
+                  <td className="text-right tabular-nums col-total">{euros(r2(totalJeu(jeu) / nbMois))}</td>
                 </tr>
-                <tr>
-                  <td style={{ color: '#6f6690' }}>Cumul sur l'exercice</td>
-                  {(() => {
-                    let cumul = 0;
-                    return syn.moisList.map(m => {
-                      cumul = r2(cumul + dotationDuMois(immos, m));
-                      return <td key={m} className="text-right tabular-nums" style={{ color: '#6f6690' }}>{euros(cumul)}</td>;
-                    });
-                  })()}
-                  <td></td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </Card>
+              </Fragment>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="total-bloc">
+              <td>TOTAL DÉPENSES JEUX ({unite})</td>
+              {syn.moisList.map(m => (
+                <td key={m} className="text-right tabular-nums">
+                  {syn.totalJeuxParMois.get(m) ? euros0(r2(syn.totalJeuxParMois.get(m)!)) : '·'}
+                </td>
+              ))}
+              <td className="text-right tabular-nums grand">{euros(grandTotal)}</td>
+              <td className="text-right tabular-nums">{euros0(r2(grandTotal / nbMois))}</td>
+            </tr>
+          </tfoot>
+        </table>
       </div>
+      <p className="text-xs mt-2" style={{ color: '#9a92b5' }}>
+        Toutes les catégories de dépenses jeux sont listées sous chaque jeu, même à zéro :
+        ce qui n'a pas encore été engagé se voit aussi. Le rattachement se fait dans la colonne
+        « Jeu » du journal ; les coûts de fabrication, eux, restent dans le Production Calculator.
+      </p>
+    </Card>
+  );
+}
 
-      {apercu && <ApercuCellule {...apercu} />}
-    </div>
+// --------------------------------------------------- Bloc immobilisations ---
+
+function BlocImmos({ syn, couleurs, unite, meta, survol, quitte, immos }: {
+  syn: ReturnType<typeof syntheseExercice>;
+  couleurs: Record<string, string>; unite: string;
+  meta: Record<string, { couleur?: string; groupe?: string }>;
+  survol: Survol; quitte: () => void;
+  immos: ReturnType<typeof immoInfos>;
+}) {
+  const t = teinteBloc('immos', couleurs);
+  const cats = [...syn.immos.keys()];
+  const grandTotal = r2([...syn.immoParMois.values()].reduce((s, v) => s + v, 0));
+  const totalDotations = r2(syn.moisList.reduce((s, m) => s + dotationDuMois(immos, m), 0));
+  if (!cats.length) return null;
+
+  return (
+    <Card
+      title={`Immobilisations — investissements (${unite})`}
+      actions={
+        <>
+          <TotalBloc label={`Investi ${unite}`} valeur={euros(grandTotal)} t={t} />
+          <BlocColorMenu bloc="immos" />
+        </>
+      }
+    >
+      <div className="overflow-x-auto -mx-4 px-4">
+        <table
+          data-table={`synthese:immos:${syn.moisList.length}`} data-bloc="immos"
+          className="sheet text-xs" style={{ minWidth: 900, ...styleBloc(t) }}
+        >
+          <thead>
+            <tr>
+              <th className="text-left" style={{ minWidth: 230 }}>Catégorie</th>
+              {syn.moisList.map(m => <th key={m} className="num" style={{ minWidth: 74 }}>{labelMois(m)}</th>)}
+              <th className="num" style={{ minWidth: 96 }}>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {cats.map(cat => (
+              <tr key={cat}>
+                <td>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="inline-block w-2.5 h-2.5 rounded-sm shrink-0"
+                      style={{ backgroundColor: meta[cat]?.couleur || t.base }} />
+                    {cat}
+                  </span>
+                </td>
+                {syn.moisList.map(m => {
+                  const v = syn.immos.get(cat)?.get(m) ?? 0;
+                  return (
+                    <td key={m} className="text-right tabular-nums"
+                      onMouseEnter={ev => survol(ev, m, `${cat} — ${labelMois(m)}`, { categorie: cat, type: 'immo' })}
+                      onMouseLeave={quitte}
+                    >
+                      {v ? euros(r2(v)) : '·'}
+                    </td>
+                  );
+                })}
+                <td className="text-right tabular-nums font-semibold col-total">
+                  {euros(r2([...(syn.immos.get(cat)?.values() ?? [])].reduce((s, v) => s + v, 0)))}
+                </td>
+              </tr>
+            ))}
+            <tr className="band-bloc">
+              <td colSpan={syn.moisList.length + 2} className="py-1">
+                Dotations aux amortissements — ce qui pèse réellement sur le résultat
+              </td>
+            </tr>
+            <tr>
+              <td>Dotation du mois</td>
+              {syn.moisList.map(m => {
+                const d = dotationDuMois(immos, m);
+                return <td key={m} className="text-right tabular-nums">{d ? euros(d) : '·'}</td>;
+              })}
+              <td className="text-right tabular-nums font-semibold col-total">{euros(totalDotations)}</td>
+            </tr>
+            <tr style={{ color: '#6f6690' }}>
+              <td>Cumul sur l'exercice</td>
+              {(() => {
+                let cumul = 0;
+                return syn.moisList.map(m => {
+                  cumul = r2(cumul + dotationDuMois(immos, m));
+                  return <td key={m} className="text-right tabular-nums">{cumul ? euros(cumul) : '·'}</td>;
+                });
+              })()}
+              <td className="col-total"></td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr className="total-bloc">
+              <td>TOTAL INVESTI ({unite})</td>
+              {syn.moisList.map(m => (
+                <td key={m} className="text-right tabular-nums">
+                  {syn.immoParMois.get(m) ? euros0(r2(syn.immoParMois.get(m)!)) : '·'}
+                </td>
+              ))}
+              <td className="text-right tabular-nums grand">{euros(grandTotal)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <p className="text-xs mt-2" style={{ color: '#9a92b5' }}>
+        Une immobilisation n'est <b>pas une charge de l'exercice</b> : c'est un investissement inscrit
+        à l'actif. Le montant apparaît le mois de l'achat, mais ce qui entre dans le résultat, c'est la
+        <b> dotation aux amortissements</b> — {euros(totalDotations)} sur cet exercice. Le détail bien
+        par bien est dans l'onglet Immobilisations.
+      </p>
+    </Card>
+  );
+}
+
+// -------------------------------------------------------- Bloc résultat ---
+
+function BlocResultat({ lignes, moisList, couleurs }: {
+  lignes: LigneResultat[]; moisList: string[]; couleurs: Record<string, string>;
+}) {
+  const t = teinteBloc('resultat', couleurs);
+  const rn = lignes.find(l => l.cle === 'rn')!;
+  const couleurValeur = (l: LigneResultat, v: number) =>
+    l.signe ? (v > 0 ? '#38761d' : v < 0 ? '#b7332e' : '#9a92b5') : undefined;
+
+  return (
+    <Card
+      title="Résultat de l'exercice (HT)"
+      actions={
+        <>
+          <TotalBloc label="Résultat net" valeur={euros(rn.total)} t={t} />
+          <BlocColorMenu bloc="resultat" />
+        </>
+      }
+    >
+      <div className="overflow-x-auto -mx-4 px-4">
+        <table
+          data-table={`synthese:resultat:${moisList.length}`} data-bloc="resultat"
+          className="sheet text-xs" style={{ minWidth: 900, ...styleBloc(t) }}
+        >
+          <thead>
+            <tr>
+              <th className="text-left" style={{ minWidth: 230 }}>Solde intermédiaire de gestion</th>
+              {moisList.map(m => <th key={m} className="num" style={{ minWidth: 74 }}>{labelMois(m)}</th>)}
+              <th className="num" style={{ minWidth: 110 }}>Exercice</th>
+            </tr>
+          </thead>
+          <tbody>
+            {lignes.filter(l => l.cle !== 'rn').map(l => (
+              <tr
+                key={l.cle}
+                className={l.niveau === 'agregat' ? 'band-bloc' : undefined}
+                title={l.aide}
+              >
+                <td className={l.niveau === 'detail' ? 'pl-4' : undefined}>
+                  <span className="inline-flex items-center gap-1.5">
+                    {l.label}
+                    {l.niveau !== 'detail' && <Info size={11} style={{ opacity: 0.5 }} />}
+                  </span>
+                </td>
+                {moisList.map(m => {
+                  const v = l.parMois?.get(m) ?? null;
+                  return (
+                    <td key={m} className="text-right tabular-nums"
+                      style={{ color: v == null ? '#c9c0e4' : couleurValeur(l, v) }}>
+                      {v == null ? '—' : v ? euros(v) : '·'}
+                    </td>
+                  );
+                })}
+                <td className="text-right tabular-nums font-semibold col-total"
+                  style={{ color: couleurValeur(l, l.total) }}>
+                  {euros(l.total)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="total-bloc">
+              <td>RÉSULTAT NET DE L'EXERCICE</td>
+              {moisList.map(m => <td key={m}></td>)}
+              <td className="text-right tabular-nums grand"
+                style={{ color: rn.total >= 0 ? '#2c5d16' : '#8f2b26' }}>
+                {euros(rn.total)}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <p className="text-xs mt-2" style={{ color: '#9a92b5' }}>
+        Enchaînement du plan comptable : <b>EBE</b> = produits − charges d'exploitation (charges externes,
+        personnel et dépenses jeux, hors frais financiers) · <b>REX</b> = EBE − dotations ·
+        <b> RC</b> = REX + produits financiers − charges financières · <b>RN</b> = RC − impôt sur les sociétés.
+        L'IS suit le barème PME (15 % jusqu'à 42 500 € de bénéfice, 25 % au-delà) et se calcule sur
+        l'année entière, d'où les cases mensuelles vides. Les immobilisations n'apparaissent pas en charges :
+        seules leurs dotations comptent.
+      </p>
+    </Card>
+  );
+}
+
+// ------------------------------------------------------------- Bloc TVA ---
+
+function BlocTVA({ syn, couleurs }: {
+  syn: ReturnType<typeof syntheseExercice>; couleurs: Record<string, string>;
+}) {
+  const t = teinteBloc('tva', couleurs);
+  const total = (m: Map<string, number>) => r2([...m.values()].reduce((s, v) => s + v, 0));
+
+  // La TVA vient directement des écritures : elle ne dépend pas du bouton HT/TTC.
+  const collectee = syn.tvaCollecteeParMois;
+  const deductible = syn.tvaDeductibleParMois;
+  const solde = new Map(syn.moisList.map(m =>
+    [m, r2((collectee.get(m) ?? 0) - (deductible.get(m) ?? 0))]));
+  const totalSolde = total(solde);
+
+  const couleurSolde = (v: number) => v > 0 ? '#b7332e' : v < 0 ? '#38761d' : '#9a92b5';
+
+  const rows: { label: string; data: Map<string, number>; couleur?: (v: number) => string | undefined }[] = [
+    { label: 'Dépenses HT soumises à TVA', data: syn.baseTVADepensesParMois },
+    { label: 'TVA déductible (sur achats)', data: deductible },
+    { label: 'Produits HT soumis à TVA', data: syn.baseTVAProduitsParMois },
+    { label: 'TVA collectée (sur ventes)', data: collectee },
+  ];
+
+  return (
+    <Card
+      title="TVA de l'exercice"
+      actions={
+        <>
+          <TotalBloc
+            label={totalSolde > 0 ? 'À reverser' : 'Crédit de TVA'}
+            valeur={euros(Math.abs(totalSolde))} t={t}
+          />
+          <BlocColorMenu bloc="tva" />
+        </>
+      }
+    >
+      <div className="overflow-x-auto -mx-4 px-4">
+        <table
+          data-table={`synthese:tva:${syn.moisList.length}`} data-bloc="tva"
+          className="sheet text-xs" style={{ minWidth: 900, ...styleBloc(t) }}
+        >
+          <thead>
+            <tr>
+              <th className="text-left" style={{ minWidth: 230 }}>TVA</th>
+              {syn.moisList.map(m => <th key={m} className="num" style={{ minWidth: 74 }}>{labelMois(m)}</th>)}
+              <th className="num" style={{ minWidth: 110 }}>Exercice</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r => (
+              <tr key={r.label}>
+                <td>{r.label}</td>
+                {syn.moisList.map(m => {
+                  const v = r.data.get(m) ?? 0;
+                  return <td key={m} className="text-right tabular-nums">{v ? euros(r2(v)) : '·'}</td>;
+                })}
+                <td className="text-right tabular-nums font-semibold col-total">{euros(total(r.data))}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="total-bloc">
+              <td>{totalSolde > 0 ? 'TVA À REVERSER À L\'ÉTAT' : 'CRÉDIT DE TVA — L\'ÉTAT TE DOIT'}</td>
+              {syn.moisList.map(m => {
+                const v = solde.get(m) ?? 0;
+                return (
+                  <td key={m} className="text-right tabular-nums" style={{ color: couleurSolde(v) }}>
+                    {v ? euros0(v) : '·'}
+                  </td>
+                );
+              })}
+              <td className="text-right tabular-nums grand" style={{ color: couleurSolde(totalSolde) }}>
+                {euros(totalSolde)}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <p className="text-xs mt-2" style={{ color: '#9a92b5' }}>
+        Solde = TVA collectée − TVA déductible. <b style={{ color: '#b7332e' }}>Positif (rouge)</b> : tu dois
+        la différence à l'État. <b style={{ color: '#38761d' }}>Négatif (vert)</b> : c'est un crédit de TVA,
+        l'État te le doit. Le détail mois par mois, avec le cumul, est dans l'onglet TVA.
+      </p>
+    </Card>
   );
 }
