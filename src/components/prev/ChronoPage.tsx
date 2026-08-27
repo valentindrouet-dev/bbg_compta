@@ -3,21 +3,21 @@ import { Plus, Trash2, GripHorizontal, CalendarDays, FolderPlus, ChevronUp, Chev
 } from 'lucide-react';
 import { useStore } from '../../store';
 import { useEtatVue } from '../../utils/etatVue';
+import { COULEURS_JEUX, couleurJeu } from '../../utils/jeux';
+import { memeJeu } from '../../utils/previsionnel';
 import type { ChronoEvent } from '../../types';
 import { formatDateFR, todayISO } from '../../utils/dates';
 import { PageHeader, Card, Btn, useSort, sortBy, ThSort } from '../ui';
 
-// Palette catégorielle validée (dataviz) — une couleur par projet
-const COLORS = ['#674ea7', '#e69138', '#38761d', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948'];
-
 /**
  * Couleur par défaut d'un projet, tirée de son NOM et non de son rang : ajouter
- * ou monter un projet ne repeint plus toute la frise.
+ * ou monter un projet ne repeint plus toute la frise. C'est la même palette
+ * pastel que les jeux, pour que la frise et les tableaux se répondent.
  */
 function couleurParDefaut(projet: string): string {
   let h = 0;
   for (const car of projet) h = (h * 31 + car.charCodeAt(0)) >>> 0;
-  return COLORS[h % COLORS.length];
+  return COULEURS_JEUX[h % COULEURS_JEUX.length];
 }
 
 /** Références stables : un `?? {}` dans un sélecteur reboucle à l'infini. */
@@ -106,8 +106,30 @@ export function ChronoPage() {
   const ordreProjets = useStore(s => s.referentiels.chronoProjets) ?? SANS_ORDRE;
   const couleursProjets = useStore(s => s.referentiels.chronoCouleurs) ?? SANS_COULEUR;
   const setCouleurProjet = useStore(s => s.setCouleurProjet);
-  /** La couleur du projet : la sienne, sinon celle que son nom lui vaut. */
-  const couleurDe = (projet: string) => couleursProjets[projet] || couleurParDefaut(projet);
+  const refs = useStore(s => s.referentiels);
+  const setJeuMeta = useStore(s => s.setJeuMeta);
+
+  /** Le jeu du catalogue que ce projet désigne, s'il en désigne un. */
+  const jeuDuProjet = (projet: string) =>
+    (refs.jeux ?? []).find(j => memeJeu(j, projet)) ?? '';
+
+  /**
+   * La couleur du projet. Quand le projet EST un jeu, c'est la couleur du jeu
+   * qui commande — celle choisie dans l'onglet Jeux, la même partout. Sinon,
+   * celle réglée ici, ou celle que son nom lui vaut.
+   */
+  const couleurDe = (projet: string) => {
+    const jeu = jeuDuProjet(projet);
+    if (jeu) return couleurJeu(jeu, refs);
+    return couleursProjets[projet] || couleurParDefaut(projet);
+  };
+
+  /** Peindre un projet : si c'est un jeu, la couleur part dans sa fiche. */
+  const peindre = (projet: string, couleur: string) => {
+    const jeu = jeuDuProjet(projet);
+    if (jeu) setJeuMeta(jeu, { couleur });
+    else setCouleurProjet(projet, couleur);
+  };
   const addChrono = useStore(s => s.addChrono);
   const updateChrono = useStore(s => s.updateChrono);
   const updateChronos = useStore(s => s.updateChronos);
@@ -353,22 +375,24 @@ export function ChronoPage() {
                       <label
                         className="inline-block w-3.5 h-3.5 rounded-sm shrink-0 cursor-pointer border"
                         style={{ backgroundColor: couleur, borderColor: 'var(--bbg-border)' }}
-                        title="Changer la couleur de ce projet"
+                        title={jeuDuProjet(g)
+                          ? `Couleur de ${jeuDuProjet(g)} — la même dans tout le site`
+                          : 'Changer la couleur de ce projet'}
                       >
                         <input
                           type="color" className="opacity-0 w-0 h-0 block"
                           value={couleur}
-                          onChange={ev => setCouleurProjet(g, ev.target.value)}
+                          onChange={ev => peindre(g, ev.target.value)}
                         />
                       </label>
                       <span className="flex items-center gap-0.5 shrink-0">
-                        {COLORS.map(c => (
+                        {COULEURS_JEUX.map(c => (
                           <button
                             key={c}
                             className="w-2.5 h-2.5 rounded-sm opacity-0 group-hover/projet:opacity-100"
                             style={{ backgroundColor: c, outline: c === couleur ? '1.5px solid var(--bbg-purple-darker)' : 'none' }}
                             title={`Peindre ${g} en ${c}`}
-                            onClick={() => setCouleurProjet(g, c)}
+                            onClick={() => peindre(g, c)}
                           />
                         ))}
                       </span>

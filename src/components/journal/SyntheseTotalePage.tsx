@@ -13,6 +13,7 @@ import {
 } from '../../utils/previsionnel';
 import type { PrevSection } from '../../types';
 import { useEtatVue } from '../../utils/etatVue';
+import { couleurJeu, encreSur } from '../../utils/jeux';
 import { PageHeader, Card, TotalBloc, BlocColorMenu, styleBloc } from '../ui';
 
 /** Un bloc de la synthèse, mais avec une colonne par exercice. */
@@ -401,8 +402,12 @@ export function SyntheseTotalePage() {
                       const postes = bloc.parJeu!.get(jeu)!;
                       return (
                         <Fragment key={`jeu-${jeu}`}>
-                          <tr className="band-bloc">
-                            <td colSpan={colonnes.length + 2} className="py-1">
+                          <tr>
+                            <td colSpan={colonnes.length + 2} className="py-1 font-bold"
+                              style={{
+                                backgroundColor: couleurJeu(jeu, refs),
+                                color: encreSur(couleurJeu(jeu, refs)),
+                              }}>
                               <span className="inline-flex items-center gap-1.5">
                                 <Gamepad2 size={13} /> {jeu}
                               </span>

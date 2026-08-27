@@ -966,12 +966,20 @@ export const useStore = create<AppState>()(
           entries: s.entries.map(e => e.jeu === name ? { ...e, jeu: '' } : e),
         };
       }),
-      setJeuMeta: (jeu, patch) => set(s => ({
-        referentiels: {
-          ...s.referentiels,
-          jeuxMeta: { ...(s.referentiels.jeuxMeta ?? {}), [jeu]: { ...(s.referentiels.jeuxMeta ?? {})[jeu], ...patch } },
-        },
-      })),
+      setJeuMeta: (jeu, patch) => set(s => {
+        const suivant = { ...(s.referentiels.jeuxMeta ?? {})[jeu], ...patch };
+        // Une clé mise à `undefined` est retirée : c'est ainsi qu'on revient à
+        // la couleur automatique.
+        for (const [k, v] of Object.entries(patch)) {
+          if (v === undefined) delete (suivant as Record<string, unknown>)[k];
+        }
+        return {
+          referentiels: {
+            ...s.referentiels,
+            jeuxMeta: { ...(s.referentiels.jeuxMeta ?? {}), [jeu]: suivant },
+          },
+        };
+      }),
       addPaiement: (name) => set(s => {
         if (!name.trim() || s.referentiels.paiements.includes(name.trim())) return s;
         return { referentiels: { ...s.referentiels, paiements: [...s.referentiels.paiements, name.trim()] } };

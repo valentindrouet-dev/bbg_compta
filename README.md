@@ -76,7 +76,8 @@ sont recalculés en direct à partir des écritures.
   toutes les étapes qui portent le même nom. Chaque **projet** se renomme, se
   monte, se descend et se supprime depuis son bandeau ; `Nouveau projet` en
   crée un. La **couleur** d'un projet se choisit sur sa pastille et **suit son
-  nom**, pas son rang : réordonner ou renommer ne repeint plus la frise
+  nom**, pas son rang ; quand le projet est un jeu du catalogue, c'est la
+  couleur du jeu qui commande, et la repeindre ici l'écrit dans sa fiche
 
 **Outils**
 - **Exports** — les quatre exports d'un coup dans une archive `.zip`
@@ -94,6 +95,12 @@ sont recalculés en direct à partir des écritures.
 - **L'en-tête reste en haut** : le titre, les bascules HT/TTC et
   détaillée/simplifiée, et les **onglets** (mois du journal, exercices ailleurs)
   restent visibles quand on descend dans un long tableau.
+- **Une couleur par jeu, choisie une fois** : dans l'onglet **Jeux**, la
+  pastille de chaque jeu ouvre la palette pastel (ou un sélecteur libre). Cette
+  couleur est reprise **partout** : bandeaux de la synthèse annuelle et de la
+  synthèse totale, du prévisionnel, pastille de la colonne « Jeu » du journal,
+  barres et bandeaux de la chronologie. Elle suit le jeu quand on le renomme,
+  et « auto » revient à la teinte déduite de son nom.
 - **Rien ne se remet en place tout seul** : le tri d'un tableau (colonne et
   sens) est retrouvé en revenant sur la page, comme les onglets et les bascules.
 - **Un poste de jeu se budgète jeu par jeu** : dans le prévisionnel, taper une

@@ -4,6 +4,7 @@ import {
 } from 'recharts';
 import { Plus, Trash2, Gamepad2, ExternalLink, Link2 } from 'lucide-react';
 import { useStore } from '../../store';
+import { COULEURS_JEUX, couleurJeu, encreSur, voileSur } from '../../utils/jeux';
 import { labelMois, formatDateFR, compareMois, EXERCICES } from '../../utils/dates';
 import { euros, euros0, r2, pourcent } from '../../utils/money';
 import { bilanJeux } from '../../utils/calc';
@@ -138,7 +139,10 @@ export function JeuxPage() {
                       >
                         <td className="font-semibold" style={{ color: 'var(--bbg-purple-darker)' }}>
                           <span className="inline-flex items-center gap-1.5">
-                            <Gamepad2 size={14} style={{ color: 'var(--bbg-orange-dark)' }} />
+                            <span className="inline-block w-3 h-3 rounded-sm shrink-0"
+                              style={{ backgroundColor: couleurJeu(b.jeu, refs) }}
+                              title={`Couleur de ${b.jeu}`} />
+                            <Gamepad2 size={14} style={{ color: encreSur(couleurJeu(b.jeu, refs)) }} />
                             {b.jeu}
                             {lienDe(b.jeu) && (
                               <a
@@ -330,10 +334,23 @@ export function JeuxPage() {
           <Card title="Catalogue des jeux">
             <ul className="space-y-2.5 mb-3">
               {jeux.map(j => (
-                <li key={j} className="group">
+                <li key={j} className="group rounded-md px-1.5 py-1"
+                  style={{ backgroundColor: voileSur(couleurJeu(j, refs), 0.5) }}>
                   <div className="flex items-center gap-1">
+                    {/* La couleur du jeu : choisie ici, reprise partout. */}
+                    <label
+                      className="w-5 h-5 rounded shrink-0 cursor-pointer border"
+                      style={{ backgroundColor: couleurJeu(j, refs), borderColor: 'var(--bbg-border)' }}
+                      title={`Couleur de ${j} — la même dans tout le site`}
+                    >
+                      <input
+                        type="color" className="opacity-0 w-0 h-0 block"
+                        value={couleurJeu(j, refs)}
+                        onChange={ev => setJeuMeta(j, { couleur: ev.target.value })}
+                      />
+                    </label>
                     <input
-                      className="flex-1 border rounded px-2 py-1 text-sm font-medium"
+                      className="flex-1 border rounded px-2 py-1 text-sm font-medium bg-white"
                       style={{ borderColor: 'var(--bbg-border-soft)' }}
                       defaultValue={j}
                       onBlur={ev => { const v = ev.target.value.trim(); if (v && v !== j) renameJeu(j, v); }}
@@ -354,6 +371,29 @@ export function JeuxPage() {
                       onClick={() => { if (confirm(`Retirer « ${j} » du catalogue ?`)) removeJeu(j); }}
                     >
                       <Trash2 size={13} />
+                    </button>
+                  </div>
+                  {/* La palette pastel de l'app, au survol de la carte. */}
+                  <div className="flex items-center gap-0.5 mt-1 opacity-0 group-hover:opacity-100">
+                    {COULEURS_JEUX.map(c => (
+                      <button
+                        key={c}
+                        className="w-4 h-4 rounded-sm border"
+                        style={{
+                          backgroundColor: c,
+                          borderColor: c === couleurJeu(j, refs) ? 'var(--bbg-purple-darker)' : 'var(--bbg-border-soft)',
+                          outline: c === couleurJeu(j, refs) ? '1.5px solid var(--bbg-purple-darker)' : 'none',
+                        }}
+                        title={`Peindre ${j} en ${c}`}
+                        onClick={() => setJeuMeta(j, { couleur: c })}
+                      />
+                    ))}
+                    <button
+                      className="text-[10px] underline ml-1" style={{ color: '#9a92b5' }}
+                      title="Revenir à la couleur déduite du nom"
+                      onClick={() => setJeuMeta(j, { couleur: undefined })}
+                    >
+                      auto
                     </button>
                   </div>
                   <div className="flex items-center gap-1 mt-1">

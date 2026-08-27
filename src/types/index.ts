@@ -179,6 +179,12 @@ export interface JeuMeta {
   /** URL du jeu dans le Production Calculator (devis usine, scénarios de vente). */
   lienProd?: string;
   note?: string;
+  /**
+   * La couleur du jeu, choisie une fois dans l'onglet Jeux et reprise partout :
+   * journal, synthèse, prévisionnel, chronologie. Elle suit le jeu quand on le
+   * renomme.
+   */
+  couleur?: string;
 }
 
 export interface Referentiels {

@@ -4,6 +4,7 @@ import {
 } from 'lucide-react';
 import { useStore } from '../../store';
 import { useEtatVue } from '../../utils/etatVue';
+import { couleurJeu, encreSur } from '../../utils/jeux';
 import type { JournalEntry } from '../../types';
 import {
   EXERCICES, moisExercice, labelMois, labelMoisLong, moisCourant, exerciceDuMois, PRE_IMMAT,
@@ -723,8 +724,15 @@ function Row({ e, kind, categories, isSelected, onToggleRow, clip, onCopy, onPas
       </td>
       {kind === 'jeux' && (
         <td>
+          {/* La pastille prend la couleur du jeu, celle choisie dans l'onglet Jeux. */}
           <select
-            className="pill-yellow" style={colStyle(formats.jeu)}
+            style={{
+              ...colStyle(formats.jeu),
+              backgroundColor: e.jeu ? couleurJeu(e.jeu, refs) : undefined,
+              color: e.jeu ? encreSur(couleurJeu(e.jeu, refs)) : undefined,
+              fontWeight: e.jeu ? 600 : undefined,
+            }}
+            className={e.jeu ? undefined : 'pill-yellow'}
             value={e.jeu ?? ''} onChange={ev => update(e.id, { jeu: ev.target.value })}
           >
             <option value="">— non rattaché —</option>

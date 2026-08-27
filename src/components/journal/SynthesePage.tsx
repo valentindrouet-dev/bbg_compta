@@ -4,6 +4,7 @@ import {
   ArrowRight, GripVertical, } from 'lucide-react';
 import { useStore } from '../../store';
 import { useReorganisation } from '../../utils/glisser';
+import { couleurJeu, encreSur } from '../../utils/jeux';
 import { EXERCICES, labelMois, moisExercice, formatDateFR } from '../../utils/dates';
 import { euros, euros0, r2 } from '../../utils/money';
 import {
@@ -388,8 +389,12 @@ export function SynthesePage({ onAllerA }: { onAllerA?: (page: Page, ligne: stri
                         const postes = bloc.parJeu!.get(jeu)!;
                         return (
                         <Fragment key={`jeu-${jeu}`}>
-                          <tr className="band-bloc">
-                            <td colSpan={syn.moisList.length + 3} className="py-1">
+                          <tr>
+                            <td colSpan={syn.moisList.length + 3} className="py-1 font-bold"
+                              style={{
+                                backgroundColor: couleurJeu(jeu, refs),
+                                color: encreSur(couleurJeu(jeu, refs)),
+                              }}>
                               <span className="inline-flex items-center gap-1.5">
                                 <Gamepad2 size={13} /> {jeu}
                               </span>
@@ -533,7 +538,8 @@ function BlocImmos({ syn, couleurs, unite, meta, survol, quitte, immos, simple }
   const catsJeux = new Set(
     [...syn.immosParJeuEtCategorie.values()].flatMap(m => [...m.keys()]));
   const catsHorsJeux = cats.filter(c => !catsJeux.has(c));
-  const catalogue = useStore(st => st.referentiels.jeux) ?? AUCUN_JEU;
+  const refsJeux = useStore(st => st.referentiels);
+  const catalogue = refsJeux.jeux ?? AUCUN_JEU;
   const brutsJeux = [...syn.immosParJeuEtCategorie.keys()];
   const jeuxImmo = [
     ...catalogue.filter(j => brutsJeux.includes(j)),
@@ -603,8 +609,12 @@ function BlocImmos({ syn, couleurs, unite, meta, survol, quitte, immos, simple }
                 chaque jeu a coûté. */}
             {!simple && jeuxImmo.map(jeu => (
               <Fragment key={`immojeu-${jeu}`}>
-                <tr className="band-bloc">
-                  <td colSpan={syn.moisList.length + 2} className="py-1">
+                <tr>
+                  <td colSpan={syn.moisList.length + 2} className="py-1 font-bold"
+                    style={{
+                      backgroundColor: couleurJeu(jeu, refsJeux),
+                      color: encreSur(couleurJeu(jeu, refsJeux)),
+                    }}>
                     <span className="inline-flex items-center gap-1.5">
                       <Gamepad2 size={13} /> {jeu} — développement à l'actif
                     </span>

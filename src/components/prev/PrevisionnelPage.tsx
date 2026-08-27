@@ -6,6 +6,7 @@ import {
 import { useStore } from '../../store';
 import { BAREME_TNS, cotisationsTNS } from '../../utils/tns';
 import { useReorganisation } from '../../utils/glisser';
+import { couleurJeu, encreSur } from '../../utils/jeux';
 import type {
   FormuleHeuresTaux, FormulePourcentage, FormulePrev, PrevLigne, PrevSection,
 } from '../../types';
@@ -488,9 +489,14 @@ export function PrevisionnelPage() {
                       {ordre.map(g => (
                         <Fragment key={`${sec.cle}-${g}`}>
                           {avecGroupes && (
-                            <tr className="band-bloc"
+                            <tr className={estJeu(g) ? undefined : 'band-bloc'}
                               {...(g ? reorg.ligne(estJeu(g) ? 'jeu' : 'groupe', g) : {})}>
-                              <td colSpan={moisList.length + 5} className="py-1">
+                              <td colSpan={moisList.length + 5} className="py-1"
+                                style={estJeu(g) ? {
+                                  backgroundColor: couleurJeu(g, refs),
+                                  color: encreSur(couleurJeu(g, refs)),
+                                  fontWeight: 700,
+                                } : undefined}>
                                 <span className="inline-flex items-center gap-1.5">
                                   {g && (
                                     <span className="poignee-glisse" {...reorg.poignee()}
@@ -549,8 +555,8 @@ export function PrevisionnelPage() {
                                         className="text-[10px] px-0.5"
                                         style={{
                                           flex: '0 0 auto', width: 86,
-                                          backgroundColor: l.jeu ? 'var(--bbg-yellow-light)' : '#fde3e1',
-                                          color: l.jeu ? 'var(--bbg-yellow-dark)' : '#b7332e',
+                                          backgroundColor: l.jeu ? couleurJeu(l.jeu, refs) : '#fde3e1',
+                                          color: l.jeu ? encreSur(couleurJeu(l.jeu, refs)) : '#b7332e',
                                         }}
                                         value={l.jeu ?? ''}
                                         title={l.jeu
