@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { FileSpreadsheet, FileText, FileJson, Table, FileArchive, Loader2 } from 'lucide-react';
+import { FileSpreadsheet, FileText, FileJson, Table, FileArchive, Loader2, Share2, Lock } from 'lucide-react';
 import { useStore } from '../../store';
 import { EXERCICES } from '../../utils/dates';
-import { exportExcel, exportCSV, exportPDF, exportBackup, exportTout } from '../../utils/export';
+import { exportExcel, exportCSV, exportPDF, exportBackup, exportTout, exportPartage } from '../../utils/export';
 import { formatTaille } from '../../utils/files';
 import { PageHeader, Card, Btn } from '../ui';
 
@@ -12,6 +12,7 @@ export function ExportsPage() {
   const [avecFactures, setAvecFactures] = useState(true);
   const [enCours, setEnCours] = useState(false);
   const [resultat, setResultat] = useState<string | null>(null);
+  const [partage, setPartage] = useState<string | null>(null);
 
   async function toutExporter() {
     setEnCours(true);
@@ -82,6 +83,39 @@ export function ExportsPage() {
               sauvegarde autonome et restaurable, prends celle du bloc plus bas.
             </p>
           )}
+        </Card>
+
+        <Card
+          className="border-2"
+          title={
+            <span className="inline-flex items-center gap-2">
+              <Share2 size={18} style={{ color: 'var(--bbg-green-dark)' }} />
+              Version partageable pour le comptable (lecture seule)
+            </span>
+          }
+        >
+          <p className="text-sm text-[#5c5280] mb-3">
+            Un <b>seul fichier HTML</b> qui contient tout l'exercice {exercice} : synthèse par bloc,
+            compte de résultat, TVA, journal détaillé, immobilisations et contrôles comptables.
+            Il s'ouvre d'un double-clic dans n'importe quel navigateur, <b>rien n'est modifiable</b>,
+            et il n'envoie rien sur Internet. Pour lui donner une adresse partageable, dépose-le sur
+            ton Drive et partage le lien — ou imprime-le en PDF depuis le navigateur.
+          </p>
+          <div className="flex items-center gap-3">
+            <Btn variant="primary" onClick={() => {
+              const r = exportPartage(state, exercice);
+              setPartage(`${r.nom} — ${formatTaille(r.taille)}`);
+            }}>
+              <span className="inline-flex items-center gap-1.5">
+                <Lock size={14} /> Générer la copie lecture seule
+              </span>
+            </Btn>
+            {partage && <span className="text-xs text-[#38761d]">{partage}</span>}
+          </div>
+          <p className="text-xs text-[#9a92b5] mt-2">
+            Ce fichier contient tes chiffres : ne le mets pas sur une page publique. Un lien Drive
+            restreint aux personnes invitées est ce qu'il faut pour ton comptable.
+          </p>
         </Card>
 
         <Card title={<span className="inline-flex items-center gap-2"><FileSpreadsheet size={18} className="text-[#38761d]" /> Excel / Google Sheets</span>}>

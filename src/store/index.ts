@@ -6,7 +6,7 @@ import type {
 } from '../types';
 import { estLigneCalculee, migrerBudgets, sectionDeCategorie } from '../utils/previsionnel';
 import { CATEGORIES_PERSONNEL_INITIALES, GROUPE_PERSONNEL } from '../utils/blocs';
-import { moisExercice } from '../utils/dates';
+import { moisExercice, PREMIER_EXERCICE } from '../utils/dates';
 import seedJournal from '../data/journal.json';
 import seedReferentiels from '../data/referentiels.json';
 import seedBudgets from '../data/budgets.json';
@@ -107,6 +107,8 @@ export interface AppState {
 
   // ----- Prévisionnel -----
   setPrevCell: (exercice: string, ligneId: string, moisIdx: number, value: number | null) => void;
+  /** Vide d'un coup plusieurs cellules — une seule étape dans l'annulation. */
+  viderPrevCells: (exercice: string, cells: { ligneIdx: number; moisIdx: number }[]) => void;
   addPrevLigne: (exercice: string, categorie: string, section?: PrevSection, jeu?: string) => void;
   updatePrevLigne: (exercice: string, ligneId: string, patch: Partial<PrevLigne>) => void;
   removePrevLigne: (exercice: string, ligneId: string) => void;
@@ -151,8 +153,11 @@ function seedState() {
     finances: structuredClone(seedTresorerie.mouvementsFinanciers) as FinanceEntry[],
     referentiels: refs,
     budgets: structuredClone(seedBudgets) as unknown as Record<string, BudgetExercice>,
+    // Seul l'exercice en cours est repris du tableur : les quatre suivants
+    // repartent d'une feuille blanche, à remplir au fil de l'eau.
     previsionnels: migrerBudgets(
-      structuredClone(seedBudgets) as unknown as Record<string, BudgetExercice>, refs),
+      { [PREMIER_EXERCICE]: (structuredClone(seedBudgets) as unknown as Record<string, BudgetExercice>)[PREMIER_EXERCICE] },
+      refs),
     chronologie: structuredClone(seedChronologie) as ChronoEvent[],
     tresoPrev: structuredClone(seedTresorerie.previsionnel) as TresoPrevLine[],
     journalFormats: {} as Record<string, ColFormat>,
@@ -385,6 +390,24 @@ export const useStore = create<AppState>()(
             : l),
         },
       })),
+      viderPrevCells: (exercice, cells) => set(s => {
+        const lignes = s.previsionnels[exercice] ?? [];
+        const parLigne = new Map<number, Set<number>>();
+        for (const c of cells) {
+          if (!parLigne.has(c.ligneIdx)) parLigne.set(c.ligneIdx, new Set());
+          parLigne.get(c.ligneIdx)!.add(c.moisIdx);
+        }
+        return {
+          previsionnels: {
+            ...s.previsionnels,
+            [exercice]: lignes.map((l, i) => {
+              const mois = parLigne.get(i);
+              if (!mois) return l;
+              return { ...l, valeurs: l.valeurs.map((v, j) => mois.has(j) ? null : v) };
+            }),
+          },
+        };
+      }),
       addPrevLigne: (exercice, categorie, section, jeu) => set(s => {
         const nMois = moisExercice(exercice).length;
         const ligne: PrevLigne = {
@@ -556,7 +579,7 @@ export const useStore = create<AppState>()(
     },
     {
       name: 'bbg-compta-v1',
-      version: 6,
+      version: 7,
       // v2 : ajout de la liste des jeux et rattachement des dépenses de
       // développement au jeu concerné (déduit des mots clés / de la catégorie).
       migrate: (persisted, version) => {
@@ -583,6 +606,10 @@ export const useStore = create<AppState>()(
           s.previsionnels = Object.fromEntries(
             Object.entries(s.previsionnels).map(([ex, lignes]) =>
               [ex, (lignes ?? []).filter(l => !estLigneCalculee(l.categorie))]));
+        }
+        // v7 : on repart d'un prévisionnel vierge pour les exercices à venir.
+        if (version < 7 && s.previsionnels) {
+          s.previsionnels = { [PREMIER_EXERCICE]: s.previsionnels[PREMIER_EXERCICE] ?? [] };
         }
         return s;
       },

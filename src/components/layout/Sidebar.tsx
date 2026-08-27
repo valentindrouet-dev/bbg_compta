@@ -1,7 +1,7 @@
 import {
   Coins, LayoutDashboard, NotebookPen, Table2, Building2, Wallet, Percent,
   UserRound, Target, GitCompareArrows, Landmark, CalendarRange, FileDown, Settings, Store, Tags, Gamepad2,
-  ReceiptText,
+  ReceiptText, TrendingUp,
 } from 'lucide-react';
 import type { Page } from '../../App';
 import { APP_VERSION } from '../../version';
@@ -33,6 +33,7 @@ const NAV: { section: string; items: { page: Page; label: string; icon: typeof C
     section: 'Prévisionnel 2025-30',
     items: [
       { page: 'budgets', label: 'Prévisionnel', icon: Target },
+      { page: 'cinqans', label: 'Vue 5 ans', icon: TrendingUp },
       { page: 'reelprevu', label: 'Réel vs Prévu', icon: GitCompareArrows },
       { page: 'tresoprev', label: 'Trésorerie prév.', icon: Landmark },
       { page: 'chrono', label: 'Chronologie', icon: CalendarRange },

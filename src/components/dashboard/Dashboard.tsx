@@ -9,11 +9,15 @@ import { EXERCICES, labelMois, moisExercice, moisCourant } from '../../utils/dat
 import { euros, euros0, r2 } from '../../utils/money';
 import { syntheseExercice, tableauTreso, tableauTVA, moisTresorerie } from '../../utils/calc';
 import { PageHeader, Card, StatCard, Btn } from '../ui';
+import { teinte } from '../../utils/couleurs';
 
-// Couleurs reprises des tableurs BBG (trio validé pour la vision des couleurs) :
-// vert = produits / CA, pêche-orange = charges, violet = trésorerie.
-const C_PRODUITS = '#38761d';
-const C_DEPENSES = '#e69138';
+// Couleurs choisies par Valentin pour l'accueil : menthe = produits,
+// pêche = dépenses. Les traits et les étiquettes prennent la version foncée
+// de la même teinte, sinon un pastel sur fond blanc ne se lit pas.
+export const C_PRODUITS = '#b0f0da';
+export const C_DEPENSES = '#fce5cd';
+const C_PRODUITS_TRAIT = teinte(C_PRODUITS).bord;
+const C_DEPENSES_TRAIT = teinte(C_DEPENSES).bord;
 const C_TRESO = '#674ea7';
 const INK_MUTED = '#6f6690';
 const GRID = '#ddd6ef';
@@ -99,8 +103,8 @@ export function Dashboard({ onNavigate }: { onNavigate: (p: Page) => void }) {
               <Legend
                 formatter={(v: string) => <span style={{ color: '#3f3268', fontSize: 12 }}>{v === 'produits' ? 'Produits' : 'Dépenses (charges + jeux + immo)'}</span>}
               />
-              <Bar dataKey="produits" fill={C_PRODUITS} radius={[4, 4, 0, 0]} maxBarSize={18} />
-              <Bar dataKey="depenses" fill={C_DEPENSES} radius={[4, 4, 0, 0]} maxBarSize={18} />
+              <Bar dataKey="produits" fill={C_PRODUITS} stroke={C_PRODUITS_TRAIT} radius={[4, 4, 0, 0]} maxBarSize={18} />
+              <Bar dataKey="depenses" fill={C_DEPENSES} stroke={C_DEPENSES_TRAIT} radius={[4, 4, 0, 0]} maxBarSize={18} />
             </BarChart>
           </ResponsiveContainer>
         </Card>
@@ -135,7 +139,7 @@ export function Dashboard({ onNavigate }: { onNavigate: (p: Page) => void }) {
                 formatter={(v: number) => [euros(v), 'Total HT']}
                 contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${GRID}` }}
               />
-              <Bar dataKey="ht" fill={C_DEPENSES} radius={[0, 4, 4, 0]} maxBarSize={16}>
+              <Bar dataKey="ht" fill={C_DEPENSES} stroke={C_DEPENSES_TRAIT} radius={[0, 4, 4, 0]} maxBarSize={16}>
                 {data.top.map((c, i) => <Cell key={i} fillOpacity={c.cat === 'Autres catégories' ? 0.45 : 1} />)}
                 <LabelList dataKey="ht" position="right" formatter={(v: number) => euros0(v)}
                   style={{ fontSize: 11, fill: '#3f3268' }} />

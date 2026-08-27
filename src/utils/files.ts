@@ -110,7 +110,56 @@ export async function tailleTotale(): Promise<{ nb: number; octets: number }> {
 export function formatTaille(octets: number): string {
   if (octets < 1024) return `${octets} o`;
   if (octets < 1024 * 1024) return `${(octets / 1024).toFixed(0)} Ko`;
-  return `${(octets / (1024 * 1024)).toFixed(1)} Mo`;
+  if (octets < 1024 * 1024 * 1024) return `${(octets / (1024 * 1024)).toFixed(1)} Mo`;
+  return `${(octets / (1024 * 1024 * 1024)).toFixed(2)} Go`;
+}
+
+// ----- Place disponible ---------------------------------------------------
+
+export interface Quota {
+  /** Place totale que le navigateur accorde à ce site, en octets. */
+  quota: number | null;
+  /** Place déjà occupée par ce site (fichiers + données), en octets. */
+  utilise: number | null;
+  /** Le navigateur a-t-il promis de ne pas effacer ces données ? */
+  persistant: boolean;
+  /** Le navigateur ne sait pas répondre (Safari ancien, mode privé…). */
+  inconnu: boolean;
+}
+
+/**
+ * Combien de place reste-t-il pour les factures ?
+ *
+ * Les navigateurs n'imposent pas une taille fixe : ils accordent une part de
+ * l'espace disque libre (souvent 60 % sur Chrome et Edge, 10 % du disque avec
+ * un plafond de 2 Go sur Firefox, environ 1 Go sur Safari avant de demander
+ * l'autorisation d'aller plus loin). `navigator.storage.estimate()` donne le
+ * chiffre réel de la machine, c'est le seul qui compte.
+ */
+export async function placeDisponible(): Promise<Quota> {
+  const st = navigator.storage;
+  const persistant = st?.persisted ? await st.persisted().catch(() => false) : false;
+  if (!st?.estimate) return { quota: null, utilise: null, persistant, inconnu: true };
+  try {
+    const { quota, usage } = await st.estimate();
+    return {
+      quota: quota ?? null,
+      utilise: usage ?? null,
+      persistant,
+      inconnu: quota == null,
+    };
+  } catch {
+    return { quota: null, utilise: null, persistant, inconnu: true };
+  }
+}
+
+/**
+ * Demande au navigateur de ne pas effacer les données de l'app quand il fait
+ * de la place. Accordé sans question sur un site installé ou souvent visité.
+ */
+export async function demanderPersistance(): Promise<boolean> {
+  if (!navigator.storage?.persist) return false;
+  try { return await navigator.storage.persist(); } catch { return false; }
 }
 
 // ----- Sauvegarde / restauration (base64) --------------------------------

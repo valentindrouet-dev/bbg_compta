@@ -8,6 +8,7 @@ import { r2 } from './money';
 import { syntheseExercice, immoInfos, tableauTVA, tableauTreso, moisTresorerie } from './calc';
 import { exporterFichiers, importerFichiers, listFiles, type FichierSerialise } from './files';
 import { creerZip, nomSur, type FichierZip } from './zip';
+import { pageLectureSeule } from './partage';
 
 function download(name: string, blob: Blob) {
   const url = URL.createObjectURL(blob);
@@ -299,6 +300,20 @@ export async function exportBackup(state: AppState, avecFichiers = true) {
   download(`BBG_Compta_sauvegarde_${today()}.json`, await blobBackup(state, avecFichiers));
 }
 
+// --------------------------------------------- Version partageable (HTML) --
+
+/** Le fichier à envoyer au comptable : tout est dedans, rien n'est modifiable. */
+export function blobPartage(state: AppState, exercice: string): Blob {
+  return new Blob([pageLectureSeule(state, exercice)], { type: 'text/html;charset=utf-8' });
+}
+
+export function exportPartage(state: AppState, exercice: string): { nom: string; taille: number } {
+  const blob = blobPartage(state, exercice);
+  const nom = `BBG_Compta_${exercice}_lecture_seule.html`;
+  download(nom, blob);
+  return { nom, taille: blob.size };
+}
+
 // ------------------------------------------------------- Export groupé ZIP --
 
 export interface ResultatZip { nom: string; taille: number; fichiers: string[] }
@@ -317,6 +332,10 @@ export async function exportTout(state: AppState, exercice: string,
   ];
   const csv = blobCSV(state.entries);
   if (csv) pieces.push({ nom: 'BBG_Journal.csv', data: csv });
+  pieces.push({
+    nom: `BBG_Compta_${exercice}_lecture_seule.html`,
+    data: blobPartage(state, exercice),
+  });
   // La sauvegarde embarque déjà les justificatifs en base64 : inutile de les
   // dupliquer en fichiers séparés quand le dossier Factures est demandé.
   pieces.push({
@@ -351,6 +370,11 @@ function lisezMoi(exercice: string, jour: string, nbFactures: number): string {
     ['BBG_Journal.csv', [
       'Toutes les écritures (séparateur « ; », virgule décimale),',
       'pour l\'expert-comptable.',
+    ]],
+    [`BBG_Compta_${exercice}_lecture_seule.html`, [
+      'Copie consultable en lecture seule : synthèse, compte de résultat,',
+      'TVA, journal, immobilisations et contrôles. Un double-clic suffit,',
+      'rien à installer, rien de modifiable.',
     ]],
     ['BBG_Compta_sauvegarde.json', [
       'Sauvegarde restaurable dans BBG Compta',

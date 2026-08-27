@@ -15,7 +15,9 @@ sont recalculés en direct à partir des écritures.
 - **Synthèse annuelle** — les blocs dans l'ordre de lecture : **Produits, Charges,
   Personnel, Jeux** (un sous-bloc par jeu, toutes ses catégories listées),
   **Immobilisations**, puis le **compte de résultat** (EBE → REX → RC → IS → RN,
-  barème PME) et la **TVA**. Chaque bloc porte son gros total en en-tête
+  barème PME), la **TVA**, un **récapitulatif** d'une page et des **contrôles
+  comptables** automatiques. Chaque bloc porte son gros total en en-tête, et un
+  bouton bascule entre vue **détaillée** et vue **simplifiée** (totaux seuls)
 - **Immobilisations** — durées, dotations, VNC et fin d'amortissement calculées
 - **Trésorerie** — encaissements/décaissements TTC, mouvements financiers
   (capital, CCA, placements, intérêts) inclus
@@ -34,6 +36,8 @@ sont recalculés en direct à partir des écritures.
   que la synthèse annuelle, avec Prévu / Réel / Écart par ligne, un compte de
   résultat prévisionnel identique, et des alarmes quand une ligne ne correspond
   à rien dans la synthèse
+- **Vue 5 ans** — les cinq exercices côte à côte : prévu, réel, compte de
+  résultat et trajectoire
 - **Réel vs Prévu** — le réalisé vient du journal, sans IMPORTRANGE
 - **Trésorerie prévisionnelle vs réalisée** — par exercice
 - **Chronologie** — frise 2025-30 des projets (dev, tirages, sorties, ventes)
@@ -43,7 +47,9 @@ sont recalculés en direct à partir des écritures.
   (Excel, PDF, CSV, JSON + un « Lisez-moi », et si tu veux un dossier
   `Factures/` rangé par mois), ou chacun séparément : classeur Excel complet
   (`.xlsx`, importable dans Google Sheets), CSV du journal (format français),
-  rapport PDF, sauvegarde JSON intégrale
+  rapport PDF, sauvegarde JSON intégrale — et une **copie HTML en lecture
+  seule** à envoyer à l'expert-comptable (un seul fichier, rien de modifiable,
+  aucune connexion)
 - **Paramètres** — catégories, moyens de paiement, plan comptable,
   sauvegarde / restauration / réinitialisation
 
@@ -61,6 +67,9 @@ sont recalculés en direct à partir des écritures.
   tire. La largeur est enregistrée et retrouvée à la prochaine ouverture ;
   un **double-clic** au même endroit rend au tableau ses largeurs automatiques
   (Paramètres → Affichage des tableaux pour tout réinitialiser).
+- **Sélectionner plusieurs cellules** : dans le prévisionnel, clique-glisse sur
+  les cases pour en sélectionner un rectangle, puis **Suppr** pour toutes les
+  vider (une seule étape d'annulation). **Échap** annule la sélection.
 - **Mise en forme d'une colonne** : la palette qui apparaît au survol de
   l'en-tête (gras, italique, alignement, couleur).
 - **Cmd+Z / Ctrl+Z** annule, **Cmd+Maj+Z / Ctrl+Y** rétablit.

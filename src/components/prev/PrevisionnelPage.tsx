@@ -15,6 +15,7 @@ import {
   compteResultat, dotationsParMois, immoInfos, produitsFinanciersParMois, type LigneResultat,
 } from '../../utils/calc';
 import { PageHeader, Card, Btn, StatCard, MoneyInput, BlocColorMenu, TotalBloc, styleBloc } from '../ui';
+import { useSelectionCellules } from '../../utils/selection';
 
 /** Durée d'amortissement retenue pour une immobilisation prévue, faute de mieux. */
 const DUREE_IMMO_PREVUE = 5;
@@ -26,6 +27,7 @@ export function PrevisionnelPage() {
   const couleurs = useStore(s => s.blocCouleurs);
   const previsionnels = useStore(s => s.previsionnels);
   const setPrevCell = useStore(s => s.setPrevCell);
+  const viderPrevCells = useStore(s => s.viderPrevCells);
   const addPrevLigne = useStore(s => s.addPrevLigne);
   const updatePrevLigne = useStore(s => s.updatePrevLigne);
   const removePrevLigne = useStore(s => s.removePrevLigne);
@@ -36,6 +38,12 @@ export function PrevisionnelPage() {
   const [exercice, setExercice] = useState('2025-26');
   const [nouvelleCat, setNouvelleCat] = useState('');
   const [alarmesOuvertes, setAlarmesOuvertes] = useState(true);
+
+  // Sélection de plusieurs cellules à la souris : Suppr les vide d'un coup.
+  // La clé de tableau porte l'identifiant de la ligne, la colonne le mois.
+  const selection = useSelectionCellules(cells => {
+    viderPrevCells(exercice, cells.map(c => ({ ligneIdx: c.ligne, moisIdx: c.col })));
+  });
 
   const moisList = moisExercice(exercice);
   const lignes = previsionnels[exercice] ?? [];
@@ -157,6 +165,19 @@ export function PrevisionnelPage() {
           </>
         }
       />
+
+      {/* Bandeau flottant : il ne doit pas décaler le tableau pendant le balayage. */}
+      {selection.nb > 0 && (
+        <div
+          className="fixed bottom-5 left-1/2 -translate-x-1/2 z-40 px-4 py-2 rounded-full border shadow-lg
+            flex items-center gap-3 text-sm"
+          style={{ backgroundColor: 'var(--bbg-purple-light)', borderColor: 'var(--bbg-purple)', color: 'var(--bbg-purple-darker)' }}
+        >
+          <b>{selection.nb} cellules sélectionnées</b>
+          <span>— <b>Suppr</b> les vide toutes, <b>Échap</b> annule.</span>
+          <Btn variant="ghost" onClick={selection.effacer}>Désélectionner</Btn>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
         <StatCard label="Produits prévus" value={euros0(totalProduits)} tone="good"
@@ -327,6 +348,7 @@ export function PrevisionnelPage() {
                             </tr>
                           )}
                           {parGroupe.get(g)!.map(l => {
+                            const idxLigne = lignes.indexOf(l);
                             const prevu = totalLigne(l);
                             const reelCat = reelDeLigne(l);
                             const ecart = r2(reelCat - prevu);
@@ -362,7 +384,10 @@ export function PrevisionnelPage() {
                                   </div>
                                 </td>
                                 {moisList.map((m, i) => (
-                                  <td key={m} className="text-right p-0.5!">
+                                  <td
+                                    key={m} className="text-right p-0.5!"
+                                    {...selection.props('prev', idxLigne, i)}
+                                  >
                                     <MoneyInput
                                       value={l.valeurs[i] ?? null}
                                       onCommit={v => setPrevCell(exercice, l.id, i, v)}

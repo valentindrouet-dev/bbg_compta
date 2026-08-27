@@ -15,6 +15,7 @@ import { JeuxPage } from './components/journal/JeuxPage';
 import { FacturesPage } from './components/journal/FacturesPage';
 import { PrevisionnelPage } from './components/prev/PrevisionnelPage';
 import { ReelVsPrevuPage } from './components/prev/ReelVsPrevuPage';
+import { CinqAnsPage } from './components/prev/CinqAnsPage';
 import { TresoPrevPage } from './components/prev/TresoPrevPage';
 import { ChronoPage } from './components/prev/ChronoPage';
 import { ExportsPage } from './components/settings/ExportsPage';
@@ -24,7 +25,7 @@ import { CategoriesPage } from './components/settings/CategoriesPage';
 export type Page =
   | 'dashboard'
   | 'journal' | 'synthese' | 'immos' | 'treso' | 'tva' | 'rembours' | 'fournisseurs' | 'jeux' | 'factures'
-  | 'budgets' | 'reelprevu' | 'tresoprev' | 'chrono'
+  | 'budgets' | 'cinqans' | 'reelprevu' | 'tresoprev' | 'chrono'
   | 'exports' | 'categories' | 'settings';
 
 export default function App() {
@@ -92,6 +93,7 @@ export default function App() {
         {page === 'jeux' && <JeuxPage />}
         {page === 'factures' && <FacturesPage />}
         {page === 'budgets' && <PrevisionnelPage />}
+        {page === 'cinqans' && <CinqAnsPage />}
         {page === 'reelprevu' && <ReelVsPrevuPage />}
         {page === 'tresoprev' && <TresoPrevPage />}
         {page === 'chrono' && <ChronoPage />}

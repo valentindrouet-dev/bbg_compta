@@ -9,7 +9,7 @@ import { labelMois, formatDateFR, compareMois } from '../../utils/dates';
 import { euros } from '../../utils/money';
 import {
   listFiles, deleteFile, openFile, downloadFile, formatTaille, surChangementFichiers,
-  saveFile, type StoredFile,
+  saveFile, placeDisponible, demanderPersistance, type StoredFile, type Quota,
 } from '../../utils/files';
 import { exportFactures } from '../../utils/export';
 import { fichiersDeposes, transporteDesFichiers } from '../../utils/depot';
@@ -36,11 +36,15 @@ export function FacturesPage() {
   const [grouper, setGrouper] = useState(true);
   const [survol, setSurvol] = useState(false);
   const [zipEnCours, setZipEnCours] = useState(false);
+  const [quota, setQuota] = useState<Quota | null>(null);
   const { sort, toggle } = useSort({ key: 'date', dir: 'desc' });
 
   // Les fichiers vivent dans IndexedDB : on les relit à chaque changement.
   useEffect(() => {
-    const charger = () => { void listFiles().then(setFichiers); };
+    const charger = () => {
+      void listFiles().then(setFichiers);
+      void placeDisponible().then(setQuota);
+    };
     charger();
     return surChangementFichiers(charger);
   }, []);
@@ -180,7 +184,11 @@ export function FacturesPage() {
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
         <StatCard label="Justificatifs stockés" value={String(fichiers.length)} />
-        <StatCard label="Place occupée" value={formatTaille(octets)} />
+        <StatCard
+          label="Place occupée"
+          value={formatTaille(octets)}
+          sub={quota?.quota ? `sur ${formatTaille(quota.quota)} disponibles` : undefined}
+        />
         <StatCard label="Écritures avec justificatif"
           value={`${avecJustificatif} / ${entries.length}`}
           tone={avecJustificatif === entries.length ? 'good' : 'neutral'}
@@ -189,6 +197,11 @@ export function FacturesPage() {
           tone={orphelines ? 'accent' : 'good'}
           sub={orphelines ? 'à relier à une écriture' : 'tout est relié'} />
       </div>
+
+      <PlaceDisponible quota={quota} octetsFactures={octets} onDemander={async () => {
+        await demanderPersistance();
+        setQuota(await placeDisponible());
+      }} />
 
       {liensCasses.length > 0 && (
         <div
@@ -409,5 +422,72 @@ function Vignette({ l }: { l: LigneFacture }) {
         </div>
       </div>
     </button>
+  );
+}
+
+// -------------------------------------------------- Place de stockage ------
+
+/** Combien de place le navigateur accorde, et ce que ça représente en factures. */
+function PlaceDisponible({ quota, octetsFactures, onDemander }: {
+  quota: Quota | null; octetsFactures: number; onDemander: () => void;
+}) {
+  if (!quota) return null;
+
+  if (quota.inconnu || !quota.quota) {
+    return (
+      <div className="mb-4 px-3 py-2 rounded-md border text-sm"
+        style={{ backgroundColor: 'var(--bbg-lavender)', borderColor: 'var(--bbg-border)', color: '#3f3268' }}>
+        <b>Place disponible : ton navigateur ne la communique pas</b> (c'est le cas de Safari).
+        Il accorde en général <b>autour d'1 Go</b> par site, puis demande l'autorisation d'aller plus loin.
+        À {formatTaille(octetsFactures)} de factures, tu es très loin de la limite.
+      </div>
+    );
+  }
+
+  const libre = Math.max(0, quota.quota - (quota.utilise ?? 0));
+  const part = quota.utilise != null ? quota.utilise / quota.quota : 0;
+  // Une facture PDF pèse en pratique entre 100 et 300 Ko : on prend 200 Ko.
+  const POIDS_FACTURE = 200 * 1024;
+  const encore = Math.floor(libre / POIDS_FACTURE);
+
+  return (
+    <div className="mb-4 rounded-lg border bg-white p-3" style={{ borderColor: 'var(--bbg-border-soft)' }}>
+      <div className="flex flex-wrap items-baseline justify-between gap-2 mb-2">
+        <span className="text-sm font-semibold" style={{ color: 'var(--bbg-purple-darker)' }}>
+          Place de stockage accordée par ton navigateur
+        </span>
+        <span className="text-sm tabular-nums" style={{ color: '#5c5280' }}>
+          <b>{formatTaille(quota.utilise ?? 0)}</b> utilisés sur <b>{formatTaille(quota.quota)}</b>
+          {' '}— il reste <b style={{ color: 'var(--bbg-green-dark)' }}>{formatTaille(libre)}</b>
+        </span>
+      </div>
+      <div className="h-2.5 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--bbg-lavender-2)' }}>
+        <div className="h-full rounded-full transition-all"
+          style={{
+            width: `${Math.max(0.6, Math.min(100, part * 100))}%`,
+            backgroundColor: part > 0.85 ? '#b7332e' : part > 0.6 ? 'var(--bbg-orange-dark)' : 'var(--bbg-green-dark)',
+          }} />
+      </div>
+      <p className="text-xs mt-2" style={{ color: '#5c5280' }}>
+        De quoi stocker encore <b>~{encore.toLocaleString('fr-FR')} factures</b> (à 200 Ko la pièce).
+        Cette place n'est pas un abonnement : c'est une part de l'espace libre de ton disque que le
+        navigateur réserve à ce site — souvent 60 % de ce qui reste sur Chrome, 10 % du disque
+        (2 Go maxi) sur Firefox. Elle grandit et rétrécit avec ton disque dur.
+      </p>
+      <p className="text-xs mt-1" style={{ color: quota.persistant ? 'var(--bbg-green-dark)' : '#9a92b5' }}>
+        {quota.persistant ? (
+          <>✓ Stockage <b>persistant</b> : le navigateur s'est engagé à ne pas effacer ces données pour faire de la place.</>
+        ) : (
+          <>
+            Stockage <b>non persistant</b> : en cas de disque saturé, le navigateur pourrait effacer
+            ces données.{' '}
+            <button className="underline" style={{ color: 'var(--bbg-purple-dark)' }} onClick={onDemander}>
+              Demander le stockage persistant
+            </button>{' '}
+            — et garde de toute façon une sauvegarde .json à jour.
+          </>
+        )}
+      </p>
+    </div>
   );
 }

@@ -114,6 +114,13 @@ input[type="number"]::-webkit-outer-spin-button { opacity: 0.5; }
 .sheet tr.band-yellow > td { background: var(--bbg-yellow-light) !important; color: var(--bbg-yellow-dark); }
 .sheet tr.band-soft   > td { background: #efeafa !important; font-weight: 600; }
 
+/* Cellules sélectionnées à la souris (façon tableur) */
+.sheet td[data-sel] {
+  background: rgba(103, 78, 167, 0.16) !important;
+  box-shadow: inset 0 0 0 1px var(--bbg-purple-dark);
+}
+.sheet td[data-sel] input { background: transparent; }
+
 /* Ligne survolée par un fichier en cours de dépôt */
 .sheet tbody tr.depot-actif > td {
   background: var(--bbg-green-light) !important;

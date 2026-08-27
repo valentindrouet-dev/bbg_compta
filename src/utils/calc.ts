@@ -83,23 +83,56 @@ export function immoInfos(entries: JournalEntry[]): ImmoInfo[] {
     return {
       entry: e, duree, dotationAn: r2(dotationAn), dotationMois: r2(dotationMois), fin,
       vnc: (atISO: string) => {
-        const start = new Date(e.date + 'T00:00:00');
-        const at = new Date(atISO + 'T00:00:00');
-        const moisEcoules = Math.max(0, (at.getFullYear() - start.getFullYear()) * 12 + at.getMonth() - start.getMonth());
-        return r2(Math.max(0, e.ht - Math.min(moisEcoules, duree * 12) * dotationMois));
+        // Cumul des fractions de mois amorties, prorata temporis compris.
+        const [y, m, jour] = e.date.split('-').map(Number);
+        const joursDuMois = new Date(y, m, 0).getDate();
+        const premiere = (joursDuMois - jour + 1) / joursDuMois;
+        const [ay, am] = atISO.split('-').map(Number);
+        const rang = (ay - y) * 12 + (am - m);
+        const dernier = duree * 12;
+        if (rang < 0) return r2(e.ht);
+        const cumul = premiere
+          + (rang >= 1 ? Math.min(rang, dernier - 1) : 0)
+          + (rang >= dernier ? 1 - premiere : 0);
+        return r2(Math.max(0, e.ht - Math.min(cumul, dernier) * dotationMois));
       },
     };
   });
 }
 
+/**
+ * Part d'un mois pendant laquelle un bien est amorti — le *prorata temporis*
+ * du plan comptable français.
+ *
+ * Un bien mis en service le 20 d'un mois de 31 jours n'ouvre droit qu'à
+ * 12/31 de dotation ce mois-là ; le complément (19/31) est repris au tout
+ * dernier mois du plan. La somme des fractions vaut exactement durée × 12
+ * mois, donc le cumul des dotations égale exactement la valeur du bien.
+ */
+export function fractionDuMois(info: ImmoInfo, mois: string): number {
+  const ref = mois === PRE_IMMAT ? '2025-08' : mois;
+  const debut = info.entry.date.slice(0, 7);
+  if (ref < debut) return 0;
+
+  const [y, m, jour] = info.entry.date.split('-').map(Number);
+  const joursDuMois = new Date(y, m, 0).getDate();
+  const premiereFraction = (joursDuMois - jour + 1) / joursDuMois;
+
+  // Rang du mois demandé depuis l'acquisition (0 = mois d'acquisition).
+  const [ry, rm] = ref.split('-').map(Number);
+  const rang = (ry - y) * 12 + (rm - m);
+  const dernier = info.duree * 12;
+  if (rang < 0 || rang > dernier) return 0;
+  if (rang === 0) return premiereFraction;
+  if (rang === dernier) return 1 - premiereFraction;
+  return 1;
+}
+
 /** Dotation mensuelle totale au titre d'un mois comptable donné (immos actives). */
 export function dotationDuMois(infos: ImmoInfo[], mois: string): number {
-  const ref = mois === PRE_IMMAT ? '2025-08' : mois;
   let total = 0;
   for (const i of infos) {
-    const debut = i.entry.date.slice(0, 7);
-    const finM = i.fin.slice(0, 7);
-    if (debut <= ref && ref < finM) total += i.entry.ht / (i.duree * 12);
+    total += i.entry.ht / (i.duree * 12) * fractionDuMois(i, mois);
   }
   return r2(total);
 }

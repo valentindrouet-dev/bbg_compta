@@ -1,5 +1,7 @@
 import { Fragment, useMemo, useState } from 'react';
-import { Eye, EyeOff, Gamepad2, Info } from 'lucide-react';
+import {
+  Eye, EyeOff, Gamepad2, Info, Rows3, List, CheckCircle2, AlertTriangle, AlertCircle, Wrench,
+} from 'lucide-react';
 import { useStore } from '../../store';
 import { EXERCICES, labelMois, formatDateFR } from '../../utils/dates';
 import { euros, euros0, r2 } from '../../utils/money';
@@ -8,6 +10,7 @@ import {
   compteResultat, ecrituresDeCellule, type BaseMontant, type LigneResultat,
 } from '../../utils/calc';
 import { teinteBloc, type BlocCle } from '../../utils/blocs';
+import { controlesComptables, dateCalee, libelleEcriture } from '../../utils/controles';
 
 import { PageHeader, Card, Btn, BlocColorMenu, TotalBloc, styleBloc } from '../ui';
 import type { JournalEntry } from '../../types';
@@ -60,8 +63,11 @@ export function SynthesePage() {
   const finances = useStore(s => s.finances);
   const refs = useStore(s => s.referentiels);
   const couleurs = useStore(s => s.blocCouleurs);
+  const updateEntry = useStore(s => s.updateEntry);
   const [exercice, setExercice] = useState('2025-26');
   const [base, setBase] = useState<BaseMontant>('ht');
+  /** Vue simplifiée : on ne garde que les totaux et les sous-totaux. */
+  const [simple, setSimple] = useState(false);
   const [apercuActif, setApercuActif] = useState(
     () => localStorage.getItem('bbg-apercu-synthese') !== 'off');
   const [apercu, setApercu] = useState<
@@ -171,6 +177,23 @@ export function SynthesePage() {
                 </button>
               ))}
             </div>
+            <div className="flex rounded-md border overflow-hidden text-sm" style={{ borderColor: 'var(--bbg-border)' }}>
+              {([['detail', 'Détaillée', List], ['simple', 'Simplifiée', Rows3]] as const).map(([cle, label, Icone]) => (
+                <button
+                  key={cle}
+                  className="px-3 py-1.5 font-semibold transition-colors inline-flex items-center gap-1.5"
+                  style={(cle === 'simple') === simple
+                    ? { backgroundColor: 'var(--bbg-purple-dark)', color: '#fff' }
+                    : { backgroundColor: '#fff', color: '#5c5280' }}
+                  onClick={() => setSimple(cle === 'simple')}
+                  title={cle === 'simple'
+                    ? 'Ne garder que les lignes de totaux et de sous-totaux'
+                    : 'Afficher chaque catégorie'}
+                >
+                  <Icone size={14} /> {label}
+                </button>
+              ))}
+            </div>
             <Btn onClick={basculerApercu} title="Afficher le détail des opérations au survol d'une case">
               <span className="inline-flex items-center gap-1">
                 {apercuActif ? <Eye size={14} /> : <EyeOff size={14} />}
@@ -243,7 +266,7 @@ export function SynthesePage() {
                               </td>
                             </tr>
                           )}
-                          {parGroupe.get(g)!.map(cat => {
+                          {(simple ? [] : parGroupe.get(g)!).map(cat => {
                             const tot = totalLigne(bloc.data, cat);
                             return (
                               <tr key={cat}>
@@ -277,8 +300,8 @@ export function SynthesePage() {
                               </tr>
                             );
                           })}
-                          {avecGroupes && parGroupe.get(g)!.length > 1 && (
-                            <tr style={{ fontStyle: 'italic' }}>
+                          {avecGroupes && (simple || parGroupe.get(g)!.length > 1) && (
+                            <tr style={simple ? { fontWeight: 600 } : { fontStyle: 'italic' }}>
                               <td style={{ color: '#6f6690' }}>Sous-total {g || 'sans groupe'}</td>
                               {syn.moisList.map(m => {
                                 const v = parGroupe.get(g)!.reduce((s, c) => s + (bloc.data.get(c)?.get(m) ?? 0), 0);
@@ -344,13 +367,13 @@ export function SynthesePage() {
         {/* ---------------------------------------------------- Jeux ----- */}
         <BlocJeux
           syn={syn} refs={refs} couleurs={couleurs} unite={unite}
-          survol={survol} quitte={quitte} nbMois={nbMois}
+          survol={survol} quitte={quitte} nbMois={nbMois} simple={simple}
         />
 
         {/* -------------------------------------------- Immobilisations -- */}
         <BlocImmos
           syn={syn} couleurs={couleurs} unite={unite} meta={meta}
-          survol={survol} quitte={quitte} immos={immos}
+          survol={survol} quitte={quitte} immos={immos} simple={simple}
         />
 
         {/* ------------------------------------------------- Résultat ---- */}
@@ -358,6 +381,19 @@ export function SynthesePage() {
 
         {/* ------------------------------------------------------ TVA ---- */}
         <BlocTVA syn={syn} couleurs={couleurs} />
+
+        {/* ---------------------------------------------- Récapitulatif -- */}
+        <Recapitulatif
+          syn={syn} resultat={resultat} couleurs={couleurs} unite={unite} exercice={exercice}
+        />
+
+        {/* ------------------------------------------------- Contrôles --- */}
+        <ControlesCard
+          entries={entries} exercice={exercice} refs={refs}
+          onCalerDates={ecritures => {
+            for (const e of ecritures) updateEntry(e.id, { date: dateCalee(e) });
+          }}
+        />
       </div>
 
       {apercu && <ApercuCellule {...apercu} />}
@@ -375,11 +411,11 @@ type Survol = (ev: React.MouseEvent, mois: string, titre: string,
  * dépenses possibles — y compris celles encore à zéro, pour voir d'un coup
  * d'œil ce qui reste à engager.
  */
-function BlocJeux({ syn, refs, couleurs, unite, survol, quitte, nbMois }: {
+function BlocJeux({ syn, refs, couleurs, unite, survol, quitte, nbMois, simple }: {
   syn: ReturnType<typeof syntheseExercice>;
   refs: { categoriesJeux: string[]; jeux?: string[] };
   couleurs: Record<string, string>; unite: string;
-  survol: Survol; quitte: () => void; nbMois: number;
+  survol: Survol; quitte: () => void; nbMois: number; simple: boolean;
 }) {
   const t = teinteBloc('jeux', couleurs);
   const cats = refs.categoriesJeux;
@@ -429,7 +465,7 @@ function BlocJeux({ syn, refs, couleurs, unite, survol, quitte, nbMois }: {
                     </span>
                   </td>
                 </tr>
-                {cats.map(cat => {
+                {(simple ? [] : cats).map(cat => {
                   const tot = r2(syn.moisList.reduce((s, m) => s + valeur(jeu, cat, m), 0));
                   return (
                     <tr key={`${jeu}-${cat}`} style={tot ? undefined : { color: '#b3aecb' }}>
@@ -490,12 +526,12 @@ function BlocJeux({ syn, refs, couleurs, unite, survol, quitte, nbMois }: {
 
 // --------------------------------------------------- Bloc immobilisations ---
 
-function BlocImmos({ syn, couleurs, unite, meta, survol, quitte, immos }: {
+function BlocImmos({ syn, couleurs, unite, meta, survol, quitte, immos, simple }: {
   syn: ReturnType<typeof syntheseExercice>;
   couleurs: Record<string, string>; unite: string;
   meta: Record<string, { couleur?: string; groupe?: string }>;
   survol: Survol; quitte: () => void;
-  immos: ReturnType<typeof immoInfos>;
+  immos: ReturnType<typeof immoInfos>; simple: boolean;
 }) {
   const t = teinteBloc('immos', couleurs);
   const cats = [...syn.immos.keys()];
@@ -526,7 +562,7 @@ function BlocImmos({ syn, couleurs, unite, meta, survol, quitte, immos }: {
             </tr>
           </thead>
           <tbody>
-            {cats.map(cat => (
+            {(simple ? [] : cats).map(cat => (
               <tr key={cat}>
                 <td>
                   <span className="inline-flex items-center gap-1.5">
@@ -767,6 +803,202 @@ function BlocTVA({ syn, couleurs }: {
         Solde = TVA collectée − TVA déductible. <b style={{ color: '#b7332e' }}>Positif (rouge)</b> : tu dois
         la différence à l'État. <b style={{ color: '#38761d' }}>Négatif (vert)</b> : c'est un crédit de TVA,
         l'État te le doit. Le détail mois par mois, avec le cumul, est dans l'onglet TVA.
+      </p>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------- Récapitulatif ---------
+
+/**
+ * Le résumé d'une page : les grandes masses de l'exercice et le résultat, sans
+ * un seul détail. C'est ce qu'on lit en premier, et ce qu'on envoie au comptable.
+ */
+function Recapitulatif({ syn, resultat, couleurs, unite, exercice }: {
+  syn: ReturnType<typeof syntheseExercice>;
+  resultat: LigneResultat[];
+  couleurs: Record<string, string>; unite: string; exercice: string;
+}) {
+  const t = teinteBloc('resultat', couleurs);
+  const total = (m: Map<string, number>) => r2([...m.values()].reduce((s, v) => s + v, 0));
+  const de = (cle: string) => resultat.find(l => l.cle === cle)?.total ?? 0;
+  // Même chemin de calcul que le bloc TVA : on somme les soldes mensuels
+  // arrondis, sinon les deux affichages divergent d'un centime.
+  const soldeTVA = r2(syn.moisList.reduce((s, m) =>
+    s + r2((syn.tvaCollecteeParMois.get(m) ?? 0) - (syn.tvaDeductibleParMois.get(m) ?? 0)), 0));
+
+  const lignes: { bloc?: BlocCle; label: string; valeur: number; niveau: 'masse' | 'agregat' | 'final' | 'hors'; aide?: string }[] = [
+    { bloc: 'produits', label: 'PRODUITS', valeur: total(syn.totalProduitsParMois), niveau: 'masse' },
+    { bloc: 'charges', label: 'CHARGES', valeur: -total(syn.totalChargesParMois), niveau: 'masse' },
+    { bloc: 'personnel', label: 'PERSONNEL', valeur: -total(syn.totalPersonnelParMois), niveau: 'masse' },
+    { bloc: 'jeux', label: 'DÉPENSES JEUX', valeur: -total(syn.totalJeuxParMois), niveau: 'masse' },
+    { label: 'dont charges financières (reprises plus bas)', valeur: total(syn.chargesFinancieresParMois), niveau: 'hors',
+      aide: 'Déjà comprises dans les charges ci-dessus, mais retirées de l\'EBE : elles se retranchent au résultat courant.' },
+    { label: 'EXCÉDENT BRUT D\'EXPLOITATION', valeur: de('ebe'), niveau: 'agregat' },
+    { label: 'Dotations aux amortissements', valeur: -de('dotations'), niveau: 'masse',
+      aide: 'L\'usure des immobilisations. L\'investissement lui-même n\'est pas une charge.' },
+    { label: 'RÉSULTAT D\'EXPLOITATION', valeur: de('rex'), niveau: 'agregat' },
+    { label: 'Produits financiers', valeur: de('pf'), niveau: 'masse' },
+    { label: 'Charges financières', valeur: -de('cf'), niveau: 'masse' },
+    { label: 'RÉSULTAT COURANT AVANT IMPÔT', valeur: de('rc'), niveau: 'agregat' },
+    { label: 'Impôt sur les sociétés', valeur: -de('is'), niveau: 'masse' },
+    { label: 'RÉSULTAT NET', valeur: de('rn'), niveau: 'final' },
+  ];
+
+  const investi = total(syn.immoParMois);
+
+  return (
+    <Card
+      title={`Récapitulatif de l'exercice ${exercice} (${unite})`}
+      actions={<TotalBloc label="Résultat net" valeur={euros(de('rn'))} t={t} />}
+    >
+      <div className="grid md:grid-cols-[minmax(0,1fr)_320px] gap-5 items-start">
+        <table data-table="synthese:recap" data-bloc="resultat" className="sheet text-sm"
+          style={styleBloc(t)}>
+          <tbody>
+            {lignes.map(l => (
+              <tr key={l.label}
+                className={l.niveau === 'agregat' ? 'band-bloc' : undefined}
+                style={l.niveau === 'hors' ? { fontStyle: 'italic', color: '#6f6690' } : undefined}
+                title={l.aide}
+              >
+                <td className={l.niveau === 'masse' || l.niveau === 'hors' ? 'pl-4' : undefined}>
+                  <span className="inline-flex items-center gap-1.5">
+                    {l.bloc && (
+                      <span className="inline-block w-2.5 h-2.5 rounded-sm shrink-0"
+                        style={{ backgroundColor: teinteBloc(l.bloc, couleurs).base }} />
+                    )}
+                    {l.label}
+                    {l.aide && <Info size={11} style={{ opacity: 0.45 }} />}
+                  </span>
+                </td>
+                <td className="text-right tabular-nums"
+                  style={{
+                    fontSize: l.niveau === 'final' ? '1.15rem' : undefined,
+                    fontWeight: l.niveau === 'final' ? 800 : l.niveau === 'agregat' ? 700 : undefined,
+                    color: l.niveau === 'agregat' || l.niveau === 'final'
+                      ? (l.valeur >= 0 ? '#2c5d16' : '#8f2b26') : undefined,
+                  }}>
+                  {euros(l.valeur)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <div className="space-y-3">
+          <div className="rounded-lg border p-3" style={{ borderColor: 'var(--bbg-border-soft)' }}>
+            <div className="text-xs uppercase tracking-wide mb-1" style={{ color: '#6f6690' }}>
+              Hors résultat — au bilan
+            </div>
+            <div className="flex justify-between text-sm py-0.5">
+              <span>Investissements de l'exercice</span>
+              <b className="tabular-nums">{euros(investi)}</b>
+            </div>
+            <div className="flex justify-between text-sm py-0.5">
+              <span>{soldeTVA > 0 ? 'TVA à reverser à l\'État' : 'Crédit de TVA sur l\'État'}</span>
+              <b className="tabular-nums" style={{ color: soldeTVA > 0 ? '#b7332e' : '#38761d' }}>
+                {euros(Math.abs(soldeTVA))}
+              </b>
+            </div>
+          </div>
+          <p className="text-xs leading-relaxed" style={{ color: '#5c5280' }}>
+            <b>Ces deux lignes n'entrent pas dans le résultat</b>, et c'est normal.
+            Un investissement s'inscrit à l'actif : seule sa dotation passe en charge.
+            La <b>TVA</b>, elle, ne t'appartient jamais : tu la collectes pour l'État et tu récupères
+            celle que tu as payée. Elle transite par des comptes de bilan (445), jamais par le résultat.
+            Le solde ci-dessus est donc une <b>créance</b> (ou une dette) au 30 septembre, pas un produit :
+            il se règle en trésorerie, sur l'exercice suivant.
+          </p>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+// ------------------------------------------------ Contrôles comptables ------
+
+const ICONE_CONTROLE = {
+  ok: { Icone: CheckCircle2, couleur: '#38761d' },
+  attention: { Icone: AlertTriangle, couleur: '#b45f06' },
+  erreur: { Icone: AlertCircle, couleur: '#b7332e' },
+  info: { Icone: Info, couleur: '#6f6690' },
+} as const;
+
+/** La passe d'inspection : ce qu'un comptable vérifierait, fait à chaque affichage. */
+function ControlesCard({ entries, exercice, refs, onCalerDates }: {
+  entries: JournalEntry[]; exercice: string;
+  refs: Parameters<typeof controlesComptables>[2];
+  onCalerDates: (ecritures: JournalEntry[]) => void;
+}) {
+  const [ouvert, setOuvert] = useState<string | null>(null);
+  const controles = useMemo(
+    () => controlesComptables(entries, exercice, refs),
+    [entries, exercice, refs],
+  );
+  const erreurs = controles.filter(c => c.niveau === 'erreur').length;
+  const attentions = controles.filter(c => c.niveau === 'attention').length;
+
+  return (
+    <Card
+      title={
+        <span className="inline-flex items-center gap-2">
+          <Wrench size={16} style={{ color: 'var(--bbg-purple-dark)' }} />
+          Contrôles comptables
+        </span>
+      }
+      actions={
+        <span className="text-sm" style={{ color: erreurs ? '#b7332e' : attentions ? '#b45f06' : '#38761d' }}>
+          {erreurs ? `${erreurs} erreur${erreurs > 1 ? 's' : ''} à corriger`
+            : attentions ? `${attentions} point${attentions > 1 ? 's' : ''} à regarder`
+              : 'tout est conforme'}
+        </span>
+      }
+    >
+      <ul className="space-y-1.5">
+        {controles.map(c => {
+          const { Icone, couleur } = ICONE_CONTROLE[c.niveau];
+          const deplie = ouvert === c.cle;
+          return (
+            <li key={c.cle}>
+              <div className="flex items-start gap-2 text-sm">
+                <Icone size={15} className="shrink-0 mt-0.5" style={{ color: couleur }} />
+                <div className="flex-1">
+                  <b style={{ color: '#3f3268' }}>{c.titre}</b>
+                  <span style={{ color: '#5c5280' }}> — {c.constat}</span>
+                  {c.ecritures && c.ecritures.length > 0 && (
+                    <button className="ml-2 text-xs underline" style={{ color: 'var(--bbg-purple-dark)' }}
+                      onClick={() => setOuvert(deplie ? null : c.cle)}>
+                      {deplie ? 'masquer' : 'voir les lignes'}
+                    </button>
+                  )}
+                  {c.correction && (
+                    <button className="ml-2 text-xs underline" style={{ color: 'var(--bbg-purple-dark)' }}
+                      onClick={() => c.ecritures && onCalerDates(c.ecritures)}>
+                      {c.correction.libelle}
+                    </button>
+                  )}
+                  {c.explication && (
+                    <div className="text-xs mt-0.5" style={{ color: '#9a92b5' }}>{c.explication}</div>
+                  )}
+                  {deplie && c.ecritures && (
+                    <ul className="mt-1 mb-1 text-xs space-y-0.5 rounded-md p-2"
+                      style={{ backgroundColor: 'var(--bbg-lavender)', color: '#5c5280' }}>
+                      {c.ecritures.slice(0, 25).map(e => <li key={e.id}>{libelleEcriture(e)}</li>)}
+                      {c.ecritures.length > 25 && (
+                        <li className="italic">… et {c.ecritures.length - 25} autres</li>
+                      )}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      <p className="text-xs mt-3" style={{ color: '#9a92b5' }}>
+        Ces contrôles tournent à chaque affichage, sur l'exercice choisi. Ils ne remplacent pas ton
+        expert-comptable : ils lui évitent de perdre du temps sur ce qui se vérifie tout seul.
       </p>
     </Card>
   );
