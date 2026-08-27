@@ -265,6 +265,12 @@ export interface SyntheseExercice {
   jeuxParJeu: Map<string, Map<string, number>>;
   /** Dépenses jeux ventilées par jeu, puis par catégorie, puis par mois. */
   jeuxParJeuEtCategorie: Map<string, Map<string, Map<string, number>>>;
+  /**
+   * Ce qui a été porté à l'actif sur chaque jeu (développement immobilisé) :
+   * c'est un investissement, il ne pèse sur le résultat que par sa dotation.
+   */
+  immosParJeu: Map<string, Map<string, number>>;
+  immosParJeuEtCategorie: Map<string, Map<string, Map<string, number>>>;
   /** Charges financières par mois : elles sortent de l'excédent brut. */
   chargesFinancieresParMois: Map<string, number>;
   /** Base HT portant de la TVA, côté dépenses puis côté produits. */
@@ -289,6 +295,9 @@ export function syntheseExercice(
   const produits = new Map<string, Map<string, number>>();
   const totalChargesParMois = new Map<string, number>();
   const totalPersonnelParMois = new Map<string, number>();
+  /** Immobilisations rattachées à un jeu : investissement, pas charge. */
+  const immosParJeu = new Map<string, Map<string, number>>();
+  const immosParJeuEtCategorie = new Map<string, Map<string, Map<string, number>>>();
   const totalTTCParMois = new Map<string, number>();
   const totalChargesTTCParMois = new Map<string, number>();
   const totalPersonnelTTCParMois = new Map<string, number>();
@@ -323,6 +332,26 @@ export function syntheseExercice(
       bump(totalProduitsTTCParMois, e.mois, e.ttc);
       if (e.tva) bump(baseTVAProduitsParMois, e.mois, e.ht);
       bump(tvaCollecteeParMois, e.mois, e.tva);
+    } else if (e.type === 'immo') {
+      // Une immobilisation n'est pas une charge de l'exercice : elle est
+      // suivie à part, et c'est sa dotation annuelle qui pèse sur le résultat.
+      // Ce test passe AVANT celui des catégories jeux : un développement de jeu
+      // porté à l'actif est une immobilisation, pas une dépense de l'exercice.
+      // On garde malgré tout la trace de son jeu, pour savoir ce qu'on a investi
+      // sur chacun — mais hors du total des charges jeux.
+      add(immos, e.categorie, e.mois, v);
+      bump(immoParMois, e.mois, v);
+      bump(totalTTCParMois, e.mois, e.ttc);
+      bump(immoTTCParMois, e.mois, e.ttc);
+      if (e.tva) bump(baseTVADepensesParMois, e.mois, e.ht);
+      bump(tvaDeductibleParMois, e.mois, e.tva);
+      if (categoriesJeux.includes(e.categorie) || e.jeu) {
+        const jeu = e.jeu || '— non rattaché —';
+        if (!immosParJeu.has(jeu)) immosParJeu.set(jeu, new Map());
+        bump(immosParJeu.get(jeu)!, e.mois, v);
+        if (!immosParJeuEtCategorie.has(jeu)) immosParJeuEtCategorie.set(jeu, new Map());
+        add(immosParJeuEtCategorie.get(jeu)!, e.categorie, e.mois, v);
+      }
     } else if (categoriesJeux.includes(e.categorie)) {
       add(jeux, e.categorie, e.mois, v);
       add(jeuxParJeu, e.jeu || '— non rattaché —', e.mois, v);
@@ -332,15 +361,6 @@ export function syntheseExercice(
       bump(totalJeuxParMois, e.mois, v);
       bump(totalTTCParMois, e.mois, e.ttc);
       bump(totalJeuxTTCParMois, e.mois, e.ttc);
-      if (e.tva) bump(baseTVADepensesParMois, e.mois, e.ht);
-      bump(tvaDeductibleParMois, e.mois, e.tva);
-    } else if (e.type === 'immo') {
-      // Une immobilisation n'est pas une charge de l'exercice : elle est
-      // suivie à part, et c'est sa dotation annuelle qui pèse sur le résultat.
-      add(immos, e.categorie, e.mois, v);
-      bump(immoParMois, e.mois, v);
-      bump(totalTTCParMois, e.mois, e.ttc);
-      bump(immoTTCParMois, e.mois, e.ttc);
       if (e.tva) bump(baseTVADepensesParMois, e.mois, e.ht);
       bump(tvaDeductibleParMois, e.mois, e.tva);
     } else if (estPersonnel(e.categorie, refs)) {
@@ -364,6 +384,7 @@ export function syntheseExercice(
   }
   return {
     moisList, base, charges, personnel, jeux, produits,
+    immosParJeu, immosParJeuEtCategorie,
     totalChargesParMois, totalPersonnelParMois, totalTTCParMois,
     totalChargesTTCParMois, totalPersonnelTTCParMois, totalJeuxTTCParMois, immoTTCParMois,
     totalJeuxParMois, totalProduitsParMois, totalProduitsTTCParMois, immoParMois,
@@ -494,7 +515,12 @@ export interface BilanJeu {
   jeu: string;
   nb: number;
   ttc: number;
+  /** Tout ce qui a été engagé sur le jeu, HT : charges et immobilisations. */
   ht: number;
+  /** La part portée à l'actif : elle ne pèse au résultat que par sa dotation. */
+  immo: number;
+  /** La part passée en charges de l'exercice. */
+  charges: number;
   tva: number;
   parCategorie: Map<string, number>;
   parMois: Map<string, number>;
@@ -509,19 +535,20 @@ export function bilanJeux(entries: JournalEntry[], categoriesJeux: string[]): Bi
     const jeu = e.jeu || '— non rattaché —';
     if (!par.has(jeu)) {
       par.set(jeu, {
-        jeu, nb: 0, ttc: 0, ht: 0, tva: 0,
+        jeu, nb: 0, ttc: 0, ht: 0, immo: 0, charges: 0, tva: 0,
         parCategorie: new Map(), parMois: new Map(),
         premiere: e.date, derniere: e.date,
       });
     }
     const b = par.get(jeu)!;
     b.nb++; b.ttc += e.ttc; b.ht += e.ht; b.tva += e.tva;
+    if (e.type === 'immo') b.immo += e.ht; else b.charges += e.ht;
     b.parCategorie.set(e.categorie, (b.parCategorie.get(e.categorie) ?? 0) + e.ht);
     b.parMois.set(e.mois, (b.parMois.get(e.mois) ?? 0) + e.ht);
     if (e.date < b.premiere) b.premiere = e.date;
     if (e.date > b.derniere) b.derniere = e.date;
   }
   return [...par.values()]
-    .map(b => ({ ...b, ttc: r2(b.ttc), ht: r2(b.ht), tva: r2(b.tva) }))
+    .map(b => ({ ...b, ttc: r2(b.ttc), ht: r2(b.ht), tva: r2(b.tva), immo: r2(b.immo), charges: r2(b.charges) }))
     .sort((a, b) => b.ht - a.ht);
 }

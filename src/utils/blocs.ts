@@ -62,8 +62,10 @@ export function estChargeFinanciere(categorie: string): boolean {
 /** Bloc d'affichage d'une écriture du journal. */
 export function blocDeEcriture(e: JournalEntry, refs: Referentiels): BlocCle {
   if (e.type === 'produit') return 'produits';
-  if (refs.categoriesJeux.includes(e.categorie)) return 'jeux';
+  // Une immobilisation reste une immobilisation, même sur un jeu : ce qui est
+  // porté à l'actif ne peut pas être en même temps une charge de l'exercice.
   if (e.type === 'immo') return 'immos';
+  if (refs.categoriesJeux.includes(e.categorie)) return 'jeux';
   if (estPersonnel(e.categorie, refs)) return 'personnel';
   return 'charges';
 }

@@ -39,8 +39,11 @@ sont recalculés en direct à partir des écritures.
 **Prévisionnel 2025-30**
 - **Prévisionnel** — mêmes blocs, même ordre, mêmes catégories et mêmes couleurs
   que la synthèse annuelle, avec Prévu / Réel / Écart par ligne, un compte de
-  résultat prévisionnel identique, et des alarmes quand une ligne ne correspond
-  à rien dans la synthèse. Les exercices 2026-27 à 2029-30 ont la **grille
+  résultat prévisionnel identique, les mêmes boutons **HT / TTC** et
+  **détaillée / simplifiée**, et des alarmes quand une ligne ne correspond
+  à rien dans la synthèse. En vue TTC, chaque ligne porte son **taux de TVA**,
+  repris du journal par défaut et modifiable ; les montants restent stockés
+  en HT, et un montant tapé en TTC est reconverti. Les exercices 2026-27 à 2029-30 ont la **grille
   complète, cases vides**, prête à remplir (bouton *Compléter la grille* pour
   rattraper une catégorie ajoutée depuis).
 - **Lignes calculées (heures × taux)** — une ligne porte les **heures faites
@@ -75,13 +78,20 @@ sont recalculés en direct à partir des écritures.
   journal** pour l'y attacher ; lâche-en plusieurs sur la **zone en bas d'un
   tableau** pour créer une ligne par fichier (le nom du fichier sert de libellé,
   et le fournisseur est reconnu s'il est déjà connu).
-- **Réorganiser les lignes** : dans la synthèse annuelle, attrape une ligne par
+- **Réorganiser les lignes** : dans la synthèse annuelle **et le prévisionnel**,
+  attrape une ligne par
   sa **poignée** (à gauche du nom, elle apparaît au survol) et remonte-la ou
   descends-la. Un trait montre où elle va tomber. Ça marche aussi sur les
   **bandeaux de groupe** et sur les **bandeaux de jeu** — tout le bloc suit.
   Une catégorie lâchée sous un autre bandeau **change de groupe**. Le nouvel
   ordre vaut partout : prévisionnel, listes déroulantes du journal, exports.
-  Un seul **Cmd+Z** annule un déplacement.
+  Un seul **Cmd+Z** annule un déplacement. Dans le prévisionnel, la corbeille
+  supprime une ligne et le champ « Ajouter une ligne… » en crée une.
+- **Immobiliser un poste de jeu** : dans le bloc Jeux de la synthèse, le lien
+  **immobiliser** au survol d'une ligne porte tout le poste à l'actif sur
+  l'exercice (amorti sur 5 ans) ; **repasser en charges** fait l'inverse.
+  Un développement porté à l'actif quitte le total des charges jeux et
+  n'entre dans le résultat que par sa dotation.
 - **Recolorer un bloc** : la palette dans l'en-tête d'un bloc. Une teinte majeure
   suffit — en-tête, bandes de groupe, lignes alternées blanc / très clair et ligne
   de total s'en déduisent, et la même teinte s'applique au journal, à la synthèse

@@ -68,6 +68,8 @@ export function JeuxPage() {
   const prevuDe = (jeu: string) => prevuParJeu.get(jeu) ?? null;
 
   const totalDepense = r2(bilans.reduce((s, b) => s + b.ht, 0));
+  /** Part portée à l'actif : investissement, pas charge de l'exercice. */
+  const totalImmo = r2(bilans.reduce((s, b) => s + b.immo, 0));
   const jeuActif = actif ? bilans.find(b => b.jeu === actif) : null;
 
   const ecrituresJeu = useMemo(() => {
@@ -95,7 +97,10 @@ export function JeuxPage() {
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
         <StatCard label="Jeux suivis" value={String(bilans.length)} />
-        <StatCard label="Total dépensé (HT)" value={euros0(totalDepense)} tone="accent" />
+        <StatCard label="Total engagé (HT)" value={euros0(totalDepense)} tone="accent"
+          sub={totalImmo
+            ? `dont ${euros0(totalImmo)} à l'actif · ${euros0(r2(totalDepense - totalImmo))} en charges`
+            : 'tout en charges de l\'exercice'} />
         <StatCard label="Total prévu au prévisionnel (HT)"
           value={euros0(r2([...prevuParJeu.values()].reduce((s, v) => s + v, 0)))} />
         <StatCard label="Écritures jeux"
@@ -148,7 +153,18 @@ export function JeuxPage() {
                           </span>
                         </td>
                         <td className="text-right tabular-nums">{b.nb}</td>
-                        <td className="text-right tabular-nums font-semibold">{euros(b.ht)}</td>
+                        <td className="text-right tabular-nums font-semibold"
+                          title={b.immo
+                            ? `dont ${euros(b.immo)} porté à l'actif (amorti), ${euros(b.charges)} en charges`
+                            : undefined}>
+                          {euros(b.ht)}
+                          {!!b.immo && (
+                            <span className="ml-1 text-[10px] px-1 rounded"
+                              style={{ backgroundColor: 'var(--bbg-blue-light)', color: 'var(--bbg-blue-dark)' }}>
+                              dont {euros0(b.immo)} à l'actif
+                            </span>
+                          )}
+                        </td>
                         <td className="text-right tabular-nums">{euros(b.ttc)}</td>
                         <td className="text-right tabular-nums" style={{ color: '#6f6690' }}>{euros(b.tva)}</td>
                         <td className="text-right tabular-nums">

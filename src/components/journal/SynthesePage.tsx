@@ -1,7 +1,7 @@
 import { Fragment, useMemo, useState } from 'react';
 import {
   Eye, EyeOff, Gamepad2, Info, Rows3, List, CheckCircle2, AlertTriangle, AlertCircle, Wrench,
-  ArrowRight, GripVertical,
+  ArrowRight, GripVertical, Landmark,
 } from 'lucide-react';
 import { useStore } from '../../store';
 import { useReorganisation } from '../../utils/glisser';
@@ -445,6 +445,41 @@ function BlocJeux({ syn, refs, couleurs, unite, survol, quitte, nbMois, simple }
   const cats = refs.categoriesJeux;
   const deplacerCategorie = useStore(s => s.deplacerCategorie);
   const deplacerJeu = useStore(s => s.deplacerJeu);
+  const entries = useStore(s => s.entries);
+  const updateEntries = useStore(s => s.updateEntries);
+
+  /**
+   * Bascule tout un poste de l'exercice entre charge et immobilisation.
+   * Un développement de jeu porté à l'actif s'amortit sur sa durée d'usage —
+   * cinq ans par défaut, à ajuster ligne par ligne dans le journal si besoin.
+   */
+  /** Combien d'écritures de ce poste sont en charges, combien à l'actif. */
+  const etatCategorie = (cat: string) => {
+    const mois = new Set(syn.moisList);
+    let charges = 0, immo = 0;
+    for (const e of entries) {
+      if (e.categorie !== cat || !mois.has(e.mois) || e.type === 'produit') continue;
+      if (e.type === 'immo') immo++; else charges++;
+    }
+    return { charges, immo };
+  };
+
+  function basculer(cat: string, vers: 'immo' | 'charges') {
+    const mois = new Set(syn.moisList);
+    const lot = entries.filter(e =>
+      e.categorie === cat && mois.has(e.mois) && e.type !== 'produit' && e.type !== vers);
+    if (!lot.length) return;
+    const somme = r2(lot.reduce((s, e) => s + e.ht, 0));
+    const question = vers === 'immo'
+      ? `Porter à l'actif les ${lot.length} écriture(s) « ${cat} » de cet exercice `
+        + `(${euros(somme)} HT) et les amortir sur 5 ans ?\n\n`
+        + `Elles sortiront des charges : seule leur dotation pèsera sur le résultat.`
+      : `Repasser en charges les ${lot.length} écriture(s) « ${cat} » de cet exercice `
+        + `(${euros(somme)} HT) ?\n\nElles pèseront alors en totalité sur le résultat.`;
+    if (!confirm(question)) return;
+    updateEntries(lot.map(e => e.id),
+      vers === 'immo' ? { type: 'immo', immoDureeAns: 5 } : { type: 'charges' });
+  }
   const reorg = useReorganisation((source, cible, apres, genre) => {
     if (genre === 'jeu') deplacerJeu(source, cible, apres);
     else deplacerCategorie(source, cible, apres);
@@ -459,6 +494,10 @@ function BlocJeux({ syn, refs, couleurs, unite, survol, quitte, nbMois, simple }
   const totalJeuMois = (jeu: string, m: string) =>
     cats.reduce((s, c) => s + valeur(jeu, c, m), 0);
   const totalJeu = (jeu: string) => r2(syn.moisList.reduce((s, m) => s + totalJeuMois(jeu, m), 0));
+  /** Ce qui a été porté à l'actif sur ce jeu — investissement, pas charge. */
+  const totalImmoJeu = (jeu: string) =>
+    r2([...(syn.immosParJeu.get(jeu)?.values() ?? [])].reduce((s, v) => s + v, 0));
+  const totalImmoJeux = r2(jeux.reduce((s, j) => s + totalImmoJeu(j), 0));
 
   if (!jeux.length) return null;
 
@@ -501,8 +540,10 @@ function BlocJeux({ syn, refs, couleurs, unite, survol, quitte, nbMois, simple }
                 </tr>
                 {(simple ? [] : cats).map(cat => {
                   const tot = r2(syn.moisList.reduce((s, m) => s + valeur(jeu, cat, m), 0));
+                  const etat = etatCategorie(cat);
                   return (
-                    <tr key={`${jeu}-${cat}`} style={tot ? undefined : { color: '#b3aecb' }}
+                    <tr key={`${jeu}-${cat}`} className="group"
+                      style={tot ? undefined : { color: '#b3aecb' }}
                       {...reorg.ligne('categorie', cat)}>
                       <td className="pl-4">
                         <span className="inline-flex items-center gap-1.5">
@@ -511,6 +552,27 @@ function BlocJeux({ syn, refs, couleurs, unite, survol, quitte, nbMois, simple }
                             <GripVertical size={13} />
                           </span>
                           {cat}
+                          {!!etat.charges && (
+                            <button
+                              className="hidden group-hover:inline text-[10px] underline shrink-0 whitespace-nowrap"
+                              style={{ color: 'var(--bbg-blue-dark)' }}
+                              title={"Porter ce poste à l'actif pour tout l'exercice : "
+                                + "il s'amortira sur 5 ans au lieu de peser d'un coup sur le résultat."}
+                              onClick={() => basculer(cat, 'immo')}
+                            >
+                              immobiliser
+                            </button>
+                          )}
+                          {!!etat.immo && (
+                            <button
+                              className="hidden group-hover:inline text-[10px] underline shrink-0 whitespace-nowrap"
+                              style={{ color: 'var(--bbg-orange-dark)' }}
+                              title="Repasser ce poste en charges de l'exercice."
+                              onClick={() => basculer(cat, 'charges')}
+                            >
+                              repasser en charges
+                            </button>
+                          )}
                         </span>
                       </td>
                       {syn.moisList.map(m => {
@@ -533,7 +595,7 @@ function BlocJeux({ syn, refs, couleurs, unite, survol, quitte, nbMois, simple }
                   );
                 })}
                 <tr style={{ fontWeight: 700 }}>
-                  <td className="pl-4">Total {jeu}</td>
+                  <td className="pl-4">Total {jeu} — en charges</td>
                   {syn.moisList.map(m => {
                     const v = r2(totalJeuMois(jeu, m));
                     return <td key={m} className="text-right tabular-nums">{v ? euros(v) : '·'}</td>;
@@ -541,6 +603,24 @@ function BlocJeux({ syn, refs, couleurs, unite, survol, quitte, nbMois, simple }
                   <td className="text-right tabular-nums col-total">{euros(totalJeu(jeu))}</td>
                   <td className="text-right tabular-nums col-total">{euros(r2(totalJeu(jeu) / nbMois))}</td>
                 </tr>
+                {/* Ce que ce jeu a d'immobilisé : à l'actif, hors du total des
+                    charges — seule sa dotation pèse sur le résultat. */}
+                {!!totalImmoJeu(jeu) && (
+                  <tr style={{ fontStyle: 'italic', color: 'var(--bbg-blue-dark)' }}
+                    title="Développement porté à l'actif : ce n'est pas une charge de l'exercice, il s'amortit sur sa durée d'usage.">
+                    <td className="pl-4">
+                      <span className="inline-flex items-center gap-1.5">
+                        <Landmark size={12} /> dont immobilisé sur {jeu} (à l'actif)
+                      </span>
+                    </td>
+                    {syn.moisList.map(m => {
+                      const v = r2(syn.immosParJeu.get(jeu)?.get(m) ?? 0);
+                      return <td key={m} className="text-right tabular-nums">{v ? euros(v) : '·'}</td>;
+                    })}
+                    <td className="text-right tabular-nums col-total">{euros(totalImmoJeu(jeu))}</td>
+                    <td className="col-total"></td>
+                  </tr>
+                )}
               </Fragment>
             ))}
           </tbody>
@@ -578,6 +658,13 @@ function BlocJeux({ syn, refs, couleurs, unite, survol, quitte, nbMois, simple }
         Toutes les catégories de dépenses jeux sont listées sous chaque jeu, même à zéro :
         ce qui n'a pas encore été engagé se voit aussi. Le rattachement se fait dans la colonne
         « Jeu » du journal ; les coûts de fabrication, eux, restent dans le Production Calculator.
+        {!!totalImmoJeux && (
+          <>
+            {' '}Une ligne passée en <b>immo</b> dans le journal sort de ce total : elle rejoint
+            les <b>immobilisations</b> ({euros(totalImmoJeux)} sur cet exercice) et ne pèse sur le
+            résultat que par sa dotation aux amortissements.
+          </>
+        )}
       </p>
     </Card>
   );

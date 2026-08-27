@@ -1,15 +1,17 @@
 import { Fragment, useMemo, useState } from 'react';
 import {
   Plus, Trash2, AlertTriangle, AlertCircle, Info, Wand2, ArrowRightLeft, Gamepad2,
-  Sigma, ListPlus, Clock,
+  Sigma, ListPlus, Clock, List, Rows3, GripVertical
 } from 'lucide-react';
 import { useStore } from '../../store';
+import { useReorganisation } from '../../utils/glisser';
 import type { FormulePrev, PrevLigne, PrevSection } from '../../types';
 import { EXERCICES, labelMois, moisExercice } from '../../utils/dates';
 import { euros, euros0, r2, pourcent, parseMontant } from '../../utils/money';
 import {
   SECTIONS, SECTIONS_DEPENSES, alarmesPrevisionnel, reelParCategorie, reelParCategorieEtMois,
-  ordreAffichage, reelParJeuEtCategorie, sectionDeCategorie, totalDeLigne, valeursDe,
+  ordreAffichage, reelParJeuEtCategorie, sectionDeCategorie, tauxDeLigne, tauxObserves,
+  totalDeLigne, valeursDe,
 } from '../../utils/previsionnel';
 import { teinteBloc, estChargeFinanciere, GROUPE_PERSONNEL, type BlocCle } from '../../utils/blocs';
 import {
@@ -40,6 +42,10 @@ export function PrevisionnelPage() {
   const completerPrevisionnel = useStore(s => s.completerPrevisionnel);
 
   const [exercice, setExercice] = useState('2025-26');
+  /** HT (base du résultat) ou TTC (ce qui sort vraiment du compte). */
+  const [base, setBase] = useState<'ht' | 'ttc'>('ht');
+  /** Vue simplifiée : les totaux seuls, comme dans la synthèse. */
+  const [simple, setSimple] = useState(false);
   const [nouvelleCat, setNouvelleCat] = useState('');
   const [alarmesOuvertes, setAlarmesOuvertes] = useState(true);
 
@@ -58,15 +64,43 @@ export function PrevisionnelPage() {
   const meta = refs.categoriesMeta ?? {};
   const groupes = refs.groupes ?? [];
   const jeuxCatalogue = refs.jeux ?? [];
+  const deplacerCategorie = useStore(s => s.deplacerCategorie);
+  const deplacerGroupe = useStore(s => s.deplacerGroupe);
+  const deplacerJeu = useStore(s => s.deplacerJeu);
+
+  /**
+   * Déplacer une ligne à la souris. L'ordre est celui du référentiel : bouger
+   * une ligne ici la bouge aussi dans la synthèse, les deux restent en regard.
+   * Une catégorie portée par plusieurs lignes les emmène toutes ensemble.
+   */
+  const reorg = useReorganisation((source, cible, apres, genre) => {
+    if (genre === 'jeu') { deplacerJeu(source, cible, apres); return; }
+    if (genre === 'groupe') { deplacerGroupe(source, cible, apres); return; }
+    const arrivee = meta[cible]?.groupe ?? '';
+    const depart = meta[source]?.groupe ?? '';
+    deplacerCategorie(source, cible, apres, arrivee === depart ? undefined : arrivee);
+  });
+
+  // TVA du prévisionnel : le taux propre à la ligne, sinon celui que le journal
+  // observe déjà sur la catégorie. Les montants restent stockés en HT.
+  const observes = useMemo(() => tauxObserves(entries), [entries]);
+  const tauxDe = (l: PrevLigne) => tauxDeLigne(l, observes);
+  const coef = (l: PrevLigne) => base === 'ttc' && !l.unite ? 1 + tauxDe(l) / 100 : 1;
+  /** Montant tel qu'il s'affiche, dans la base choisie. */
+  const aff = (v: number | null, l: PrevLigne) => v == null ? null : r2(v * coef(l));
+  /** L'inverse : ce qui est tapé à l'écran, ramené en HT pour le stockage. */
+  const enHT = (v: number | null, l: PrevLigne) => v == null ? null : r2(v / coef(l));
 
   const reel = useMemo(() => reelParCategorie(entries, exercice), [entries, exercice]);
   // Réel ventilé par bloc : une immobilisation ne doit pas gonfler les charges.
   const reelParSection = useMemo(() => {
     const m = new Map<PrevSection, Map<string, number>>();
-    for (const sec of SECTIONS) m.set(sec.cle, reelParCategorie(entries, exercice, refs, sec.cle));
+    for (const sec of SECTIONS) m.set(sec.cle, reelParCategorie(entries, exercice, refs, sec.cle, base));
     return m;
-  }, [entries, exercice, refs]);
-  const reelMois = useMemo(() => reelParCategorieEtMois(entries, exercice), [entries, exercice]);
+  }, [entries, exercice, refs, base]);
+  const reelMois = useMemo(
+    () => reelParCategorieEtMois(entries, exercice, undefined, undefined, base),
+    [entries, exercice, base]);
   const reelJeux = useMemo(() => reelParJeuEtCategorie(entries, exercice, refs), [entries, exercice, refs]);
   const alarmes = useMemo(() => alarmesPrevisionnel(lignes, reel, refs), [lignes, reel, refs]);
   const immos = useMemo(() => immoInfos(entries), [entries]);
@@ -82,10 +116,11 @@ export function PrevisionnelPage() {
   const totalLigne = (l: PrevLigne) => totalDeLigne(l, lignes);
   const lignesDe = (sec: PrevSection) => lignes.filter(l => l.section === sec);
   const totalSection = (sec: PrevSection) =>
-    r2(lignesDe(sec).filter(l => !l.unite).reduce((s, l) => s + totalLigne(l), 0));
-  /** Prévu d'une section, mois par mois. */
+    r2(lignesDe(sec).filter(l => !l.unite).reduce((s, l) => s + totalLigne(l) * coef(l), 0));
+  /** Prévu d'une section, mois par mois, dans la base affichée. */
   const prevuMois = (sec: PrevSection, i: number) =>
-    r2(lignesDe(sec).filter(l => !l.unite).reduce((s, l) => s + (valeursDe(l, lignes)[i] ?? 0), 0));
+    r2(lignesDe(sec).filter(l => !l.unite)
+      .reduce((s, l) => s + (valeursDe(l, lignes)[i] ?? 0) * coef(l), 0));
 
   const totalPrevu = r2(SECTIONS_DEPENSES.reduce((s, sec) => s + totalSection(sec), 0));
   const totalProduits = totalSection('produits');
@@ -171,6 +206,40 @@ export function PrevisionnelPage() {
               title="Ajouter les lignes de la synthèse qui manquent encore, cellules vides">
               <span className="inline-flex items-center gap-1.5"><ListPlus size={14} /> Compléter la grille</span>
             </Btn>
+            <div className="flex rounded-md border overflow-hidden text-sm" style={{ borderColor: 'var(--bbg-border)' }}>
+              {(['ht', 'ttc'] as const).map(b => (
+                <button
+                  key={b}
+                  className="px-3 py-1.5 font-semibold transition-colors"
+                  style={base === b
+                    ? { backgroundColor: 'var(--bbg-purple-dark)', color: '#fff' }
+                    : { backgroundColor: '#fff', color: '#5c5280' }}
+                  title={b === 'ht'
+                    ? 'Hors taxes — la base du résultat'
+                    : 'Toutes taxes comprises — ce qui sort vraiment du compte'}
+                  onClick={() => setBase(b)}
+                >
+                  {b.toUpperCase()}
+                </button>
+              ))}
+            </div>
+            <div className="flex rounded-md border overflow-hidden text-sm" style={{ borderColor: 'var(--bbg-border)' }}>
+              {([['detail', 'Détaillée', List], ['simple', 'Simplifiée', Rows3]] as const).map(([cle, label, Icone]) => (
+                <button
+                  key={cle}
+                  className="px-3 py-1.5 font-semibold transition-colors inline-flex items-center gap-1.5"
+                  style={(cle === 'simple') === simple
+                    ? { backgroundColor: 'var(--bbg-purple-dark)', color: '#fff' }
+                    : { backgroundColor: '#fff', color: '#5c5280' }}
+                  onClick={() => setSimple(cle === 'simple')}
+                  title={cle === 'simple'
+                    ? 'Les totaux et sous-totaux seuls'
+                    : 'Toutes les lignes'}
+                >
+                  <Icone size={14} /> {label}
+                </button>
+              ))}
+            </div>
             <select
               className="border rounded-md px-2 py-1.5 text-sm bg-white font-medium"
               style={{ borderColor: 'var(--bbg-border)', color: 'var(--bbg-purple-darker)' }}
@@ -313,7 +382,7 @@ export function PrevisionnelPage() {
           return (
             <Card
               key={sec.cle}
-              title={`${sec.titre}${estIndicateurs ? '' : ' (HT)'} — prévisionnel ${exercice}`}
+              title={`${sec.titre}${estIndicateurs ? '' : ` (${base.toUpperCase()})`} — prévisionnel ${exercice}`}
               actions={
                 <>
                   {sec.cle === 'produits' && (
@@ -363,27 +432,40 @@ export function PrevisionnelPage() {
                       {ordre.map(g => (
                         <Fragment key={`${sec.cle}-${g}`}>
                           {avecGroupes && (
-                            <tr className="band-bloc">
+                            <tr className="band-bloc"
+                              {...(g ? reorg.ligne(sec.cle === 'jeux' ? 'jeu' : 'groupe', g) : {})}>
                               <td colSpan={moisList.length + 5} className="py-1">
                                 <span className="inline-flex items-center gap-1.5">
+                                  {g && (
+                                    <span className="poignee-glisse" {...reorg.poignee()}
+                                      title={sec.cle === 'jeux'
+                                        ? "Glisser pour changer l'ordre des jeux"
+                                        : 'Glisser pour déplacer tout le groupe'}>
+                                      <GripVertical size={13} />
+                                    </span>
+                                  )}
                                   {sec.cle === 'jeux' && <Gamepad2 size={13} />}
                                   {g || '— sans groupe —'}
                                 </span>
                               </td>
                             </tr>
                           )}
-                          {parGroupe.get(g)!.map(l => {
+                          {(simple ? [] : parGroupe.get(g)!).map(l => {
                             const idxLigne = lignes.indexOf(l);
                             const calculees = valeursDe(l, lignes);
                             const prevu = totalLigne(l);
                             const reelCat = reelDeLigne(l);
-                            const ecart = r2(reelCat - prevu);
+                            const ecart = r2(reelCat - (aff(prevu, l) ?? 0));
                             const rattachee = toutesCategories.includes(l.categorie);
                             const estMontant = !l.unite;
                             return (
-                              <tr key={l.id} className="group">
+                              <tr key={l.id} className="group" {...reorg.ligne('categorie', l.categorie)}>
                                 <td>
                                   <div className="flex items-center gap-1">
+                                    <span className="poignee-glisse shrink-0" {...reorg.poignee()}
+                                      title="Glisser pour remonter ou descendre cette ligne">
+                                      <GripVertical size={13} />
+                                    </span>
                                     {!rattachee && estMontant && (
                                       <span title="Cette ligne ne correspond à aucune catégorie de la synthèse">
                                         <AlertCircle size={13} className="shrink-0" style={{ color: '#b7332e' }} />
@@ -412,6 +494,26 @@ export function PrevisionnelPage() {
                                         <Sigma size={12} style={{ color: 'var(--bbg-purple-dark)' }} />
                                       </span>
                                     )}
+                                    {base === 'ttc' && estMontant && (
+                                      <select
+                                        className="text-[10px] px-0.5"
+                                        // `.sheet select` vaut 100 % : on fixe la largeur pour que
+                                        // le taux ne mange pas le nom de la catégorie.
+                                        style={{
+                                          flex: '0 0 auto', width: 56,
+                                          backgroundColor: l.tauxTVA == null ? '#eee9f8' : 'var(--bbg-purple-light)',
+                                          color: 'var(--bbg-purple-darker)',
+                                        }}
+                                        value={tauxDe(l)}
+                                        title={l.tauxTVA == null
+                                          ? `Taux repris du journal pour « ${l.categorie} ». Choisis-en un autre pour le fixer.`
+                                          : 'Taux fixé sur cette ligne'}
+                                        onChange={ev => updatePrevLigne(exercice, l.id, { tauxTVA: Number(ev.target.value) })}
+                                      >
+                                        {[...new Set([...refs.tauxTVA, tauxDe(l)])].sort((a, b) => a - b)
+                                          .map(t => <option key={t} value={t}>{t} %</option>)}
+                                      </select>
+                                    )}
                                   </div>
                                   {l.formule && (
                                     <TauxHoraire
@@ -427,7 +529,7 @@ export function PrevisionnelPage() {
                                         i - l.formule.decalage >= 0 ? labelMois(moisList[i - l.formule.decalage]) : '—'}`}
                                       style={{ color: '#5c5280', fontStyle: 'italic' }}>
                                       <span className="block truncate text-xs">
-                                        {calculees[i] ? euros(calculees[i]!) : '·'}
+                                        {calculees[i] ? euros(aff(calculees[i], l)!) : '·'}
                                       </span>
                                     </td>
                                   ) : (
@@ -436,15 +538,15 @@ export function PrevisionnelPage() {
                                       {...selection.props('prev', idxLigne, i)}
                                     >
                                       <MoneyInput
-                                        value={l.valeurs[i] ?? null}
-                                        onCommit={v => setPrevCell(exercice, l.id, i, v)}
+                                        value={aff(l.valeurs[i] ?? null, l)}
+                                        onCommit={v => setPrevCell(exercice, l.id, i, enHT(v, l))}
                                         className="w-full min-w-12 border-transparent hover:border-[#ddd6ef] bg-transparent text-xs"
                                       />
                                     </td>
                                   )
                                 ))}
                                 <td className="text-right tabular-nums font-semibold col-total">
-                                  {estMontant ? euros(prevu) : r2(prevu).toLocaleString('fr-FR')}
+                                  {estMontant ? euros(aff(prevu, l)!) : r2(prevu).toLocaleString('fr-FR')}
                                 </td>
                                 <td className="text-right tabular-nums" style={{ color: '#5c5280' }}>
                                   {estMontant ? (reelCat ? euros(reelCat) : '·') : '—'}
@@ -455,6 +557,7 @@ export function PrevisionnelPage() {
                                     : (ecart > 0 ? '#b7332e' : '#38761d') }}>
                                   {estMontant && (prevu || reelCat) ? euros(ecart) : '·'}
                                 </td>
+
                                 <td>
                                   <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100">
                                     <button
@@ -478,10 +581,36 @@ export function PrevisionnelPage() {
                               </tr>
                             );
                           })}
+                          {avecGroupes && (simple || parGroupe.get(g)!.length > 1) && (
+                            <tr style={simple ? { fontWeight: 600 } : { fontStyle: 'italic' }}>
+                              <td style={{ color: '#6f6690' }}>
+                                Sous-total {g || 'sans groupe'}
+                              </td>
+                              {moisList.map((m, i) => {
+                                const v = r2(parGroupe.get(g)!.filter(l => !l.unite)
+                                  .reduce((acc, l) => acc + (valeursDe(l, lignes)[i] ?? 0) * coef(l), 0));
+                                return (
+                                  <td key={m} className="text-right tabular-nums" style={{ color: '#6f6690' }}>
+                                    {v ? euros(v) : '·'}
+                                  </td>
+                                );
+                              })}
+                              <td className="text-right tabular-nums col-total" style={{ color: '#5c5280' }}>
+                                {euros(r2(parGroupe.get(g)!.filter(l => !l.unite)
+                                  .reduce((acc, l) => acc + totalLigne(l) * coef(l), 0)))}
+                              </td>
+                              <td className="text-right tabular-nums" style={{ color: '#5c5280' }}>
+                                {euros(r2(parGroupe.get(g)!
+                                  .reduce((acc, l) => acc + (reelSec.get(l.categorie) ?? 0), 0)))}
+                              </td>
+                              <td className="col-total"></td>
+                              <td></td>
+                            </tr>
+                          )}
                         </Fragment>
                       ))}
 
-                      {manquantes.map(cat => (
+                      {(simple ? [] : manquantes).map(cat => (
                         <tr key={`manque-${cat}`} style={{ fontStyle: 'italic' }}>
                           <td>
                             <span className="inline-flex items-center gap-1" style={{ color: 'var(--bbg-orange-dark)' }}>
@@ -510,7 +639,7 @@ export function PrevisionnelPage() {
                     </tbody>
                     <tfoot>
                       <tr className="total-bloc">
-                        <td>TOTAL {sec.titre.toUpperCase()}</td>
+                        <td>TOTAL {sec.titre.toUpperCase()} ({base.toUpperCase()})</td>
                         {moisList.map((m, i) => {
                           const v = prevuMois(sec.cle, i);
                           return <td key={m} className="text-right tabular-nums">{v ? euros0(v) : '·'}</td>;

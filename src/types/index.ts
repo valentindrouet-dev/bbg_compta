@@ -101,6 +101,12 @@ export interface PrevLigne {
   unite?: 'heures' | 'jours' | 'pourcentage' | 'volume';
   /** Si présent, les montants sont calculés et non saisis. */
   formule?: FormulePrev;
+  /**
+   * Taux de TVA de la ligne, en %, pour l'affichage TTC du prévisionnel.
+   * Absent = on reprend le taux dominant observé au journal pour cette
+   * catégorie, et 20 % à défaut. Les montants restent toujours stockés en HT.
+   */
+  tauxTVA?: number;
   /** Une valeur par mois de l'exercice, dans l'ordre de moisExercice(). */
   valeurs: (number | null)[];
   note?: string;

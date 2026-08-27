@@ -151,13 +151,14 @@ export function sectionDeEcriture(e: JournalEntry, refs: Referentiels): PrevSect
 /** Somme du réel par catégorie sur l'exercice (base HT), éventuellement par bloc. */
 export function reelParCategorie(
   entries: JournalEntry[], exercice: string, refs?: Referentiels, section?: PrevSection,
+  base: 'ht' | 'ttc' = 'ht',
 ): Map<string, number> {
   const moisSet = new Set(moisExercice(exercice));
   const m = new Map<string, number>();
   for (const e of entries) {
     if (!moisSet.has(e.mois)) continue;
     if (section && refs && sectionDeEcriture(e, refs) !== section) continue;
-    m.set(e.categorie, r2((m.get(e.categorie) ?? 0) + e.ht));
+    m.set(e.categorie, r2((m.get(e.categorie) ?? 0) + (base === 'ttc' ? e.ttc : e.ht)));
   }
   return m;
 }
@@ -170,7 +171,10 @@ export function reelParJeuEtCategorie(
   const m = new Map<string, Map<string, number>>();
   for (const e of entries) {
     if (!moisSet.has(e.mois)) continue;
-    if (!refs.categoriesJeux.includes(e.categorie) || e.type === 'produit') continue;
+    // Le réel des dépenses jeux, hors immobilisations : ce qui est porté à
+    // l'actif ne se compare pas à un budget de charges.
+    if (!refs.categoriesJeux.includes(e.categorie)) continue;
+    if (e.type === 'produit' || e.type === 'immo') continue;
     const jeu = e.jeu || '— non rattaché —';
     if (!m.has(jeu)) m.set(jeu, new Map());
     const row = m.get(jeu)!;
@@ -182,6 +186,7 @@ export function reelParJeuEtCategorie(
 /** Réel d'une catégorie, mois par mois, éventuellement par bloc. */
 export function reelParCategorieEtMois(
   entries: JournalEntry[], exercice: string, refs?: Referentiels, section?: PrevSection,
+  base: 'ht' | 'ttc' = 'ht',
 ): Map<string, Map<string, number>> {
   const moisSet = new Set(moisExercice(exercice));
   const m = new Map<string, Map<string, number>>();
@@ -190,7 +195,7 @@ export function reelParCategorieEtMois(
     if (section && refs && sectionDeEcriture(e, refs) !== section) continue;
     if (!m.has(e.categorie)) m.set(e.categorie, new Map());
     const row = m.get(e.categorie)!;
-    row.set(e.mois, r2((row.get(e.mois) ?? 0) + e.ht));
+    row.set(e.mois, r2((row.get(e.mois) ?? 0) + (base === 'ttc' ? e.ttc : e.ht)));
   }
   return m;
 }
@@ -366,4 +371,37 @@ export function ordreAffichage(lignes: PrevLigne[], refs: Referentiels): PrevLig
     out.splice(out.findIndex(x => x.id === l.id), 0, source);
   }
   return out;
+}
+
+/**
+ * Le taux de TVA dominant de chaque catégorie, lu dans le journal.
+ *
+ * Sert de valeur par défaut à l'affichage TTC du prévisionnel : inutile de
+ * ressaisir 20 % partout quand les écritures réelles le disent déjà. On retient
+ * le taux qui porte le plus de HT sur la catégorie, arrondi au taux légal le
+ * plus proche ; 20 % quand la catégorie n'a encore aucune écriture.
+ */
+export function tauxObserves(entries: JournalEntry[]): Map<string, number> {
+  const LEGAUX = [0, 2.1, 5.5, 10, 20];
+  const poids = new Map<string, Map<number, number>>();
+  for (const e of entries) {
+    if (!e.ht) continue;
+    const brut = (e.tva / e.ht) * 100;
+    const taux = LEGAUX.reduce((a, b) => Math.abs(b - brut) < Math.abs(a - brut) ? b : a, 0);
+    if (!poids.has(e.categorie)) poids.set(e.categorie, new Map());
+    const row = poids.get(e.categorie)!;
+    row.set(taux, (row.get(taux) ?? 0) + Math.abs(e.ht));
+  }
+  const out = new Map<string, number>();
+  for (const [cat, row] of poids) {
+    let meilleur = 20, max = -1;
+    for (const [taux, p] of row) if (p > max) { max = p; meilleur = taux; }
+    out.set(cat, meilleur);
+  }
+  return out;
+}
+
+/** Le taux à appliquer à une ligne de prévisionnel : le sien, ou l'observé. */
+export function tauxDeLigne(l: PrevLigne, observes: Map<string, number>): number {
+  return l.tauxTVA ?? l.formule?.tauxTVA ?? observes.get(l.categorie) ?? 20;
 }
