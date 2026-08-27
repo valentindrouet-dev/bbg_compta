@@ -12,7 +12,7 @@ import { useStore } from '../../store';
 import type { LigneStock } from '../../types';
 import { labelMois } from '../../utils/dates';
 import { euros, euros0, r2 } from '../../utils/money';
-import { couleurJeu, encreSur, voileSur } from '../../utils/jeux';
+import { couleurJeu, encreSur } from '../../utils/jeux';
 import {
   CANAUX_DEFAUT, stocksExercice, totalRepartition, type StockJeu,
 } from '../../utils/stock';
@@ -130,9 +130,8 @@ function TableauJeu({ s, moisList, couleur, lienProd, onPatch, onRemove }: {
   const setStockFabrique = useStore(st => st.setStockFabrique);
   const setVentesPourcent = useStore(st => st.setVentesPourcent);
   const couleursBloc = useStore(st => st.blocCouleurs);
-  const teinte = teinteBloc('immos', couleursBloc);
+  const teinte = teinteBloc('jeux', couleursBloc);
   const encre = encreSur(couleur);
-  const voile = voileSur(couleur, 0.2);
   const l = s.ligne;
   const nCanaux = (l.canaux ?? []).length;
   /** Le tirage de l'exercice : c'est lui que les répartitions découpent. */
@@ -147,7 +146,7 @@ function TableauJeu({ s, moisList, couleur, lienProd, onPatch, onRemove }: {
     label: string; aide?: string; get: (i: number) => number; total: number;
     fort?: boolean; monnaie?: boolean; signe?: boolean;
   }) => (
-    <tr style={fort ? { backgroundColor: voile, fontWeight: 700 } : undefined}>
+    <tr style={fort ? { backgroundColor: 'var(--bloc-clair)', fontWeight: 700 } : undefined}>
       <td title={aide} className={aide ? 'cursor-help' : ''}>{label}</td>
       {moisList.map((m, i) => {
         const v = get(i);
@@ -158,7 +157,7 @@ function TableauJeu({ s, moisList, couleur, lienProd, onPatch, onRemove }: {
           </td>
         );
       })}
-      <td className="text-right tabular-nums" style={{ backgroundColor: voile, fontWeight: 700 }}>
+      <td className="text-right tabular-nums" style={{ backgroundColor: 'var(--bloc-total)', fontWeight: 700 }}>
         {total ? (monnaie ? euros(total) : String(total)) : '·'}
       </td>
     </tr>
@@ -215,12 +214,12 @@ function TableauJeu({ s, moisList, couleur, lienProd, onPatch, onRemove }: {
       }
     >
       <div className="overflow-x-auto -mx-4 px-4" style={styleBloc(teinte)}>
-        <table data-table={`stockprev:${l.jeu}`} className="sheet text-sm border-collapse w-full">
+        <table data-table={`stockprev:${l.jeu}`} data-bloc="jeux" className="sheet text-sm border-collapse w-full">
           <thead>
             <tr className="text-left" style={{ color: '#5c5280' }}>
               <th style={{ minWidth: LARGEUR_LIBELLE, width: LARGEUR_LIBELLE }}>Mouvement</th>
               {moisList.map(m => <th key={m} className="text-right">{labelMois(m)}</th>)}
-              <th className="text-right bg-[var(--bloc-total)]">Total</th>
+              <th className="text-right">Total</th>
             </tr>
           </thead>
           <tbody>
@@ -238,14 +237,14 @@ function TableauJeu({ s, moisList, couleur, lienProd, onPatch, onRemove }: {
                   />
                 </td>
               ))}
-              <td className="text-right tabular-nums" style={{ backgroundColor: voile, fontWeight: 700 }}>
+              <td className="text-right tabular-nums" style={{ backgroundColor: 'var(--bloc-total)', fontWeight: 700 }}>
                 {s.total.fabrique || '·'}
               </td>
             </tr>
 
             {/* Le rythme d'écoulement : un seul pourcentage par mois, que les
                 canaux se partagent au prorata de leur répartition. */}
-            <tr style={{ backgroundColor: voile }}>
+            <tr style={{ backgroundColor: 'var(--bloc-clair)' }}>
               <td title="Quel pourcentage du tirage part ce mois-là, tous canaux confondus. Chaque canal en reçoit sa part.">
                 <b>% de ventes</b>{' '}
                 <span className="text-[11px] font-normal" style={{ color: '#6f6690' }}>
@@ -274,7 +273,7 @@ function TableauJeu({ s, moisList, couleur, lienProd, onPatch, onRemove }: {
                   </td>
                 );
               })}
-              <td className="text-right tabular-nums" style={{ backgroundColor: voile, fontWeight: 700 }}>
+              <td className="text-right tabular-nums" style={{ backgroundColor: 'var(--bloc-total)', fontWeight: 700 }}>
                 {totalRythme ? `${r2(totalRythme)} %` : '·'}
               </td>
             </tr>
@@ -391,7 +390,7 @@ function TableauJeu({ s, moisList, couleur, lienProd, onPatch, onRemove }: {
                       </td>
                     );
                   })}
-                  <td className="text-right tabular-nums" style={{ backgroundColor: voile, fontWeight: 700 }}>
+                  <td className="text-right tabular-nums" style={{ backgroundColor: 'var(--bloc-total)', fontWeight: 700 }}>
                     {s.total.parCanal.get(c.id)?.quantite || '·'}
                   </td>
                 </tr>
@@ -451,7 +450,7 @@ function TableauJeu({ s, moisList, couleur, lienProd, onPatch, onRemove }: {
                   const v = s.mois[i].parCanal.get(c.id)?.ca ?? 0;
                   return <td key={m} className="text-right tabular-nums">{v ? euros0(v) : '·'}</td>;
                 })}
-                <td className="text-right tabular-nums" style={{ backgroundColor: voile, fontWeight: 700 }}>
+                <td className="text-right tabular-nums" style={{ backgroundColor: 'var(--bloc-total)', fontWeight: 700 }}>
                   {s.total.parCanal.get(c.id)?.ca ? euros(s.total.parCanal.get(c.id)!.ca) : '·'}
                 </td>
               </tr>

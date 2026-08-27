@@ -74,7 +74,7 @@ export function TotalPrev({ exercice, moisList }: { exercice: string; moisList: 
           <Card key={bloc.cle} title={bloc.titre}
             actions={<TotalBloc label={`Total ${bloc.titre.toLowerCase()}`} valeur={euros(totalBloc)} t={t} />}>
             <div className="overflow-x-auto -mx-4 px-4" style={styleBloc(t)}>
-              <table data-table={`total:${bloc.cle}`} className="sheet text-sm border-collapse w-full">
+              <table data-table={`total:${bloc.cle}`} data-bloc={bloc.cle} className="sheet text-sm border-collapse w-full">
                 <thead>
                   <tr className="text-left" style={{ color: '#5c5280' }}>
                     <th className="min-w-56">Ligne</th>
@@ -191,7 +191,7 @@ export function TotalPrev({ exercice, moisList }: { exercice: string; moisList: 
       <Card title="Résultat prévisionnel de l'exercice (HT)"
         actions={<TotalBloc label="Résultat net prévu" valeur={euros(rn.total)} t={teinteBloc('resultat', couleurs)} />}>
         <div className="overflow-x-auto -mx-4 px-4" style={styleBloc(teinteBloc('resultat', couleurs))}>
-          <table data-table="total:resultat" className="sheet text-sm border-collapse w-full">
+          <table data-table="total:resultat" data-bloc="resultat" className="sheet text-sm border-collapse w-full">
             <thead>
               <tr className="text-left" style={{ color: '#5c5280' }}>
                 <th className="min-w-56">Ligne</th>

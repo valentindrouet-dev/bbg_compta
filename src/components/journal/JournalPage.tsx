@@ -15,7 +15,7 @@ import {
   PageHeader, Card, MonthTabs, Btn, useSort, sortBy, ThSort, BlocColorMenu, TotalBloc,
   styleBloc, type SortState,
 } from '../ui';
-import { teinteBloc, type BlocCle } from '../../utils/blocs';
+import { estImmobilisation, teinteBloc, type BlocCle } from '../../utils/blocs';
 import { DateCell, MoneyCell, AutoCompleteCell, FactureCell, ColFormatMenu, colStyle } from './cells';
 import type { ColFormat } from '../../store';
 import { saveFile, deleteFile } from '../../utils/files';
@@ -25,7 +25,13 @@ import { useCibleLigne, type Cible } from '../../utils/cible';
 /** Référence stable : un `?? []` dans un sélecteur reboucle à l'infini. */
 const AUCUN_JEU: string[] = [];
 
-type SectionKind = 'depenses' | 'jeux' | 'produits';
+/**
+ * Les quatre tableaux du mois. Les charges et les immobilisations sont
+ * séparées : elles ne pèsent pas de la même façon — une charge sort du
+ * résultat en une fois, une immobilisation s'inscrit à l'actif et ne le touche
+ * que par sa dotation. Les voir mélangées, c'est se tromper de bloc.
+ */
+type SectionKind = 'charges' | 'immos' | 'jeux' | 'produits';
 
 /**
  * Largeurs de colonnes en %. Les colonnes de montants (TTC, TVA, HT) sont
@@ -112,7 +118,9 @@ export function JournalPage({ cible }: { cible?: Cible }) {
     jeu: e => e.jeu ?? '',
   });
 
-  const depenses = tri(duMois.filter(e => e.type !== 'produit' && !refs.categoriesJeux.includes(e.categorie)));
+  const horsJeux = duMois.filter(e => e.type !== 'produit' && !refs.categoriesJeux.includes(e.categorie));
+  const charges = tri(horsJeux.filter(e => !estImmobilisation(e, refs)));
+  const immos = tri(horsJeux.filter(e => estImmobilisation(e, refs)));
   const jeux = tri(duMois.filter(e => e.type !== 'produit' && refs.categoriesJeux.includes(e.categorie)));
   const produits = tri(duMois.filter(e => e.type === 'produit'));
 
@@ -194,7 +202,7 @@ export function JournalPage({ cible }: { cible?: Cible }) {
       />
 
 
-      <ResumeMois depenses={depenses} jeux={jeux} produits={produits} />
+      <ResumeMois depenses={[...charges, ...immos]} jeux={jeux} produits={produits} />
 
       {/* Bandeau mode collage */}
       {clip && (
@@ -246,7 +254,10 @@ export function JournalPage({ cible }: { cible?: Cible }) {
       )}
 
       <div className="space-y-5 mt-4">
-        <Section kind="depenses" title="Dépenses" mois={mois} rows={depenses}
+        <Section kind="charges" title="Charges" mois={mois} rows={charges}
+          sort={sort} onSort={toggle} selected={selected} onToggleRow={toggleRow} onToggleAll={toggleAll}
+          clip={clip} onCopy={setClip} onPaste={pasteInto} fournisseurs={fournisseurs} />
+        <Section kind="immos" title="Immobilisations (portées à l'actif, amorties)" mois={mois} rows={immos}
           sort={sort} onSort={toggle} selected={selected} onToggleRow={toggleRow} onToggleAll={toggleAll}
           clip={clip} onCopy={setClip} onPaste={pasteInto} fournisseurs={fournisseurs} />
         <Section kind="jeux" title="Dépenses Jeux (développement & droits)" mois={mois} rows={jeux}
@@ -368,7 +379,8 @@ function Section({
   const [survolZone, setSurvolZone] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
   // Le journal, la synthèse et le prévisionnel partagent la teinte de chaque bloc.
-  const bloc: BlocCle = kind === 'produits' ? 'produits' : kind === 'jeux' ? 'jeux' : 'charges';
+  const bloc: BlocCle = kind === 'produits' ? 'produits'
+    : kind === 'jeux' ? 'jeux' : kind === 'immos' ? 'immos' : 'charges';
   const t = teinteBloc(bloc, couleurs);
   const fmtMenu = (col: string) => (
     <ColFormatMenu
@@ -402,7 +414,10 @@ function Section({
       date: defaultDate(), fournisseur: '', description: '',
       categorie: categories[0] ?? '', ttc: 0, tva: 0, ht: 0,
       paiement: refs.paiements[0] ?? 'CB BBG',
-      type: isProduits ? 'produit' : 'charges',
+      // Une ligne créée dans le tableau des immobilisations en est une : elle
+      // s'inscrit à l'actif et s'amortit, cinq ans par défaut.
+      type: isProduits ? 'produit' : kind === 'immos' ? 'immo' : 'charges',
+      ...(kind === 'immos' ? { immoDureeAns: 5 } : {}),
       compta: '', motsCles: '', facture: '', mois,
       // La nouvelle ligne reprend le jeu de la dernière saisie de la section.
       jeu: kind === 'jeux' ? (rows[rows.length - 1]?.jeu ?? '') : undefined,

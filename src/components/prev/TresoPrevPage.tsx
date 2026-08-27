@@ -12,7 +12,7 @@ import { useStore } from '../../store';
 import { EXERCICES, moisExercice } from '../../utils/dates';
 import { euros, r2 } from '../../utils/money';
 import { ordreAffichage } from '../../utils/previsionnel';
-import { fluxTresorerie, sommeMap } from '../../utils/prevCalc';
+import { fluxTresorerie, moisEcoules, sommeMap } from '../../utils/prevCalc';
 import { PageHeader, Card, MoneyInput, StatCard } from '../ui';
 
 const AUCUNE_LIGNE: never[] = [];
@@ -30,7 +30,10 @@ export function TresoPrevPage() {
   const prevu = useMemo(() => EXERCICES.map(ex => {
     const moisList = moisExercice(ex);
     const lignes = ordreAffichage(previsionnels[ex] ?? AUCUNE_LIGNE, refs);
-    const f = fluxTresorerie(lignes, moisList, stocks, ex, refs, entries);
+    // Sur l'exercice en cours, les mois déjà passés viennent du journal : le
+    // budget n'a plus rien à dire sur ce qui est déjà encaissé et payé.
+    const reels = moisEcoules(moisList);
+    const f = fluxTresorerie(lignes, moisList, stocks, ex, refs, entries, reels);
     const mouvements = finances.filter(x => {
       const m = x.date < '2025-09-01' ? 'pre-immat' : x.date.slice(0, 7);
       return moisList.includes(m);
@@ -47,6 +50,8 @@ export function TresoPrevPage() {
     const sorties = r2(sommeMap(f.decaissements) - placements - autres);
     return {
       ex,
+      nReels: reels.length,
+      nMois: moisList.length,
       ventesJeux: sommeMap(f.ventesJeux),
       autresProduits: sommeMap(f.autresProduits),
       produitsFinanciers,
@@ -123,7 +128,7 @@ export function TresoPrevPage() {
       />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-        <StatCard label="Trésorerie prévue en 2029-30" value={euros(finPrevue)}
+        <StatCard label="Trésorerie fin 2029-30" value={euros(finPrevue)}
           tone={finPrevue >= 0 ? 'good' : 'bad'} sub="après apports et remboursements" />
         <StatCard label="Ventes de jeux prévues (TTC)" value={euros(totalVentesJeux)}
           tone="good" sub="calculées dans Prévisionnel → Stock" />
@@ -135,13 +140,22 @@ export function TresoPrevPage() {
           sub="charges, personnel, investissements et tirages" />
       </div>
 
-      <Card title="Prévisionnel (TTC) — calculé depuis les onglets du prévisionnel" className="mb-6">
+      <Card title="Trésorerie de l'exercice (TTC) — réel jusqu'au mois en cours, budget ensuite" className="mb-6">
         <div className="overflow-x-auto -mx-4 px-4">
           <table data-table="tresoprev:previsionnel" className="sheet text-sm border-collapse w-full">
             <thead>
               <tr className="text-left text-[#5c5280]">
                 <th className="min-w-64">Catégories (TTC)</th>
-                {EXERCICES.map(ex => <th key={ex} className="text-right">{ex}</th>)}
+                {prevuCumule.map(x => (
+                  <th key={x.ex} className="text-right">
+                    {x.ex}
+                    <div className="text-[10px] font-normal opacity-80">
+                      {x.nReels === 0 ? 'prévu'
+                        : x.nReels >= x.nMois ? 'réalisé'
+                          : `${x.nReels}/${x.nMois} mois réels`}
+                    </div>
+                  </th>
+                ))}
                 <th className="text-right bg-[#efeafa]">Total</th>
               </tr>
             </thead>
@@ -169,10 +183,12 @@ export function TresoPrevPage() {
           </table>
         </div>
         <p className="text-xs text-[#9a92b5] mt-2">
-          Rien ne se saisit ici : chaque ligne est la somme d'un bloc du prévisionnel de l'exercice,
-          convertie en TTC ligne à ligne (chacune garde son taux de TVA). Les tirages d'usine et les
-          ventes de jeux viennent de l'onglet <b>Stock</b>. Les apports en capital, le compte courant
-          d'associé et les placements restent des <b>mouvements financiers</b>, saisis en Trésorerie.
+          Rien ne se saisit ici. <b>Les mois déjà passés viennent du journal</b> — ce qui est encaissé
+          et payé est connu, le budget n'a plus rien à en dire ; les mois à venir viennent du
+          prévisionnel, chaque ligne convertie en TTC avec son propre taux de TVA. Les tirages
+          d'usine et les ventes de jeux à venir viennent de l'onglet <b>Stock</b>. Les apports en
+          capital, le compte courant d'associé et les placements restent des
+          <b> mouvements financiers</b>, saisis en Trésorerie.
         </p>
       </Card>
 
@@ -254,7 +270,10 @@ export function TresoPrevPage() {
 }
 
 interface PrevuRow {
-  ex: string; ventesJeux: number; autresProduits: number; produitsFinanciers: number;
+  ex: string;
+  /** Combien de mois de cet exercice viennent du journal, et sur combien. */
+  nReels: number; nMois: number;
+  ventesJeux: number; autresProduits: number; produitsFinanciers: number;
   entrees: number; charges: number; personnel: number; immos: number; fabrication: number;
   placements: number; autres: number; sorties: number; exploitation: number;
   capital: number; cca: number; remboursementCCA: number; apports: number; treso: number;

@@ -9,7 +9,12 @@ sont recalculés en direct à partir des écritures.
 ## Onglets
 
 **Journal comptable**
-- **Journal du mois** — saisie des dépenses, dépenses jeux et produits, mois par mois
+- **Journal du mois** — **quatre tableaux** : **Charges**, **Immobilisations**
+  (portées à l'actif et amorties), **Dépenses Jeux** et **Produits**. Les charges
+  et les immobilisations ne pèsent pas de la même façon — l'une sort du résultat
+  en une fois, l'autre ne le touche que par sa dotation — les voir mélangées,
+  c'est se tromper de bloc. Une ligne créée dans le tableau des immobilisations
+  en est une d'office. Saisie mois par mois
   (TVA automatique par taux 20 / 10 / 5,5 / 0 % ou saisie manuelle, HT calculé,
   catégories, plan comptable, mots clés, factures, alerte si la date sort du mois)
 - **Le mois en trois chiffres** — en haut du journal : dépenses (charges,
@@ -35,7 +40,11 @@ sont recalculés en direct à partir des écritures.
   et résultat net tiennent alors compte de la fin d'exercice prévue. La date du
   jour, affichée sous « BBG Compta », décide de la frontière ; elle se remet à
   jour toute seule à minuit.
-- **Immobilisations** — durées, dotations, VNC et fin d'amortissement calculées
+- **Immobilisations** — **en lecture seule** : c'est un compte rendu de ce qui est
+  saisi au Journal du mois, qui fait foi. Durées, dotations, VNC et fin
+  d'amortissement calculées ; un clic sur une ligne l'ouvre dans son mois, là où
+  elle se corrige. Corriger un montant à deux endroits, c'est se donner deux
+  chances de se tromper
 - **Stocks** — les **exemplaires**, pas les euros : un tirage entre, une vente
   sort, une casse aussi, un inventaire corrige. Chaque vente porte son **canal**
   (distributeur, boutique, éditeur). La position de chaque jeu s'en déduit —
@@ -99,8 +108,10 @@ sont recalculés en direct à partir des écritures.
     de revient et ses canaux, et le stock de clôture devient l'ouverture
   - **Total** — tout le prévisionnel de l'exercice d'un seul tenant et
     **non modifiable** : chaque bloc, le stock, puis le compte de résultat.
-    Même mise en forme que les onglets de saisie — les postes généraux d'abord,
-    puis un **bandeau par jeu** avec ses lignes et ses ventes
+    Même mise en forme **et même palette** que les onglets de saisie : le tableau
+    des produits y est vert comme dans Produits, celui des charges orange comme
+    dans Charges — les postes généraux d'abord, puis un **bandeau par jeu** avec
+    ses lignes et ses ventes
 - Dans les onglets de saisie : mêmes blocs, même ordre, mêmes catégories et mêmes couleurs
   que la synthèse annuelle, avec Prévu / Réel / Écart par ligne, les mêmes boutons **HT / TTC** et
   **détaillée / simplifiée**, et des alarmes quand une ligne ne correspond
@@ -119,8 +130,12 @@ sont recalculés en direct à partir des écritures.
   résultat et trajectoire. Le prévu y compte le stock, comme l'onglet Total :
   les deux pages lisent le même calcul
 - **Réel vs Prévu** — le réalisé vient du journal, sans IMPORTRANGE
-- **Trésorerie prévisionnelle vs réalisée** — par exercice. Le prévisionnel n'est
-  plus recopié à la main : chaque ligne est la somme d'un bloc du prévisionnel,
+- **Trésorerie prévisionnelle vs réalisée** — par exercice, et **le réel prime**.
+  Sur l'exercice en cours, les mois déjà passés viennent du journal — ce qui est
+  encaissé et payé est connu, le budget n'a plus rien à en dire — et seuls les
+  mois à venir sont budgétés ; l'en-tête de chaque colonne dit lesquels
+  (« 13/14 mois réels », « prévu », « réalisé »). Le prévisionnel n'est
+  plus recopié à la main : chaque ligne à venir est la somme d'un bloc du prévisionnel,
   **convertie en TTC ligne à ligne** (chacune garde son taux ; cotisations et
   rémunérations n'en portent pas). Les **ventes de jeux** et les **tirages
   d'usine** viennent de l'onglet Stock. Capital, compte courant d'associé et

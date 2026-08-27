@@ -7,11 +7,12 @@
 import type {
   FinanceEntry, JournalEntry, LigneStock, PrevLigne, PrevSection, Referentiels,
 } from '../types';
-import { estChargeFinanciere } from './blocs';
+import { estChargeFinanciere, estPersonnel } from './blocs';
 import {
   compteResultat, dotationsParMois, produitsFinanciersParMois,
   type ImmoInfo, type LigneResultat,
 } from './calc';
+import { compareMois, moisCourant } from './dates';
 import { r2 } from './money';
 import { tauxDeLigne, tauxObserves, valeursDe } from './previsionnel';
 import { apportStock, type ApportStock } from './stock';
@@ -164,20 +165,60 @@ function sectionHT(
   return montantsSection(lignes, moisList, section);
 }
 
+/**
+ * Les mois d'un exercice déjà passés — ceux dont le journal fait foi.
+ *
+ * Sur l'exercice en cours, une trésorerie qui ne lirait que le budget serait
+ * fausse de onze mois : ce qui est encaissé et payé est connu, il n'y a plus
+ * rien à prévoir. On prend donc le réel jusqu'au mois courant inclus, et le
+ * prévisionnel pour la suite.
+ */
+export function moisEcoules(moisList: string[]): string[] {
+  const courant = moisCourant();
+  return moisList.filter(m => compareMois(m, courant) <= 0);
+}
+
 export function fluxTresorerie(
   lignes: PrevLigne[], moisList: string[], stocksLignes: LigneStock[],
   exercice: string, refs: Referentiels, entries: JournalEntry[] = [],
+  /**
+   * Mois déjà écoulés : pour ceux-là, le journal remplace le budget. Laisser la
+   * liste vide donne le prévisionnel pur.
+   */
+  reels: string[] = [],
 ): FluxTreso {
   const observes = tauxObserves(entries);
+  const passe = new Set(reels);
+  /** Ce que le journal a réellement fait bouger sur un mois, TTC. */
+  const duJournal = (m: string, garde: (e: JournalEntry) => boolean) =>
+    r2(entries.filter(e => e.mois === m && garde(e)).reduce((s, e) => s + e.ttc, 0));
+  /** Le réel quand le mois est passé, le budget sinon. */
+  const melange = (prevu: Map<string, number>, garde: (e: JournalEntry) => boolean) =>
+    new Map(moisList.map(m => [m, passe.has(m) ? duJournal(m, garde) : (prevu.get(m) ?? 0)]));
   const stock = apportStock(stocksLignes, exercice, refs.jeux ?? []);
-  const autresProduits = sectionTTC(lignes, moisList, 'produits', observes);
-  const ventesJeux = new Map(moisList.map(m => [m, stock.caTTCParMois.get(m) ?? 0]));
-  const charges = sectionTTC(lignes, moisList, 'charges', observes);
+  const estJeu = (e: JournalEntry) => refs.categoriesJeux.includes(e.categorie);
+  const estPerso = (e: JournalEntry) => estPersonnel(e.categorie, refs);
+
+  // Sur un mois passé, chaque poste vient du journal ; sur un mois à venir, du
+  // budget. Les ventes de jeux prévues s'effacent aussi devant le réel : elles
+  // sont déjà dans les produits du journal.
+  const autresProduits = melange(
+    sectionTTC(lignes, moisList, 'produits', observes),
+    e => e.type === 'produit');
+  const ventesJeux = melange(
+    new Map(moisList.map(m => [m, stock.caTTCParMois.get(m) ?? 0])),
+    () => false);
+  const charges = melange(
+    sectionTTC(lignes, moisList, 'charges', observes),
+    e => e.type === 'charges' && !estPerso(e) && !estJeu(e));
   // Cotisations et rémunérations : pas de TVA, le TTC est le HT.
-  const personnel = sectionHT(lignes, moisList, 'personnel');
-  const immos = sectionTTC(lignes, moisList, 'immos', observes);
+  const personnel = melange(sectionHT(lignes, moisList, 'personnel'), estPerso);
+  const immos = melange(sectionTTC(lignes, moisList, 'immos', observes), e => e.type === 'immo');
   // La TVA sur un tirage est déductible : l'usine est payée TTC, la TVA revient.
-  const fabrication = new Map(moisList.map(m => [m, r2((stock.fabricationParMois.get(m) ?? 0) * 1.2)]));
+  // Les dépenses jeux réelles prennent la place des tirages prévus.
+  const fabrication = melange(
+    new Map(moisList.map(m => [m, r2((stock.fabricationParMois.get(m) ?? 0) * 1.2)])),
+    e => e.type !== 'produit' && estJeu(e));
 
   const encaissements = new Map(moisList.map(m =>
     [m, r2((autresProduits.get(m) ?? 0) + (ventesJeux.get(m) ?? 0))]));

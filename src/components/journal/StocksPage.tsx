@@ -16,12 +16,13 @@ import {
   todayISO,
 } from '../../utils/dates';
 import { euros, euros0, r2 } from '../../utils/money';
-import { couleurJeu, encreSur, voileSur } from '../../utils/jeux';
+import { couleurJeu, encreSur } from '../../utils/jeux';
 import {
   CANAUX_DEFAUT, mouvementsExercice, positionsStock, sensMouvement, stocksExercice,
 } from '../../utils/stock';
 import { useEtatVue } from '../../utils/etatVue';
-import { PageHeader, Card, Btn, StatCard, MoneyInput, ExerciceTabs } from '../ui';
+import { PageHeader, Card, Btn, StatCard, MoneyInput, ExerciceTabs, styleBloc } from '../ui';
+import { teinteBloc } from '../../utils/blocs';
 
 const AUCUN_JEU: string[] = [];
 
@@ -41,6 +42,8 @@ export function StocksPage() {
   const updateMouvementStock = useStore(s => s.updateMouvementStock);
   const removeMouvementStock = useStore(s => s.removeMouvementStock);
 
+  const couleursBloc = useStore(s => s.blocCouleurs);
+  const teinteJeux = teinteBloc('jeux', couleursBloc);
   const [exercice, setExercice] = useEtatVue('stocks.exercice', '2025-26',
     v => (EXERCICES as readonly string[]).includes(v));
 
@@ -94,8 +97,8 @@ export function StocksPage() {
       {/* ---------------------------------------------- Position par jeu --- */}
       <Card title="Position de chaque jeu" className="mb-5">
         {positions.length ? (
-          <div className="overflow-x-auto -mx-4 px-4">
-            <table data-table="stocks:positions" className="sheet text-sm border-collapse w-full">
+          <div className="overflow-x-auto -mx-4 px-4" style={styleBloc(teinteJeux)}>
+            <table data-table="stocks:positions" data-bloc="jeux" className="sheet text-sm border-collapse w-full">
               <thead>
                 <tr className="text-left" style={{ color: '#5c5280' }}>
                   <th className="min-w-40">Jeu</th>
@@ -125,7 +128,7 @@ export function StocksPage() {
                       <td className="text-right tabular-nums font-bold">{pos.stock}</td>
                       <td className="text-right tabular-nums">{pos.coutMoyen ? euros(pos.coutMoyen) : '·'}</td>
                       <td className="text-right tabular-nums font-medium"
-                        style={{ backgroundColor: voileSur(c, 0.18) }}>{euros(pos.valeur)}</td>
+                        style={{ backgroundColor: 'var(--bloc-total)' }}>{euros(pos.valeur)}</td>
                       <td className="text-right tabular-nums">{pos.ca ? euros(pos.ca) : '·'}</td>
                       <td className="text-right tabular-nums">{pos.cogs ? euros(pos.cogs) : '·'}</td>
                       <td className="text-right tabular-nums font-bold"
@@ -168,8 +171,8 @@ export function StocksPage() {
       {/* ------------------------------------------- Ventes par canal ------ */}
       {positions.some(p => p.parCanal.size > 0) && (
         <Card title="Ventes par canal" className="mb-5">
-          <div className="overflow-x-auto -mx-4 px-4">
-            <table data-table="stocks:canaux" className="sheet text-sm border-collapse w-full">
+          <div className="overflow-x-auto -mx-4 px-4" style={styleBloc(teinteJeux)}>
+            <table data-table="stocks:canaux" data-bloc="jeux" className="sheet text-sm border-collapse w-full">
               <thead>
                 <tr className="text-left" style={{ color: '#5c5280' }}>
                   <th className="min-w-40">Jeu</th>
@@ -219,8 +222,8 @@ export function StocksPage() {
       {/* ------------------------------------------------- Mouvements ------ */}
       <Card title={`Mouvements de l'exercice ${exercice}`} className="mt-5">
         {duMois.length ? (
-          <div className="overflow-x-auto -mx-4 px-4">
-            <table data-table="stocks:mouvements" className="sheet text-sm border-collapse w-full">
+          <div className="overflow-x-auto -mx-4 px-4" style={styleBloc(teinteJeux)}>
+            <table data-table="stocks:mouvements" data-bloc="jeux" className="sheet text-sm border-collapse w-full">
               <thead>
                 <tr className="text-left" style={{ color: '#5c5280' }}>
                   <th>Date</th><th>Mois</th><th className="min-w-32">Jeu</th><th>Type</th>

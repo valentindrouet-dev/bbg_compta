@@ -124,7 +124,7 @@ export default function App() {
         {page === 'journal' && <JournalPage cible={cibleDe('journal')} />}
         {page === 'synthese' && <SynthesePage onAllerA={allerA} />}
         {page === 'totale' && <SyntheseTotalePage />}
-        {page === 'immos' && <ImmosPage cible={cibleDe('immos')} />}
+        {page === 'immos' && <ImmosPage cible={cibleDe('immos')} onAllerA={allerA} />}
         {page === 'stocks' && <StocksPage />}
         {page === 'treso' && <TresoPage />}
         {page === 'tva' && <TVAPage />}

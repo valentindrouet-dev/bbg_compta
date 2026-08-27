@@ -412,7 +412,7 @@ export function PrevisionnelPage() {
               valeur={euros(sommeMap(stock.caParMois))} t={teinteBloc('produits', couleurs)} />
           }>
           <div className="overflow-x-auto -mx-4 px-4" style={styleBloc(teinteBloc('produits', couleurs))}>
-            <table data-table="prev:ventesjeux" className="sheet text-sm border-collapse w-full">
+            <table data-table="prev:ventesjeux" data-bloc="produits" className="sheet text-sm border-collapse w-full">
               <thead>
                 <tr className="text-left" style={{ color: '#5c5280' }}>
                   <th className="min-w-52">Canal de vente</th>

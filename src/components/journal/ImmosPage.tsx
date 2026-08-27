@@ -1,24 +1,30 @@
 import { Fragment, useMemo } from 'react';
-import { Trash2, Plus } from 'lucide-react';
+import { SquareArrowOutUpRight, Lock } from 'lucide-react';
 import { useStore, type ColFormat } from '../../store';
-import { labelMois, labelMoisLong, compareMois, todayISO, moisDeDate, formatDateFR } from '../../utils/dates';
-import { euros, r2, tvaDepuisTTC } from '../../utils/money';
+import { labelMois, labelMoisLong, compareMois, todayISO, formatDateFR } from '../../utils/dates';
+import { euros, r2 } from '../../utils/money';
 import { immoInfos, type ImmoInfo } from '../../utils/calc';
-import { PageHeader, Card, StatCard, Btn, useSort, sortBy, ThSort } from '../ui';
-import { DateCell, MoneyCell, AutoCompleteCell, ColFormatMenu, colStyle } from './cells';
+import { PageHeader, Card, StatCard, useSort, sortBy, ThSort } from '../ui';
+import { ColFormatMenu, colStyle } from './cells';
 import { useCibleLigne, type Cible } from '../../utils/cible';
 
 /** Colonnes du tableau, en % : tout tient à l'écran. */
 const COLS = [8, 11, 17, 13, 7, 7, 7, 5, 6.5, 6.5, 6.5, 3.5, 2];
 
-const DUREES = [3, 5, 10, 15, 20];
-
-export function ImmosPage({ cible }: { cible?: Cible }) {
+/**
+ * Les immobilisations, en lecture seule.
+ *
+ * C'est un compte rendu de ce qui a été saisi au **Journal du mois** : c'est lui
+ * qui fait foi. Corriger un montant à deux endroits, c'est se donner deux
+ * chances de se tromper — un clic sur une ligne ouvre l'écriture là où elle se
+ * modifie, dans son mois.
+ */
+export function ImmosPage({ cible, onAllerA }: {
+  cible?: Cible;
+  onAllerA?: (page: 'journal', ligne: string) => void;
+}) {
   const entries = useStore(s => s.entries);
   const refs = useStore(s => s.referentiels);
-  const update = useStore(s => s.updateEntry);
-  const remove = useStore(s => s.removeEntry);
-  const addEntry = useStore(s => s.addEntry);
   const formats = useStore(s => s.journalFormats);
   const setColFormat = useStore(s => s.setColFormat);
   const resetColFormat = useStore(s => s.resetColFormat);
@@ -28,12 +34,6 @@ export function ImmosPage({ cible }: { cible?: Cible }) {
   const today = todayISO();
   // Ligne visée depuis les contrôles comptables de la synthèse.
   useCibleLigne(cible);
-
-  const fournisseurs = useMemo(() => {
-    const noms = new Map<string, string>();
-    for (const e of entries) { const n = e.fournisseur.trim(); if (n) noms.set(n.toLowerCase(), n); }
-    return [...noms.values()].sort((a, b) => a.localeCompare(b, 'fr'));
-  }, [entries]);
 
   /** Les immobilisations sont regroupées par mois d'acquisition, comme dans le tableur. */
   const parMois = useMemo(() => {
@@ -74,25 +74,18 @@ export function ImmosPage({ cible }: { cible?: Cible }) {
   );
   const st = (col: string) => colStyle(formats[`immo:${col}`]);
 
-  function ajouter() {
-    const d = todayISO();
-    addEntry({
-      date: d, fournisseur: '', description: '', categorie: refs.categoriesDepenses[0] ?? '',
-      ttc: 0, tva: 0, ht: 0, paiement: refs.paiements[0] ?? 'CB BBG',
-      type: 'immo', immoDureeAns: 5, compta: '', motsCles: '', facture: '',
-      mois: moisDeDate(d),
-    });
-  }
 
   return (
     <div className="p-4 w-full">
       <PageHeader
         title="Immobilisations & dotations"
-        subtitle="Regroupées par mois d'acquisition — amortissement linéaire, calculé automatiquement"
+        subtitle="Compte rendu de ce qui est saisi au Journal du mois — amortissement linéaire, calculé automatiquement"
         actions={
-          <Btn variant="primary" onClick={ajouter}>
-            <span className="inline-flex items-center gap-1"><Plus size={14} /> Ajouter</span>
-          </Btn>
+          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-sm font-semibold"
+            style={{ backgroundColor: '#e9f3ea', borderColor: '#9cc9a4', color: '#2c5d16' }}
+            title="Rien ne se modifie ici : une immobilisation se saisit et se corrige au Journal du mois, dans son mois.">
+            <Lock size={14} /> Lecture seule
+          </span>
         }
       />
 
@@ -134,7 +127,6 @@ export function ImmosPage({ cible }: { cible?: Cible }) {
                 const sAn = r2(list.reduce((s, i) => s + i.dotationAn, 0));
                 const sMois = r2(list.reduce((s, i) => s + i.dotationMois, 0));
                 const sVnc = r2(list.reduce((s, i) => s + i.vnc(today), 0));
-                const annee = mois === 'pre-immat' ? 2025 : Number(mois.slice(0, 4));
                 return (
                   <Fragment key={mois}>
                     <tr className="band-purple">
@@ -147,48 +139,21 @@ export function ImmosPage({ cible }: { cible?: Cible }) {
                       const e = i.entry;
                       return (
                         <tr key={e.id} data-ligne={e.id} className="group">
-                          <td><DateCell value={e.date} anneeRef={annee} style={st('date')}
-                            onCommit={v => update(e.id, { date: v })} /></td>
-                          <td>
-                            <AutoCompleteCell value={e.fournisseur} options={fournisseurs} style={st('fournisseur')}
-                              onCommit={v => update(e.id, { fournisseur: v })} />
+                          <td style={st('date')}>{formatDateFR(e.date)}</td>
+                          <td style={st('fournisseur')}>{e.fournisseur}</td>
+                          <td className="truncate" style={st('description')} title={e.description}>{e.description}</td>
+                          <td style={st('categorie')}>
+                            <span className="pill-orange px-2 py-0.5 rounded-full text-xs">{e.categorie}</span>
                           </td>
-                          <td>
-                            <input defaultValue={e.description} style={st('description')} title={e.description}
-                              onBlur={ev => ev.target.value !== e.description && update(e.id, { description: ev.target.value })}
-                              onKeyDown={ev => { if (ev.key === 'Enter') (ev.target as HTMLInputElement).blur(); }} />
-                          </td>
-                          <td>
-                            <select className="pill-orange" style={st('categorie')} value={e.categorie}
-                              onChange={ev => update(e.id, { categorie: ev.target.value })}>
-                              {!refs.categoriesDepenses.includes(e.categorie) && e.categorie &&
-                                <option value={e.categorie}>{e.categorie}</option>}
-                              {refs.categoriesDepenses.map(c => <option key={c} value={c}>{c}</option>)}
-                            </select>
-                          </td>
-                          <td>
-                            <MoneyCell value={e.ttc} style={st('ttc')} onCommit={v => {
-                              const ttc = v ?? 0;
-                              // Le taux implicite est conservé quand on corrige le TTC.
-                              const taux = e.ttc ? (e.tva / e.ttc) : 0;
-                              const tva = r2(Math.abs(taux - 1 / 6) < 0.002 ? tvaDepuisTTC(ttc, 20) : ttc * taux);
-                              update(e.id, { ttc, tva, ht: r2(ttc - tva) });
-                            }} />
-                          </td>
-                          <td>
-                            <MoneyCell value={e.tva} style={st('tva')} onCommit={v => {
-                              const tva = v ?? 0;
-                              update(e.id, { tva, ht: r2(e.ttc - tva) });
-                            }} />
-                          </td>
+                          <td className="text-right tabular-nums" style={st('ttc')}>{euros(e.ttc)}</td>
+                          <td className="text-right tabular-nums" style={st('tva')}>{euros(e.tva)}</td>
                           <td className="text-right tabular-nums font-semibold"
                             style={{ color: 'var(--bbg-purple-darker)', ...st('ht') }}>{euros(e.ht)}</td>
-                          <td>
-                            <select className="pill-blue" title="Durée d'amortissement"
-                              style={st('duree')} value={e.immoDureeAns ?? 5}
-                              onChange={ev => update(e.id, { immoDureeAns: Number(ev.target.value) })}>
-                              {DUREES.map(d => <option key={d} value={d}>{d} ans</option>)}
-                            </select>
+                          <td style={st('duree')}>
+                            <span className="pill-blue px-2 py-0.5 rounded-full text-xs"
+                              title="Durée d'amortissement — elle se règle sur la ligne, au Journal du mois">
+                              {e.immoDureeAns ?? 5} ans
+                            </span>
                           </td>
                           <td className="text-right tabular-nums" style={st('dotAn')}>{euros(i.dotationAn)}</td>
                           <td className="text-right tabular-nums" style={st('dotMois')}>{euros(i.dotationMois)}</td>
@@ -197,10 +162,11 @@ export function ImmosPage({ cible }: { cible?: Cible }) {
                           <td>
                             <button
                               className="mx-auto block opacity-0 group-hover:opacity-100"
-                              style={{ color: '#d98b86' }} title="Supprimer"
-                              onClick={() => { if (confirm(`Supprimer « ${e.description || e.fournisseur} » ?`)) remove(e.id); }}
+                              style={{ color: 'var(--bbg-purple-dark)' }}
+                              title="Ouvrir cette écriture au Journal du mois, là où elle se modifie"
+                              onClick={() => onAllerA?.('journal', e.id)}
                             >
-                              <Trash2 size={14} />
+                              <SquareArrowOutUpRight size={14} />
                             </button>
                           </td>
                         </tr>
