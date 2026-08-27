@@ -169,7 +169,9 @@ export function SynthesePage({ onAllerA }: { onAllerA?: (page: Page, ligne: stri
       produits: ht.totalProduitsParMois,
       charges: ht.totalChargesParMois,
       personnel: ht.totalPersonnelParMois,
-      jeux: ht.totalJeuxParMois,
+      // Les dépenses jeux sont désormais DANS les charges : les repasser ici
+      // les compterait deux fois.
+      jeux: VIDE,
       dotations: dotationsParMois(immos, ht.moisList),
       produitsFinanciers: produitsFinanciersParMois(finances, ht.moisList),
       chargesFinancieres: ht.chargesFinancieresParMois,
@@ -320,12 +322,17 @@ export function SynthesePage({ onAllerA }: { onAllerA?: (page: Page, ligne: stri
                                         categorie: cat, type: bloc.typeApercu,
                                       })}
                                       onMouseLeave={quitte}
+                                      // Un montant négatif dans un bloc de dépenses est un
+                                      // remboursement : il vient en moins des charges du mois.
+                                      style={v < 0 ? { color: '#38761d' } : undefined}
+                                      title={v < 0 ? 'En réduction des charges du mois' : undefined}
                                     >
                                       {v ? euros(r2(v)) : '·'}
                                     </td>
                                   );
                                 })}
-                                <td className="text-right tabular-nums font-semibold col-total">{euros(tot)}</td>
+                                <td className="text-right tabular-nums font-semibold col-total"
+                                  style={tot < 0 ? { color: '#38761d' } : undefined}>{euros(tot)}</td>
                                 <td className="text-right tabular-nums col-total" style={{ color: '#5c5280' }}>
                                   {euros(r2(tot / nbMois))}
                                 </td>
@@ -503,7 +510,7 @@ function BlocJeux({ syn, refs, couleurs, unite, survol, quitte, nbMois, simple }
 
   return (
     <Card
-      title={`Dépenses Jeux — un bloc par jeu (${unite})`}
+      title={`Dépenses Jeux — ventilation par jeu (${unite})`}
       actions={
         <>
           <TotalBloc label={`Total ${unite}`} valeur={euros(grandTotal)} t={t} />
@@ -655,6 +662,9 @@ function BlocJeux({ syn, refs, couleurs, unite, survol, quitte, nbMois, simple }
         </table>
       </div>
       <p className="text-xs mt-2" style={{ color: '#9a92b5' }}>
+        <b>Ce bloc ne s'ajoute pas au résultat</b> : les charges listées ici sont déjà comprises
+        dans les <b>Charges</b> ci-dessus, et ce qui est immobilisé, dans les <b>Immobilisations</b>.
+        C'est une lecture par jeu, pour savoir ce que chacun a coûté.{' '}
         Toutes les catégories de dépenses jeux sont listées sous chaque jeu, même à zéro :
         ce qui n'a pas encore été engagé se voit aussi. Le rattachement se fait dans la colonne
         « Jeu » du journal ; les coûts de fabrication, eux, restent dans le Production Calculator.
@@ -686,6 +696,15 @@ function BlocImmos({ syn, couleurs, unite, meta, survol, quitte, immos, simple }
   // Même ordre que partout ailleurs : celui du référentiel, puis les intrus.
   const cats = ordreRef.filter(c => syn.immos.has(c))
     .concat([...syn.immos.keys()].filter(c => !ordreRef.includes(c)));
+  // Les immobilisations d'un jeu sont regroupées plus bas, jeu par jeu : on ne
+  // les répète pas dans la liste générale.
+  const catsJeux = new Set(
+    [...syn.immosParJeuEtCategorie.values()].flatMap(m => [...m.keys()]));
+  const catsHorsJeux = cats.filter(c => !catsJeux.has(c));
+  const jeuxImmo = [...syn.immosParJeuEtCategorie.keys()];
+  const totalJeuMois = (jeu: string, m: string) =>
+    r2([...(syn.immosParJeuEtCategorie.get(jeu)?.values() ?? [])]
+      .reduce((s, parMois) => s + (parMois.get(m) ?? 0), 0));
   const grandTotal = r2([...syn.immoParMois.values()].reduce((s, v) => s + v, 0));
   const totalDotations = r2(syn.moisList.reduce((s, m) => s + dotationDuMois(immos, m), 0));
   if (!cats.length) return null;
@@ -713,7 +732,7 @@ function BlocImmos({ syn, couleurs, unite, meta, survol, quitte, immos, simple }
             </tr>
           </thead>
           <tbody>
-            {(simple ? [] : cats).map(cat => (
+            {(simple ? [] : catsHorsJeux).map(cat => (
               <tr key={cat} {...reorg.ligne('categorie', cat)}>
                 <td>
                   <span className="inline-flex items-center gap-1.5">
@@ -741,6 +760,51 @@ function BlocImmos({ syn, couleurs, unite, meta, survol, quitte, immos, simple }
                   {euros(r2([...(syn.immos.get(cat)?.values() ?? [])].reduce((s, v) => s + v, 0)))}
                 </td>
               </tr>
+            ))}
+            {/* Le développement porté à l'actif, jeu par jeu : ce sont des
+                immobilisations comme les autres, mais on veut savoir ce que
+                chaque jeu a coûté. */}
+            {!simple && jeuxImmo.map(jeu => (
+              <Fragment key={`immojeu-${jeu}`}>
+                <tr className="band-bloc">
+                  <td colSpan={syn.moisList.length + 2} className="py-1">
+                    <span className="inline-flex items-center gap-1.5">
+                      <Gamepad2 size={13} /> {jeu} — développement à l'actif
+                    </span>
+                  </td>
+                </tr>
+                {[...syn.immosParJeuEtCategorie.get(jeu)!.keys()].map(cat => (
+                  <tr key={`${jeu}-${cat}`}>
+                    <td className="pl-4">{cat}</td>
+                    {syn.moisList.map(m => {
+                      const v = syn.immosParJeuEtCategorie.get(jeu)!.get(cat)?.get(m) ?? 0;
+                      return (
+                        <td key={m} className="text-right tabular-nums"
+                          onMouseEnter={ev => survol(ev, m, `${jeu} — ${cat} — ${labelMois(m)}`,
+                            { categorie: cat, type: 'immo' })}
+                          onMouseLeave={quitte}
+                        >
+                          {v ? euros(r2(v)) : '·'}
+                        </td>
+                      );
+                    })}
+                    <td className="text-right tabular-nums font-semibold col-total">
+                      {euros(r2(syn.moisList.reduce((acc, m) =>
+                        acc + (syn.immosParJeuEtCategorie.get(jeu)!.get(cat)?.get(m) ?? 0), 0)))}
+                    </td>
+                  </tr>
+                ))}
+                <tr style={{ fontWeight: 700 }}>
+                  <td className="pl-4">Total {jeu} à l'actif</td>
+                  {syn.moisList.map(m => {
+                    const v = totalJeuMois(jeu, m);
+                    return <td key={m} className="text-right tabular-nums">{v ? euros(v) : '·'}</td>;
+                  })}
+                  <td className="text-right tabular-nums col-total">
+                    {euros(r2(syn.moisList.reduce((acc, m) => acc + totalJeuMois(jeu, m), 0)))}
+                  </td>
+                </tr>
+              </Fragment>
             ))}
             <tr className="band-bloc">
               <td colSpan={syn.moisList.length + 2} className="py-1">
@@ -1001,7 +1065,8 @@ function Recapitulatif({ syn, resultat, couleurs, unite, exercice }: {
     { bloc: 'produits', label: 'PRODUITS', valeur: total(syn.totalProduitsParMois), niveau: 'masse' },
     { bloc: 'charges', label: 'CHARGES', valeur: -total(syn.totalChargesParMois), niveau: 'masse' },
     { bloc: 'personnel', label: 'PERSONNEL', valeur: -total(syn.totalPersonnelParMois), niveau: 'masse' },
-    { bloc: 'jeux', label: 'DÉPENSES JEUX', valeur: -total(syn.totalJeuxParMois), niveau: 'masse' },
+    { label: 'dont dépenses jeux (comprises dans les charges)', valeur: total(syn.totalJeuxParMois), niveau: 'hors',
+      aide: 'Déjà comptées dans les charges ci-dessus. Le détail par jeu est plus bas.' },
     { label: 'dont charges financières (reprises plus bas)', valeur: total(syn.chargesFinancieresParMois), niveau: 'hors',
       aide: 'Déjà comprises dans les charges ci-dessus, mais retirées de l\'EBE : elles se retranchent au résultat courant.' },
     { label: 'EXCÉDENT BRUT D\'EXPLOITATION', valeur: de('ebe'), niveau: 'agregat' },
@@ -1095,6 +1160,9 @@ function Recapitulatif({ syn, resultat, couleurs, unite, exercice }: {
 
 /** Nom lisible de la page où se corrige un contrôle. */
 const destination = (p: PageControle) => p === 'immos' ? 'Immobilisations' : 'Journal du mois';
+
+/** Une carte vide, pour les entrées de compte de résultat sans montant. */
+const VIDE: Map<string, number> = new Map();
 
 const ICONE_CONTROLE = {
   ok: { Icone: CheckCircle2, couleur: '#38761d' },

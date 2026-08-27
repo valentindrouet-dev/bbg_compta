@@ -43,7 +43,8 @@ sont recalculés en direct à partir des écritures.
   **détaillée / simplifiée**, et des alarmes quand une ligne ne correspond
   à rien dans la synthèse. En vue TTC, chaque ligne porte son **taux de TVA**,
   repris du journal par défaut et modifiable ; les montants restent stockés
-  en HT, et un montant tapé en TTC est reconverti. Les exercices 2026-27 à 2029-30 ont la **grille
+  en HT, et un montant tapé en TTC est reconverti. Un **onglet par exercice**
+  en tête de page, comme les mois du journal. Les exercices 2026-27 à 2029-30 ont la **grille
   complète, cases vides**, prête à remplir (bouton *Compléter la grille* pour
   rattraper une catégorie ajoutée depuis).
 - **Lignes calculées (heures × taux)** — une ligne porte les **heures faites
@@ -87,6 +88,18 @@ sont recalculés en direct à partir des écritures.
   ordre vaut partout : prévisionnel, listes déroulantes du journal, exports.
   Un seul **Cmd+Z** annule un déplacement. Dans le prévisionnel, la corbeille
   supprime une ligne et le champ « Ajouter une ligne… » en crée une.
+- **Remboursements et notes de frais** : ils ne créent pas de chiffre
+  d'affaires, ils rendent une dépense déjà passée. Ils sont donc rangés dans les
+  **charges, en négatif** — ils viennent en réduction des charges du mois, et
+  leur TVA en moins de la TVA déductible. Le résultat est identique, le CA
+  redevient juste.
+- **Postes de jeu** : le **développement graphique** et les **illustrations**
+  sont des coûts de développement portés à l'actif (amortis sur 5 ans) ; ils
+  apparaissent dans les **Immobilisations**, ventilés jeu par jeu. Le
+  **prototypage**, la **communication jeux** et les **avances droit d'auteur**
+  restent en **charges**, également ventilés par jeu. Le bloc « Dépenses Jeux »
+  de la synthèse est une **lecture par jeu**, pas un bloc de résultat en plus :
+  ce qu'il liste est déjà compté dans les charges et les immobilisations.
 - **Immobiliser un poste de jeu** : dans le bloc Jeux de la synthèse, le lien
   **immobiliser** au survol d'une ligne porte tout le poste à l'actif sur
   l'exercice (amorti sur 5 ans) ; **repasser en charges** fait l'inverse.

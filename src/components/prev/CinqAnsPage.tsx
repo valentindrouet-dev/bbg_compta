@@ -101,7 +101,7 @@ export function CinqAnsPage() {
       produits: syn.totalProduitsParMois,
       charges: syn.totalChargesParMois,
       personnel: syn.totalPersonnelParMois,
-      jeux: syn.totalJeuxParMois,
+      jeux: new Map<string, number>(),   // déjà comprises dans les charges
       dotations: dotationsReelles,
       produitsFinanciers: produitsFinanciersParMois(finances, moisList),
       chargesFinancieres: syn.chargesFinancieresParMois,

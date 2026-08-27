@@ -35,6 +35,96 @@ export function deduireJeu(e: JournalEntry, jeux: string[]): string {
   return jeux.find(j => cat.endsWith(j.toUpperCase())) ?? '';
 }
 
+/**
+ * Catégories qui ne sont pas des recettes : un remboursement ou une note de
+ * frais ne crée pas de chiffre d'affaires, il rend une dépense déjà passée.
+ * Ces écritures deviennent des charges négatives — elles se retranchent des
+ * charges du mois, et leur TVA vient en moins de la TVA déductible, jamais en
+ * TVA collectée.
+ */
+const CATEGORIES_EN_REDUCTION = ['notes de frais', 'remboursement'];
+
+/**
+ * Rebascule les remboursements et notes de frais des produits vers les charges,
+ * en négatif. Le résultat ne bouge pas d'un centime (un produit de +100 et une
+ * charge de -100 pèsent pareil), le chiffre d'affaires, lui, redevient juste.
+ */
+function remboursementsEnReductionDeCharges(
+  entries: JournalEntry[], refs: Referentiels,
+): { entries: JournalEntry[]; referentiels: Referentiels } {
+  const cibles = new Set(CATEGORIES_EN_REDUCTION.map(c => c.toLowerCase()));
+  const corrigees = entries.map(e => {
+    if (e.type !== 'produit' || !cibles.has(e.categorie.toLowerCase())) return e;
+    return { ...e, type: 'charges' as const, ht: -e.ht, tva: -e.tva, ttc: -e.ttc };
+  });
+  const dansProduits = refs.categoriesProduits.filter(c => cibles.has(c.toLowerCase()));
+  if (!dansProduits.length) return { entries: corrigees, referentiels: refs };
+  return {
+    entries: corrigees,
+    referentiels: {
+      ...refs,
+      categoriesProduits: refs.categoriesProduits.filter(c => !cibles.has(c.toLowerCase())),
+      categoriesDepenses: [...refs.categoriesDepenses, ...dansProduits],
+    },
+  };
+}
+
+/**
+ * Ce qui, dans un jeu, s'inscrit à l'actif : le développement graphique et les
+ * illustrations sont les coûts de développement d'un projet identifié, portés
+ * au bilan et amortis. Le reste — prototypes, communication, avances — reste en
+ * charges de l'exercice.
+ */
+const POSTES_JEU_IMMOBILISES = ['Développement Graphique', 'Illustrations'];
+/** Postes de jeu qui restent en charges, listés pour que la grille les propose. */
+const POSTES_JEU_CHARGES = ['Prototypage Jeux', 'Communication Jeux', "Avances Droit d'Auteur"];
+
+/** « Illustrations EDIT » -> « Illustrations » : le jeu vit dans sa colonne. */
+function nomGenerique(categorie: string, jeux: string[]): string {
+  for (const j of jeux) {
+    const suffixe = ` ${j}`;
+    if (categorie.toUpperCase().endsWith(suffixe.toUpperCase())) {
+      return categorie.slice(0, categorie.length - suffixe.length).trim();
+    }
+  }
+  return categorie;
+}
+
+/**
+ * Range les postes de jeux : le développement graphique et les illustrations
+ * passent à l'actif (amortis sur cinq ans), le reste demeure en charges. Les
+ * catégories perdent le nom du jeu — il est déjà porté par la colonne « Jeu »,
+ * ce qui permet à chaque jeu d'avoir sa propre ligne sur chaque poste.
+ */
+function rangerPostesDeJeu(
+  entries: JournalEntry[], refs: Referentiels,
+): { entries: JournalEntry[]; referentiels: Referentiels } {
+  const jeux = refs.jeux ?? JEUX_PAR_DEFAUT;
+  const aImmobiliser = new Set(POSTES_JEU_IMMOBILISES.map(c => c.toLowerCase()));
+
+  const corrigees = entries.map(e => {
+    const generique = nomGenerique(e.categorie, jeux);
+    if (generique === e.categorie && !aImmobiliser.has(generique.toLowerCase())) return e;
+    // Le jeu était déduit du suffixe : on le fige avant de renommer.
+    const jeu = e.jeu || deduireJeu(e, jeux);
+    if (!aImmobiliser.has(generique.toLowerCase())) return { ...e, categorie: generique, jeu };
+    return {
+      ...e, categorie: generique, jeu,
+      type: 'immo' as const, immoDureeAns: e.immoDureeAns ?? 5,
+    };
+  });
+
+  const anciennes = new Set(entries.map(e => e.categorie));
+  const renommees = [...anciennes].map(c => nomGenerique(c, jeux));
+  const catsJeux = [...new Set([
+    ...refs.categoriesJeux.map(c => nomGenerique(c, jeux)),
+    ...renommees.filter(c => aImmobiliser.has(c.toLowerCase())),
+    ...POSTES_JEU_CHARGES,
+  ])];
+
+  return { entries: corrigees, referentiels: { ...refs, categoriesJeux: catsJeux } };
+}
+
 /** Mise en forme d'une colonne du journal (gras, italique, couleur, alignement). */
 export interface ColFormat {
   bold?: boolean;
@@ -163,10 +253,15 @@ export interface AppState {
 }
 
 function seedState() {
-  const refs = avecGroupePersonnel(structuredClone(seedReferentiels) as Referentiels);
+  let refs = avecGroupePersonnel(structuredClone(seedReferentiels) as Referentiels);
   refs.jeux = refs.jeux ?? JEUX_PAR_DEFAUT;
-  const entries = (structuredClone(seedJournal) as JournalEntry[]).map(e =>
+  const brutes = (structuredClone(seedJournal) as JournalEntry[]).map(e =>
     e.jeu ? e : { ...e, jeu: deduireJeu(e, refs.jeux!) });
+  // Deux redressements appliqués une fois pour toutes, dès la première ouverture.
+  const sansRemb = remboursementsEnReductionDeCharges(brutes, refs);
+  const rangees = rangerPostesDeJeu(sansRemb.entries, sansRemb.referentiels);
+  const entries = rangees.entries;
+  refs = rangees.referentiels;
   return {
     entries,
     finances: structuredClone(seedTresorerie.mouvementsFinanciers) as FinanceEntry[],
@@ -728,7 +823,7 @@ export const useStore = create<AppState>()(
     },
     {
       name: 'bbg-compta-v1',
-      version: 8,
+      version: 9,
       // v2 : ajout de la liste des jeux et rattachement des dépenses de
       // développement au jeu concerné (déduit des mots clés / de la catégorie).
       migrate: (persisted, version) => {
@@ -772,6 +867,29 @@ export const useStore = create<AppState>()(
           }
           s.previsionnels[PREMIER_EXERCICE] =
             brancherCalculHeures(s.previsionnels[PREMIER_EXERCICE] ?? []);
+        }
+        // v9 : deux redressements comptables.
+        //  - remboursements et notes de frais : ils rendaient une dépense, pas
+        //    du chiffre d'affaires. Ils passent en charges négatives.
+        //  - postes de jeu : le développement graphique et les illustrations
+        //    s'inscrivent à l'actif ; les catégories perdent le nom du jeu, qui
+        //    vit désormais dans la colonne « Jeu ».
+        if (version < 9 && s.entries && s.referentiels) {
+          const a = remboursementsEnReductionDeCharges(s.entries, s.referentiels);
+          const b = rangerPostesDeJeu(a.entries, a.referentiels);
+          s.entries = b.entries;
+          s.referentiels = b.referentiels;
+          // Le prévisionnel suit les catégories renommées.
+          if (s.previsionnels) {
+            const jeux = s.referentiels.jeux ?? JEUX_PAR_DEFAUT;
+            s.previsionnels = Object.fromEntries(
+              Object.entries(s.previsionnels).map(([ex, lignes]) => [ex, (lignes ?? []).map(l => {
+                const nom = nomGenerique(l.categorie, jeux);
+                if (nom === l.categorie) return l;
+                const suffixe = l.categorie.slice(nom.length).trim();
+                return { ...l, categorie: nom, jeu: l.jeu ?? (suffixe || undefined) };
+              })]));
+          }
         }
         return s;
       },

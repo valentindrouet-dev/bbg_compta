@@ -266,8 +266,9 @@ export interface SyntheseExercice {
   /** Dépenses jeux ventilées par jeu, puis par catégorie, puis par mois. */
   jeuxParJeuEtCategorie: Map<string, Map<string, Map<string, number>>>;
   /**
-   * Ce qui a été porté à l'actif sur chaque jeu (développement immobilisé) :
-   * c'est un investissement, il ne pèse sur le résultat que par sa dotation.
+   * Dépenses jeux restées en charges. Elles sont DÉJÀ comprises dans
+   * `totalChargesParMois` : c'est une ventilation pour mémoire, à ne jamais
+   * retrancher une seconde fois du résultat.
    */
   immosParJeu: Map<string, Map<string, number>>;
   immosParJeuEtCategorie: Map<string, Map<string, Map<string, number>>>;
@@ -353,6 +354,12 @@ export function syntheseExercice(
         add(immosParJeuEtCategorie.get(jeu)!, e.categorie, e.mois, v);
       }
     } else if (categoriesJeux.includes(e.categorie)) {
+      // Un poste de jeu resté en charges EST une charge de l'exercice : il
+      // compte dans le bloc Charges. La ventilation par jeu est conservée à
+      // côté, pour mémoire — elle ne s'ajoute pas une deuxième fois.
+      add(charges, e.categorie, e.mois, v);
+      bump(totalChargesParMois, e.mois, v);
+      bump(totalChargesTTCParMois, e.mois, e.ttc);
       add(jeux, e.categorie, e.mois, v);
       add(jeuxParJeu, e.jeu || '— non rattaché —', e.mois, v);
       const jeu = e.jeu || '— non rattaché —';

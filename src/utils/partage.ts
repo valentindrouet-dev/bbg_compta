@@ -41,7 +41,7 @@ export function pageLectureSeule(state: AppState, exercice: string): string {
     produits: syn.totalProduitsParMois,
     charges: syn.totalChargesParMois,
     personnel: syn.totalPersonnelParMois,
-    jeux: syn.totalJeuxParMois,
+    jeux: new Map<string, number>(),   // déjà comprises dans les charges
     dotations,
     produitsFinanciers: produitsFinanciersParMois(finances, mois),
     chargesFinancieres: syn.chargesFinancieresParMois,
@@ -57,7 +57,8 @@ export function pageLectureSeule(state: AppState, exercice: string): string {
     { cle: 'produits', titre: 'Produits', lignes: lignesDe(syn.produits, refs.categoriesProduits), totaux: syn.totalProduitsParMois },
     { cle: 'charges', titre: 'Charges', lignes: lignesDe(syn.charges, refs.categoriesDepenses), totaux: syn.totalChargesParMois },
     { cle: 'personnel', titre: 'Personnel & rémunérations', lignes: lignesDe(syn.personnel, refs.categoriesDepenses), totaux: syn.totalPersonnelParMois },
-    { cle: 'jeux', titre: 'Dépenses Jeux', lignes: lignesDe(syn.jeux, refs.categoriesJeux), totaux: syn.totalJeuxParMois },
+    { cle: 'jeux', titre: 'Dépenses Jeux — ventilation, déjà comprise dans les charges',
+      lignes: lignesDe(syn.jeux, refs.categoriesJeux), totaux: syn.totalJeuxParMois },
     { cle: 'immos', titre: 'Immobilisations — investissements', lignes: lignesDe(syn.immos, []), totaux: syn.immoParMois },
   ];
 
@@ -190,7 +191,7 @@ export function pageLectureSeule(state: AppState, exercice: string): string {
       ['Produits', somme(syn.totalProduitsParMois), 'produits'],
       ['Charges', somme(syn.totalChargesParMois), 'charges'],
       ['Personnel', somme(syn.totalPersonnelParMois), 'personnel'],
-      ['Dépenses Jeux', somme(syn.totalJeuxParMois), 'jeux'],
+      ['dont dépenses jeux (dans les charges)', -somme(syn.totalJeuxParMois), 'jeux'],
       ['Investissements', somme(syn.immoParMois), 'immos'],
       ['Dotations', somme(dotations), 'immos'],
       ['Résultat net', rn, 'resultat'],

@@ -17,7 +17,9 @@ import { teinteBloc, estChargeFinanciere, GROUPE_PERSONNEL, type BlocCle } from 
 import {
   compteResultat, dotationsParMois, immoInfos, produitsFinanciersParMois, type LigneResultat,
 } from '../../utils/calc';
-import { PageHeader, Card, Btn, StatCard, MoneyInput, BlocColorMenu, TotalBloc, styleBloc } from '../ui';
+import {
+  PageHeader, Card, Btn, StatCard, MoneyInput, BlocColorMenu, TotalBloc, styleBloc, MonthTabs,
+} from '../ui';
 import { useSelectionCellules } from '../../utils/selection';
 
 /** Durée d'amortissement retenue pour une immobilisation prévue, faute de mieux. */
@@ -240,16 +242,18 @@ export function PrevisionnelPage() {
                 </button>
               ))}
             </div>
-            <select
-              className="border rounded-md px-2 py-1.5 text-sm bg-white font-medium"
-              style={{ borderColor: 'var(--bbg-border)', color: 'var(--bbg-purple-darker)' }}
-              value={exercice}
-              onChange={ev => setExercice(ev.target.value)}
-            >
-              {EXERCICES.map(ex => <option key={ex} value={ex}>Exercice {ex}</option>)}
-            </select>
           </>
         }
+      />
+
+      {/* Un onglet par exercice : on passe de 2026-27 à 2027-28 d'un clic. */}
+      <MonthTabs
+        mois={exercice}
+        moisList={[...EXERCICES]}
+        labelOf={ex => ex}
+        badgeOf={ex => (previsionnels[ex] ?? []).reduce(
+          (n, l) => n + l.valeurs.filter(v => v != null).length, 0)}
+        onChange={setExercice}
       />
 
       {/* Bandeau flottant : il ne doit pas décaler le tableau pendant le balayage. */}
