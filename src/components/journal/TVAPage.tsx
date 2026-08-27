@@ -3,7 +3,7 @@ import { useStore } from '../../store';
 import { EXERCICES, labelMois, moisExercice } from '../../utils/dates';
 import { euros, r2 } from '../../utils/money';
 import { tableauTVA } from '../../utils/calc';
-import { PageHeader, Card, StatCard } from '../ui';
+import { PageHeader, ExerciceTabs, Card, StatCard } from '../ui';
 import { useEtatVue } from '../../utils/etatVue';
 
 /** Rouge = je dois à l'État ; vert = l'État me doit. */
@@ -36,15 +36,7 @@ export function TVAPage() {
       <PageHeader
         title="TVA"
         subtitle="TVA collectée sur les produits, déductible sur les dépenses — calculée écriture par écriture"
-        actions={
-          <select
-            className="border border-[#c9c0e4] rounded-md px-2 py-1.5 text-sm bg-white"
-            value={exercice}
-            onChange={ev => setExercice(ev.target.value)}
-          >
-            {EXERCICES.map(ex => <option key={ex} value={ex}>Exercice {ex}</option>)}
-          </select>
-        }
+        tabs={<ExerciceTabs exercice={exercice} exercices={EXERCICES} onChange={setExercice} />}
       />
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">

@@ -34,7 +34,13 @@ export function TresoPage() {
     () => tableauTreso(entries, finances, moisList, tresoManuel),
     [entries, finances, moisList, tresoManuel],
   );
-  const dernier = rows[rows.length - 1];
+  // Le solde « actuel » est celui du mois en cours, pas celui de la dernière
+  // ligne : un mouvement déjà planifié en octobre ne doit pas fausser ce qu'on
+  // a en banque aujourd'hui.
+  const courant = moisCourant();
+  const iCourant = rows.findIndex(r => r.mois === courant);
+  const dernier = rows[iCourant >= 0 ? iCourant : rows.length - 1];
+  const aVenir = iCourant >= 0 ? rows.slice(iCourant + 1) : [];
   const totalPlace = r2(-finances.filter(f => f.type === 'placement').reduce((s, f) => s + f.montant, 0));
 
   const [showFinances, setShowFinances] = useState(false);
@@ -48,8 +54,12 @@ export function TresoPage() {
       />
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
-        <StatCard label="Solde actuel (cumulé)" value={euros(dernier?.soldeCumule ?? 0)}
-          tone={(dernier?.soldeCumule ?? 0) >= 0 ? 'good' : 'bad'} />
+        <StatCard label={`Solde à fin ${labelMois(dernier?.mois ?? courant)}`}
+          value={euros(dernier?.soldeCumule ?? 0)}
+          tone={(dernier?.soldeCumule ?? 0) >= 0 ? 'good' : 'bad'}
+          sub={aVenir.length
+            ? `${euros(rows[rows.length - 1].soldeCumule)} après les ${aVenir.length} mois déjà planifiés`
+            : 'dernier mois du tableau'} />
         <StatCard label="Dont placé (comptes à terme)" value={euros(totalPlace)} tone="accent"
           sub="modifiable dans les mouvements financiers" />
         <StatCard label="Disponible + placé" value={euros(r2((dernier?.soldeCumule ?? 0) + totalPlace))} />

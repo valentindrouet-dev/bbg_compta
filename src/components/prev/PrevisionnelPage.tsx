@@ -13,7 +13,7 @@ import { EXERCICES, labelMois, moisExercice } from '../../utils/dates';
 import { euros, euros0, r2, pourcent, parseMontant } from '../../utils/money';
 import {
   SECTIONS, SECTIONS_DEPENSES, alarmesPrevisionnel, reelParCategorie, reelParCategorieEtMois,
-  ordreAffichage, reelParJeuEtCategorie, sectionDeCategorie, tauxDeLigne, tauxObserves,
+  jeuDeLigne, ordreAffichage, reelParJeuEtCategorie, sectionDeCategorie, tauxDeLigne, tauxObserves,
   totalDeLigne, valeursDe,
 } from '../../utils/previsionnel';
 import { teinteBloc, estChargeFinanciere, GROUPE_PERSONNEL, type BlocCle } from '../../utils/blocs';
@@ -251,17 +251,18 @@ export function PrevisionnelPage() {
             </div>
           </>
         }
-      />
-
-      {/* Un onglet par exercice : on passe de 2026-27 à 2027-28 d'un clic. */}
-      <MonthTabs
+        tabs={
+          <MonthTabs
         mois={exercice}
         moisList={[...EXERCICES]}
         labelOf={ex => ex}
         badgeOf={ex => (previsionnels[ex] ?? []).reduce(
           (n, l) => n + l.valeurs.filter(v => v != null).length, 0)}
         onChange={setExercice}
+          />
+        }
       />
+
 
       {/* Bandeau flottant : il ne doit pas décaler le tableau pendant le balayage. */}
       {selection.nb > 0 && (
@@ -376,7 +377,8 @@ export function PrevisionnelPage() {
           // Regroupement : une ligne rattachée à un jeu passe sous le bandeau de
           // ce jeu, les autres sous leur groupe de catégories. Les jeux ferment
           // le bloc, après les postes généraux.
-          const cle = (l: PrevLigne) => l.jeu || (meta[l.categorie]?.groupe ?? '');
+          const cle = (l: PrevLigne) =>
+            jeuDeLigne(l, jeuxCatalogue) || (meta[l.categorie]?.groupe ?? '');
           const parGroupe = new Map<string, PrevLigne[]>();
           for (const l of lignesSec) {
             const g = cle(l);

@@ -16,7 +16,10 @@ sont recalculés en direct à partir des écritures.
   immobilisations et jeux), recettes, solde ; TTC en gros, HT rappelé dessous
 - **Synthèse totale** — la même lecture, mais **une colonne par exercice** au
   lieu d'une par mois : catégories, blocs, ventilation par jeu, compte de
-  résultat et cumul sur les cinq ans
+  résultat et cumul sur les cinq ans. Le bouton **Prévisionnels** complète les
+  exercices sans écriture avec ce qui est budgété, **en gris et en italique** :
+  la trajectoire complète se lit d'un coup, sans jamais confondre le réalisé et
+  le prévu
 - **Synthèse annuelle** — les blocs dans l'ordre de lecture : **Produits, Charges,
   Personnel, Jeux** (un sous-bloc par jeu, toutes ses catégories listées),
   **Immobilisations**, puis le **compte de résultat** (EBE → REX → RC → IS → RN,
@@ -72,7 +75,8 @@ sont recalculés en direct à partir des écritures.
   les supprime ensemble. **Double-clic** sur un libellé propose de renommer
   toutes les étapes qui portent le même nom. Chaque **projet** se renomme, se
   monte, se descend et se supprime depuis son bandeau ; `Nouveau projet` en
-  crée un
+  crée un. La **couleur** d'un projet se choisit sur sa pastille et **suit son
+  nom**, pas son rang : réordonner ou renommer ne repeint plus la frise
 
 **Outils**
 - **Exports** — les quatre exports d'un coup dans une archive `.zip`
@@ -86,6 +90,13 @@ sont recalculés en direct à partir des écritures.
   sauvegarde / restauration / réinitialisation
 
 ## Gestes utiles
+
+- **L'en-tête reste en haut** : le titre, les bascules HT/TTC et
+  détaillée/simplifiée, et les **onglets** (mois du journal, exercices ailleurs)
+  restent visibles quand on descend dans un long tableau.
+- **Un onglet par exercice** partout où plusieurs exercices se lisent : synthèse
+  annuelle, TVA, réel vs prévu, exports, tableau de bord — avec le nombre
+  d'écritures en pastille.
 
 - **On revient là où on était** : le mois ouvert dans le journal, l'exercice du
   prévisionnel, les bascules HT/TTC et détaillée/simplifiée, et même la page

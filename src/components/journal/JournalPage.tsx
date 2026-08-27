@@ -181,16 +181,17 @@ export function JournalPage({ cible }: { cible?: Cible }) {
             </select>
           </>
         }
-      />
-
-      {/* Onglets : un par mois de l'exercice */}
-      <MonthTabs
+        tabs={
+          <MonthTabs
         mois={mois}
         moisList={moisList}
         labelOf={labelMois}
         badgeOf={m => nbParMois.get(m) ?? 0}
         onChange={setMois}
+          />
+        }
       />
+
 
       <ResumeMois depenses={depenses} jeux={jeux} produits={produits} />
 

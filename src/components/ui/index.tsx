@@ -5,15 +5,54 @@ import { useStore } from '../../store';
 import { BLOC_PAR_CLE, teinteBloc, type BlocCle } from '../../utils/blocs';
 import { TEINTES_MAJEURES, variablesTeinte, type Teinte } from '../../utils/couleurs';
 
-export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: ReactNode }) {
+/**
+ * L'en-tête d'une page : le titre et ses boutons.
+ *
+ * Il reste collé en haut quand on descend dans un long tableau — la bascule
+ * HT/TTC ou le choix d'exercice doivent rester sous la main au milieu de la
+ * synthèse. Les marges négatives lui font couvrir toute la largeur, y compris
+ * le rembourrage de la page.
+ */
+export function PageHeader({ title, subtitle, actions, tabs }: {
+  title: string; subtitle?: string; actions?: ReactNode;
+  /** Onglets (mois, exercices) : ils restent collés avec le titre. */
+  tabs?: ReactNode;
+}) {
   return (
-    <div className="flex flex-wrap items-end justify-between gap-3 mb-4">
-      <div>
-        <h1 className="text-2xl font-bold" style={{ color: 'var(--bbg-purple-darker)' }}>{title}</h1>
-        {subtitle && <p className="text-sm mt-0.5" style={{ color: '#6f6690' }}>{subtitle}</p>}
+    <div
+      className="sticky top-0 z-30 -mx-4 -mt-4 px-4 pt-4 pb-2 mb-4"
+      style={{ backgroundColor: '#f6f4fc', boxShadow: '0 1px 0 var(--bbg-border-soft)' }}
+    >
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold" style={{ color: 'var(--bbg-purple-darker)' }}>{title}</h1>
+          {subtitle && <p className="text-sm mt-0.5" style={{ color: '#6f6690' }}>{subtitle}</p>}
+        </div>
+        {actions && <div className="flex items-center gap-2">{actions}</div>}
       </div>
-      {actions && <div className="flex items-center gap-2">{actions}</div>}
+      {tabs && <div className="mt-2.5">{tabs}</div>}
     </div>
+  );
+}
+
+/**
+ * Les exercices en onglets, comme les mois du journal. Un clic suffit à changer
+ * d'exercice, et le compteur dit d'un coup d'œil lesquels portent des écritures.
+ */
+export function ExerciceTabs({ exercice, exercices, badgeOf, onChange }: {
+  exercice: string;
+  exercices: readonly string[];
+  badgeOf?: (ex: string) => number;
+  onChange: (ex: string) => void;
+}) {
+  return (
+    <MonthTabs
+      mois={exercice}
+      moisList={[...exercices]}
+      labelOf={ex => ex}
+      badgeOf={badgeOf}
+      onChange={onChange}
+    />
   );
 }
 

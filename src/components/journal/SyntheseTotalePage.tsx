@@ -1,13 +1,17 @@
 import { Fragment, useMemo } from 'react';
-import { Gamepad2, List, Rows3 } from 'lucide-react';
+import { CheckSquare, Gamepad2, List, Rows3, Square } from 'lucide-react';
 import { useStore } from '../../store';
-import { EXERCICES } from '../../utils/dates';
+import { EXERCICES, moisExercice } from '../../utils/dates';
 import { euros, euros0, r2 } from '../../utils/money';
 import {
   compteResultat, dotationsParMois, immoInfos, produitsFinanciersParMois, syntheseExercice,
   type BaseMontant, type LigneResultat,
 } from '../../utils/calc';
-import { teinteBloc, type BlocCle } from '../../utils/blocs';
+import { estChargeFinanciere, teinteBloc, type BlocCle } from '../../utils/blocs';
+import {
+  ordreAffichage, tauxDeLigne, tauxObserves, totalDeLigne, valeursDe,
+} from '../../utils/previsionnel';
+import type { PrevSection } from '../../types';
 import { useEtatVue } from '../../utils/etatVue';
 import { PageHeader, Card, TotalBloc, BlocColorMenu, styleBloc } from '../ui';
 
@@ -39,15 +43,23 @@ export function SyntheseTotalePage() {
   const couleurs = useStore(s => s.blocCouleurs);
   const [base, setBase] = useEtatVue<BaseMontant>('totale.base', 'ht');
   const [simple, setSimple] = useEtatVue('totale.simple', false);
+  /** Compléter les exercices sans écriture avec ce qui est budgété. */
+  const [avecPrev, setAvecPrev] = useEtatVue('totale.prev', false);
+  const previsionnels = useStore(s => s.previsionnels);
 
   const meta = refs.categoriesMeta ?? {};
   const groupes = refs.groupes ?? [];
   const unite = base === 'ttc' ? 'TTC' : 'HT';
   const immos = useMemo(() => immoInfos(entries, refs), [entries, refs]);
+  const observes = useMemo(() => tauxObserves(entries), [entries]);
 
   /** Une synthèse par exercice, puis un pivot : les mois deviennent des années. */
-  const { blocs, resultat, exercices } = useMemo(() => {
+  const { blocs, resultat, exercices, prevus } = useMemo(() => {
     const syns = EXERCICES.map(ex => ({ ex, syn: syntheseExercice(entries, ex, refs, base) }));
+    /** Les exercices qui n'ont aucune écriture : ceux qu'on peut compléter. */
+    const prevus = new Set(EXERCICES.filter(ex =>
+      total(syns.find(x => x.ex === ex)!.syn.totalTTCParMois) === 0
+      && total(syns.find(x => x.ex === ex)!.syn.totalProduitsTTCParMois) === 0));
 
     /** Pivote une carte « catégorie -> mois » en « catégorie -> exercice ». */
     const pivot = (
@@ -145,11 +157,95 @@ export function SyntheseTotalePage() {
         chargesFinancieres: ht.chargesFinancieresParMois,
       }));
     }
-    return { blocs, resultat, exercices: [...EXERCICES] };
-  }, [entries, refs, finances, base, unite, immos]);
+    // Le prévisionnel vient combler les exercices vides, en grisé : on lit la
+    // trajectoire complète sans jamais confondre le réalisé et le budgété.
+    if (avecPrev) {
+      for (const ex of prevus) {
+        const lignes = ordreAffichage(previsionnels[ex] ?? [], refs);
+        const parSection = (sec: PrevSection) => {
+          const m = new Map<string, number>();
+          for (const l of lignes) {
+            if (l.section !== sec || l.unite) continue;
+            const v = r2(totalDeLigne(l, lignes) * (base === 'ttc' ? 1 + tauxDeLigne(l, observes) / 100 : 1));
+            if (!v) continue;
+            const jeu = l.jeu;
+            if (jeu) continue;   // les lignes par jeu vont dans leur bandeau
+            m.set(l.categorie, r2((m.get(l.categorie) ?? 0) + v));
+          }
+          return m;
+        };
+        const parJeuSection = (sec: PrevSection) => {
+          const m = new Map<string, Map<string, number>>();
+          for (const l of lignes) {
+            if (l.section !== sec || l.unite || !l.jeu) continue;
+            const v = r2(totalDeLigne(l, lignes) * (base === 'ttc' ? 1 + tauxDeLigne(l, observes) / 100 : 1));
+            if (!v) continue;
+            if (!m.has(l.jeu)) m.set(l.jeu, new Map());
+            m.get(l.jeu)!.set(l.categorie, r2((m.get(l.jeu)!.get(l.categorie) ?? 0) + v));
+          }
+          return m;
+        };
+        const remplir = (bloc: typeof blocs[number], sec: PrevSection) => {
+          for (const [cat, v] of parSection(sec)) {
+            if (!bloc.data.has(cat)) bloc.data.set(cat, new Map());
+            bloc.data.get(cat)!.set(ex, v);
+            if (!bloc.cats.includes(cat)) bloc.cats.push(cat);
+          }
+          for (const [jeu, postes] of parJeuSection(sec)) {
+            if (!bloc.parJeu) continue;
+            if (!bloc.parJeu.has(jeu)) bloc.parJeu.set(jeu, new Map());
+            for (const [cat, v] of postes) {
+              if (!bloc.parJeu.get(jeu)!.has(cat)) bloc.parJeu.get(jeu)!.set(cat, new Map());
+              bloc.parJeu.get(jeu)!.get(cat)!.set(ex, v);
+            }
+          }
+          const somme = r2([...parSection(sec).values()].reduce((s, v) => s + v, 0)
+            + [...parJeuSection(sec).values()]
+              .reduce((s, m) => s + [...m.values()].reduce((a, v) => a + v, 0), 0));
+          bloc.totaux.set(ex, somme);
+        };
+        remplir(blocs[0], 'produits');
+        remplir(blocs[1], 'charges');
+        remplir(blocs[2], 'personnel');
+        remplir(blocs[3], 'immos');
 
-  /** Les exercices qui portent quelque chose : inutile d'afficher cinq colonnes vides. */
+        // Le résultat prévisionnel de cet exercice, dotations comprises.
+        const moisList = moisExercice(ex);
+        const carte = (calc: (i: number) => number) =>
+          new Map(moisList.map((m, i) => [m, r2(calc(i))]));
+        const sectionMois = (sec: PrevSection) => carte(i =>
+          lignes.filter(l => l.section === sec && !l.unite)
+            .reduce((s, l) => s + (valeursDe(l, lignes)[i] ?? 0), 0));
+        const dotationsReelles = dotationsParMois(immos, moisList);
+        const immosPrevues = sectionMois('immos');
+        resultat.set(ex, compteResultat({
+          moisList,
+          produits: sectionMois('produits'),
+          charges: sectionMois('charges'),
+          personnel: sectionMois('personnel'),
+          jeux: new Map(),
+          dotations: carte(i => {
+            let d = dotationsReelles.get(moisList[i]) ?? 0;
+            for (let j = 0; j <= i; j++) d += (immosPrevues.get(moisList[j]) ?? 0) / (5 * 12);
+            return d;
+          }),
+          produitsFinanciers: produitsFinanciersParMois(finances, moisList),
+          chargesFinancieres: carte(i => lignes
+            .filter(l => l.section === 'charges' && !l.unite && estChargeFinanciere(l.categorie))
+            .reduce((s, l) => s + (valeursDe(l, lignes)[i] ?? 0), 0)),
+        }));
+      }
+    }
+
+    return { blocs, resultat, exercices: [...EXERCICES], prevus };
+  }, [entries, refs, finances, base, unite, immos, avecPrev, previsionnels, observes]);
+
   const colonnes = exercices;
+  /** Une colonne remplie par le prévisionnel se lit en gris et en italique. */
+  const estPrevu = (ex: string) => avecPrev && prevus.has(ex as typeof EXERCICES[number]);
+  const styleCol = (ex: string) => estPrevu(ex)
+    ? { color: '#8d85a6', fontStyle: 'italic' as const }
+    : undefined;
   const lignesResultat = resultat.get(colonnes[0])?.map(l => l.cle) ?? [];
 
   return (
@@ -173,6 +269,16 @@ export function SyntheseTotalePage() {
                 </button>
               ))}
             </div>
+            <button
+              className="px-3 py-1.5 rounded-md border text-sm font-semibold inline-flex items-center gap-1.5"
+              style={avecPrev
+                ? { backgroundColor: 'var(--bbg-purple-dark)', color: '#fff', borderColor: 'var(--bbg-purple-dark)' }
+                : { backgroundColor: '#fff', color: '#5c5280', borderColor: 'var(--bbg-border)' }}
+              title="Compléter les exercices sans écriture avec ce qui est budgété, en grisé"
+              onClick={() => setAvecPrev(!avecPrev)}
+            >
+              {avecPrev ? <CheckSquare size={14} /> : <Square size={14} />} Prévisionnels
+            </button>
             <div className="flex rounded-md border overflow-hidden text-sm" style={{ borderColor: 'var(--bbg-border)' }}>
               {([['detail', 'Détaillée', List], ['simple', 'Simplifiée', Rows3]] as const).map(([cle, label, Icone]) => (
                 <button
@@ -231,7 +337,10 @@ export function SyntheseTotalePage() {
                     <tr>
                       <th className="text-left" style={{ minWidth: 260 }}>Catégorie</th>
                       {colonnes.map(ex => (
-                        <th key={ex} className="num" style={{ minWidth: 110 }}>{ex}</th>
+                        <th key={ex} className="num" style={{ minWidth: 110 }}
+                          title={estPrevu(ex) ? 'Rempli avec le prévisionnel' : undefined}>
+                          {ex}{estPrevu(ex) && <span className="font-normal opacity-70"> · prév.</span>}
+                        </th>
                       ))}
                       <th className="num" style={{ minWidth: 120 }}>Cumul</th>
                     </tr>
@@ -257,7 +366,7 @@ export function SyntheseTotalePage() {
                               const v = bloc.data.get(cat)?.get(ex) ?? 0;
                               return (
                                 <td key={ex} className="text-right tabular-nums"
-                                  style={v < 0 ? { color: '#38761d' } : undefined}>
+                                  style={v < 0 ? { color: '#38761d' } : styleCol(ex)}>
                                   {v ? euros(r2(v)) : '·'}
                                 </td>
                               );
@@ -333,7 +442,7 @@ export function SyntheseTotalePage() {
                     <tr className="total-bloc">
                       <td>TOTAL {bloc.titre.split(' ')[0].toUpperCase()} ({unite})</td>
                       {colonnes.map(ex => (
-                        <td key={ex} className="text-right tabular-nums">
+                        <td key={ex} className="text-right tabular-nums" style={styleCol(ex)}>
                           {bloc.totaux.get(ex) ? euros0(r2(bloc.totaux.get(ex)!)) : '·'}
                         </td>
                       ))}
@@ -375,7 +484,11 @@ export function SyntheseTotalePage() {
               <thead>
                 <tr>
                   <th className="text-left" style={{ minWidth: 260 }}>Solde intermédiaire de gestion</th>
-                  {colonnes.map(ex => <th key={ex} className="num" style={{ minWidth: 110 }}>{ex}</th>)}
+                  {colonnes.map(ex => (
+                    <th key={ex} className="num" style={{ minWidth: 110 }}>
+                      {ex}{estPrevu(ex) && <span className="font-normal opacity-70"> · prév.</span>}
+                    </th>
+                  ))}
                   <th className="num" style={{ minWidth: 120 }}>Cumul</th>
                 </tr>
               </thead>
@@ -392,8 +505,8 @@ export function SyntheseTotalePage() {
                         return (
                           <td key={ex} className="text-right tabular-nums"
                             style={estFort(modele)
-                              ? { fontWeight: 700, color: v >= 0 ? '#2c5d16' : '#8f2b26' }
-                              : undefined}>
+                              ? { fontWeight: 700, color: v >= 0 ? '#2c5d16' : '#8f2b26', ...styleCol(ex) }
+                              : styleCol(ex)}>
                             {v ? euros(r2(v)) : '·'}
                           </td>
                         );
@@ -409,6 +522,9 @@ export function SyntheseTotalePage() {
             </table>
           </div>
           <p className="text-xs mt-2" style={{ color: '#9a92b5' }}>
+            {avecPrev
+              ? 'Les colonnes en gris et en italique sont remplies par le prévisionnel : ce n\'est pas du réalisé. '
+              : 'Coche « Prévisionnels » pour compléter les exercices vides avec ce qui est budgété. '}
             Le compte de résultat reste en HT, quoi qu'affiche le bouton : c'est sa base.
             Un exercice sans écriture affiche tout de même ses dotations — l'usure du matériel
             déjà acheté continue de courir.

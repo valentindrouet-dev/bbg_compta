@@ -7,11 +7,22 @@ import type { ChronoEvent } from '../../types';
 import { formatDateFR, todayISO } from '../../utils/dates';
 import { PageHeader, Card, Btn, useSort, sortBy, ThSort } from '../ui';
 
-// Palette catégorielle validée (dataviz) — ordre fixe, une couleur par projet
+// Palette catégorielle validée (dataviz) — une couleur par projet
 const COLORS = ['#674ea7', '#e69138', '#38761d', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948'];
 
-/** Référence stable pour « aucun ordre enregistré ». */
+/**
+ * Couleur par défaut d'un projet, tirée de son NOM et non de son rang : ajouter
+ * ou monter un projet ne repeint plus toute la frise.
+ */
+function couleurParDefaut(projet: string): string {
+  let h = 0;
+  for (const car of projet) h = (h * 31 + car.charCodeAt(0)) >>> 0;
+  return COLORS[h % COLORS.length];
+}
+
+/** Références stables : un `?? {}` dans un sélecteur reboucle à l'infini. */
 const SANS_ORDRE: string[] = [];
+const SANS_COULEUR: Record<string, string> = {};
 
 const LARGEUR_LIBELLE = 210;
 /** Largeur d'un mois sur la frise, en pixels — règle aussi la finesse du glissé. */
@@ -93,6 +104,10 @@ export function ChronoPage() {
   // Le défaut est appliqué HORS du sélecteur : un `?? []` à l'intérieur
   // renverrait un tableau neuf à chaque rendu, et Zustand rebouclerait sans fin.
   const ordreProjets = useStore(s => s.referentiels.chronoProjets) ?? SANS_ORDRE;
+  const couleursProjets = useStore(s => s.referentiels.chronoCouleurs) ?? SANS_COULEUR;
+  const setCouleurProjet = useStore(s => s.setCouleurProjet);
+  /** La couleur du projet : la sienne, sinon celle que son nom lui vaut. */
+  const couleurDe = (projet: string) => couleursProjets[projet] || couleurParDefaut(projet);
   const addChrono = useStore(s => s.addChrono);
   const updateChrono = useStore(s => s.updateChrono);
   const updateChronos = useStore(s => s.updateChronos);
@@ -329,13 +344,34 @@ export function ChronoPage() {
                 ))}
               </div>
 
-              {groupes.map((g, gi) => {
+              {groupes.map(g => {
                 const evts = valides.filter(c => racine(c.projet) === g);
-                const couleur = COLORS[gi % COLORS.length];
+                const couleur = couleurDe(g);
                 return (
                   <div key={g} className="border-t py-1.5" style={{ borderColor: 'var(--bbg-border-soft)' }}>
                     <div className="flex items-center gap-2 mb-1 group/projet">
-                      <span className="inline-block w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: couleur }} />
+                      <label
+                        className="inline-block w-3.5 h-3.5 rounded-sm shrink-0 cursor-pointer border"
+                        style={{ backgroundColor: couleur, borderColor: 'var(--bbg-border)' }}
+                        title="Changer la couleur de ce projet"
+                      >
+                        <input
+                          type="color" className="opacity-0 w-0 h-0 block"
+                          value={couleur}
+                          onChange={ev => setCouleurProjet(g, ev.target.value)}
+                        />
+                      </label>
+                      <span className="flex items-center gap-0.5 shrink-0">
+                        {COLORS.map(c => (
+                          <button
+                            key={c}
+                            className="w-2.5 h-2.5 rounded-sm opacity-0 group-hover/projet:opacity-100"
+                            style={{ backgroundColor: c, outline: c === couleur ? '1.5px solid var(--bbg-purple-darker)' : 'none' }}
+                            title={`Peindre ${g} en ${c}`}
+                            onClick={() => setCouleurProjet(g, c)}
+                          />
+                        ))}
+                      </span>
                       {renommeProjet === g ? (
                         <input
                           autoFocus

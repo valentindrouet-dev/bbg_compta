@@ -184,6 +184,8 @@ export interface JeuMeta {
 export interface Referentiels {
   /** Ordre d'affichage des grands projets de la chronologie. */
   chronoProjets?: string[];
+  /** Couleur choisie pour chaque projet de la chronologie. */
+  chronoCouleurs?: Record<string, string>;
   categoriesDepenses: string[];
   categoriesJeux: string[];
   categoriesProduits: string[];

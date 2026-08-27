@@ -6,7 +6,7 @@ import type {
 } from '../types';
 import {
   categoriesImmobilisees, categoriesManquantes, estLigneCalculee, gabaritPrevisionnel,
-  migrerBudgets, sectionDeCategorie,
+  migrerBudgets, sectionDeCategorie, memeJeu,
 } from '../utils/previsionnel';
 import {
   CATEGORIES_PERSONNEL_INITIALES, GROUPE_PERSONNEL, POSTES_JEU_IMMOBILISES,
@@ -31,11 +31,13 @@ export const JEUX_PAR_DEFAUT = ['EDIT', 'CAMINO', 'TORNADICES'];
  * catégorie (« Illustrations EDIT » -> EDIT). Utilisé à l'import et en migration.
  */
 export function deduireJeu(e: JournalEntry, jeux: string[]): string {
-  const mot = (e.motsCles ?? '').trim().toUpperCase();
-  const trouve = jeux.find(j => j.toUpperCase() === mot);
-  if (trouve) return trouve;
-  const cat = e.categorie.toUpperCase();
-  return jeux.find(j => cat.endsWith(j.toUpperCase())) ?? '';
+  const mot = (e.motsCles ?? '').trim();
+  const parMot = jeux.find(j => memeJeu(j, mot));
+  if (parMot) return parMot;
+  // Sinon, le suffixe de la catégorie : « Ventes EDIT » -> EDIT.
+  const cat = e.categorie.trim();
+  const dernier = cat.split(/[\s—-]+/).pop() ?? '';
+  return jeux.find(j => memeJeu(j, dernier)) ?? '';
 }
 
 /**
@@ -245,6 +247,8 @@ export interface AppState {
   supprimerProjet: (projet: string) => void;
   /** Ordre d'affichage des projets sur la frise. */
   setOrdreProjets: (projets: string[]) => void;
+  /** Couleur d'un projet de la chronologie ; elle suit son nom, pas son rang. */
+  setCouleurProjet: (projet: string, couleur: string) => void;
   /** Déplace une étape juste avant ou juste après une autre. */
   deplacerChrono: (id: string, cible: string, apres: boolean) => void;
 
@@ -729,9 +733,16 @@ export const useStore = create<AppState>()(
           ? n
           : projet.startsWith(ancien + ' - ') ? n + projet.slice(ancien.length) : projet;
         const projets = (s.referentiels.chronoProjets ?? []).map(p => p === ancien ? n : p);
+        // La couleur est attachée au nom : elle suit le projet renommé.
+        const couleurs = { ...(s.referentiels.chronoCouleurs ?? {}) };
+        if (couleurs[ancien]) { couleurs[n] = couleurs[ancien]; delete couleurs[ancien]; }
         return {
           chronologie: s.chronologie.map(c => ({ ...c, projet: suit(c.projet) })),
-          referentiels: { ...s.referentiels, chronoProjets: [...new Set(projets)] },
+          referentiels: {
+            ...s.referentiels,
+            chronoProjets: [...new Set(projets)],
+            chronoCouleurs: couleurs,
+          },
         };
       }),
 
@@ -746,6 +757,13 @@ export const useStore = create<AppState>()(
 
       setOrdreProjets: (projets) => set(s => ({
         referentiels: { ...s.referentiels, chronoProjets: projets },
+      })),
+
+      setCouleurProjet: (projet, couleur) => set(s => ({
+        referentiels: {
+          ...s.referentiels,
+          chronoCouleurs: { ...(s.referentiels.chronoCouleurs ?? {}), [projet]: couleur },
+        },
       })),
 
       deplacerChrono: (id, cible, apres) => set(s => {

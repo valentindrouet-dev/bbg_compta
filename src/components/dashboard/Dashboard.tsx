@@ -8,7 +8,7 @@ import type { Page } from '../../App';
 import { EXERCICES, labelMois, moisExercice, moisCourant } from '../../utils/dates';
 import { euros, euros0, r2 } from '../../utils/money';
 import { syntheseExercice, tableauTreso, tableauTVA, moisTresorerie } from '../../utils/calc';
-import { PageHeader, Card, StatCard, Btn } from '../ui';
+import { PageHeader, ExerciceTabs, Card, StatCard, Btn } from '../ui';
 import { teinte } from '../../utils/couleurs';
 import { useEtatVue } from '../../utils/etatVue';
 
@@ -67,17 +67,12 @@ export function Dashboard({ onNavigate }: { onNavigate: (p: Page) => void }) {
         subtitle={`Exercice ${exercice} — ${labelMois(moisCourant())}`}
         actions={
           <>
-            <select
-              className="border border-[#c9c0e4] rounded-md px-2 py-1.5 text-sm bg-white"
-              value={exercice}
-              onChange={ev => setExercice(ev.target.value)}
-            >
-              {EXERCICES.map(ex => <option key={ex} value={ex}>Exercice {ex}</option>)}
-            </select>
             <Btn variant="primary" onClick={() => onNavigate('journal')}>+ Saisir une dépense</Btn>
           </>
         }
+        tabs={<ExerciceTabs exercice={exercice} exercices={EXERCICES} onChange={setExercice} />}
       />
+
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
         <StatCard label="Produits (HT)" value={euros0(data.totProd)} />

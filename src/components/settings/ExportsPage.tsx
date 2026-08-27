@@ -4,7 +4,7 @@ import { useStore } from '../../store';
 import { EXERCICES } from '../../utils/dates';
 import { exportExcel, exportCSV, exportPDF, exportBackup, exportTout, exportPartage } from '../../utils/export';
 import { formatTaille } from '../../utils/files';
-import { PageHeader, Card, Btn } from '../ui';
+import { PageHeader, ExerciceTabs, Card, Btn } from '../ui';
 import { useEtatVue } from '../../utils/etatVue';
 
 export function ExportsPage() {
@@ -34,15 +34,7 @@ export function ExportsPage() {
       <PageHeader
         title="Exports"
         subtitle="Excel / Google Sheets, CSV, PDF et sauvegarde complète"
-        actions={
-          <select
-            className="border border-[#c9c0e4] rounded-md px-2 py-1.5 text-sm bg-white"
-            value={exercice}
-            onChange={ev => setExercice(ev.target.value)}
-          >
-            {EXERCICES.map(ex => <option key={ex} value={ex}>Exercice {ex}</option>)}
-          </select>
-        }
+        tabs={<ExerciceTabs exercice={exercice} exercices={EXERCICES} onChange={setExercice} />}
       />
 
       <div className="space-y-4">

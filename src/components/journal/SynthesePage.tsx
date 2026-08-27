@@ -4,7 +4,7 @@ import {
   ArrowRight, GripVertical, } from 'lucide-react';
 import { useStore } from '../../store';
 import { useReorganisation } from '../../utils/glisser';
-import { EXERCICES, labelMois, formatDateFR } from '../../utils/dates';
+import { EXERCICES, labelMois, moisExercice, formatDateFR } from '../../utils/dates';
 import { euros, euros0, r2 } from '../../utils/money';
 import {
   syntheseExercice, immoInfos, dotationDuMois, dotationsParMois, produitsFinanciersParMois,
@@ -16,7 +16,7 @@ import {
 } from '../../utils/controles';
 import type { Page } from '../../App';
 
-import { PageHeader, Card, Btn, BlocColorMenu, TotalBloc, styleBloc } from '../ui';
+import { PageHeader, ExerciceTabs, Card, Btn, BlocColorMenu, TotalBloc, styleBloc } from '../ui';
 import type { JournalEntry } from '../../types';
 import { useEtatVue } from '../../utils/etatVue';
 
@@ -109,6 +109,15 @@ export function SynthesePage({ onAllerA }: { onAllerA?: (page: Page, ligne: stri
   const quitte = () => setApercu(null);
   const meta = refs.categoriesMeta ?? {};
   const groupes = refs.groupes ?? [];
+  /** Combien d'écritures porte chaque exercice — le compteur des onglets. */
+  const nbEcrituresParExercice = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const ex of EXERCICES) {
+      const mois = new Set(moisExercice(ex));
+      m.set(ex, entries.filter(e => mois.has(e.mois)).length);
+    }
+    return m;
+  }, [entries]);
   const deplacerCategorie = useStore(s => s.deplacerCategorie);
   const deplacerGroupe = useStore(s => s.deplacerGroupe);
 
@@ -241,15 +250,14 @@ export function SynthesePage({ onAllerA }: { onAllerA?: (page: Page, ligne: stri
                 Aperçu {apercuActif ? 'activé' : 'désactivé'}
               </span>
             </Btn>
-            <select
-              className="border rounded-md px-2 py-1.5 text-sm bg-white font-medium"
-              style={{ borderColor: 'var(--bbg-border)', color: 'var(--bbg-purple-darker)' }}
-              value={exercice}
-              onChange={ev => setExercice(ev.target.value)}
-            >
-              {EXERCICES.map(ex => <option key={ex} value={ex}>Exercice {ex}</option>)}
-            </select>
           </>
+        }
+        tabs={
+          <ExerciceTabs
+            exercice={exercice} exercices={EXERCICES}
+            badgeOf={ex => nbEcrituresParExercice.get(ex) ?? 0}
+            onChange={setExercice}
+          />
         }
       />
 

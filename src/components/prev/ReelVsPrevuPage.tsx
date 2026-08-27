@@ -7,7 +7,7 @@ import {
   reelParCategorie, reelParCategorieEtMois, sectionDeCategorie, totalDeLigne, valeursDe,
   SECTIONS, SECTIONS_DEPENSES,
 } from '../../utils/previsionnel';
-import { PageHeader, Card, StatCard } from '../ui';
+import { PageHeader, ExerciceTabs, Card, StatCard } from '../ui';
 import { useEtatVue } from '../../utils/etatVue';
 
 const DEPENSES: PrevSection[] = SECTIONS_DEPENSES;
@@ -63,16 +63,7 @@ export function ReelVsPrevuPage() {
       <PageHeader
         title="Réel vs Prévu"
         subtitle="Le réalisé vient du journal, le prévu du prévisionnel — mêmes catégories de part et d'autre"
-        actions={
-          <select
-            className="border rounded-md px-2 py-1.5 text-sm bg-white font-medium"
-            style={{ borderColor: 'var(--bbg-border)', color: 'var(--bbg-purple-darker)' }}
-            value={exercice}
-            onChange={ev => setExercice(ev.target.value)}
-          >
-            {EXERCICES.map(ex => <option key={ex} value={ex}>Exercice {ex}</option>)}
-          </select>
-        }
+        tabs={<ExerciceTabs exercice={exercice} exercices={EXERCICES} onChange={setExercice} />}
       />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">

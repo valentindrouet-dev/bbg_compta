@@ -380,14 +380,16 @@ export function ordreAffichage(lignes: PrevLigne[], refs: Referentiels): PrevLig
   };
   const refDe = (l: PrevLigne) =>
     l.section === 'produits' ? refs.categoriesProduits
-      : l.jeu ? refs.categoriesJeux
+      : jeuDeLigne(l, refs.jeux ?? []) ? refs.categoriesJeux
         : refs.categoriesDepenses;
   const jeux = refs.jeux ?? [];
 
   // Dans un bloc : d'abord les postes généraux, puis les jeux, dans l'ordre du
   // catalogue ; à l'intérieur, l'ordre du référentiel.
-  const clef = (l: PrevLigne, i: number): [number, number, number] =>
-    [l.jeu ? 1 + rang(jeux, l.jeu) : 0, rang(refDe(l), l.categorie), i];
+  const clef = (l: PrevLigne, i: number): [number, number, number] => {
+    const jeu = jeuDeLigne(l, jeux);
+    return [jeu ? 1 + rang(jeux, jeu) : 0, rang(refDe(l), l.categorie), i];
+  };
 
   const trie = lignes
     .map((l, i) => ({ l, k: clef(l, i) }))
@@ -439,4 +441,26 @@ export function tauxObserves(entries: JournalEntry[]): Map<string, number> {
 export function tauxDeLigne(l: PrevLigne, observes: Map<string, number>): number {
   const tauxFormule = l.formule?.type === 'heures-taux' ? l.formule.tauxTVA : undefined;
   return l.tauxTVA ?? tauxFormule ?? observes.get(l.categorie) ?? 20;
+}
+
+/**
+ * Le jeu d'une ligne de prévisionnel : celui qu'elle porte, sinon celui que son
+ * libellé désigne (« Ventes EDIT » -> EDIT). La comparaison tolère une lettre
+ * ou deux d'écart, sans quoi « Ventes TORNADICE » resterait orpheline pendant
+ * que « Ventes EDIT » et « Ventes CAMINO » sont bien regroupées.
+ */
+export function jeuDeLigne(l: PrevLigne, jeux: string[]): string {
+  if (l.jeu) return l.jeu;
+  const dernier = l.categorie.trim().split(/[\s—-]+/).pop() ?? '';
+  return jeux.find(j => memeJeu(j, dernier)) ?? '';
+}
+
+/** Deux noms désignent-ils le même jeu ? Une lettre ou deux d'écart tolérées. */
+export function memeJeu(a: string, b: string): boolean {
+  const n = (v: string) => v.trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const [x, y] = [n(a), n(b)];
+  if (!x || !y) return false;
+  if (x === y) return true;
+  const [court, long] = x.length <= y.length ? [x, y] : [y, x];
+  return court.length >= 4 && long.startsWith(court) && long.length - court.length <= 2;
 }
