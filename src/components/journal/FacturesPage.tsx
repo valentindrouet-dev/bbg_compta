@@ -37,7 +37,7 @@ export function FacturesPage() {
   const [survol, setSurvol] = useState(false);
   const [zipEnCours, setZipEnCours] = useState(false);
   const [quota, setQuota] = useState<Quota | null>(null);
-  const { sort, toggle } = useSort({ key: 'date', dir: 'desc' });
+  const { sort, toggle } = useSort({ key: 'date', dir: 'desc' }, 'factures');
 
   // Les fichiers vivent dans IndexedDB : on les relit à chaque changement.
   useEffect(() => {

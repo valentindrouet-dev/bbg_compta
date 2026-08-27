@@ -22,7 +22,7 @@ export function ImmosPage({ cible }: { cible?: Cible }) {
   const formats = useStore(s => s.journalFormats);
   const setColFormat = useStore(s => s.setColFormat);
   const resetColFormat = useStore(s => s.resetColFormat);
-  const { sort, toggle } = useSort({ key: 'date', dir: 'asc' });
+  const { sort, toggle } = useSort({ key: 'date', dir: 'asc' }, 'immos');
 
   const infos = useMemo(() => immoInfos(entries, refs), [entries, refs]);
   const today = todayISO();

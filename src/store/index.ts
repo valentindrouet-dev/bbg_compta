@@ -222,6 +222,11 @@ export interface AppState {
   /** Vide d'un coup plusieurs cellules — une seule étape dans l'annulation. */
   viderPrevCells: (exercice: string, cells: { ligneIdx: number; moisIdx: number }[]) => void;
   addPrevLigne: (exercice: string, categorie: string, section?: PrevSection, jeu?: string) => void;
+  /**
+   * Une ligne par jeu du catalogue, pour un poste qui les concerne tous
+   * (prototypage, communication, illustrations…). En une seule annulation.
+   */
+  addPrevLignesParJeu: (exercice: string, categorie: string, section?: PrevSection) => void;
   updatePrevLigne: (exercice: string, ligneId: string, patch: Partial<PrevLigne>) => void;
   removePrevLigne: (exercice: string, ligneId: string) => void;
   /** Recopie une valeur sur tous les mois restants de l'exercice. */
@@ -634,6 +639,25 @@ export const useStore = create<AppState>()(
           previsionnels: { ...s.previsionnels, [exercice]: [...(s.previsionnels[exercice] ?? []), ligne] },
         };
       }),
+      addPrevLignesParJeu: (exercice, categorie, section) => set(s => {
+        const nMois = moisExercice(exercice).length;
+        const jeux = s.referentiels.jeux ?? JEUX_PAR_DEFAUT;
+        const sec = section ?? sectionDeCategorie(categorie, s.referentiels);
+        const deja = new Set((s.previsionnels[exercice] ?? [])
+          .filter(l => l.categorie === categorie).map(l => l.jeu ?? ''));
+        const nouvelles: PrevLigne[] = jeux.filter(j => !deja.has(j)).map(jeu => ({
+          id: uid(), categorie, section: sec, jeu,
+          valeurs: new Array<number | null>(nMois).fill(null),
+        }));
+        if (!nouvelles.length) return s;
+        return {
+          previsionnels: {
+            ...s.previsionnels,
+            [exercice]: [...(s.previsionnels[exercice] ?? []), ...nouvelles],
+          },
+        };
+      }),
+
       updatePrevLigne: (exercice, ligneId, patch) => set(s => ({
         previsionnels: {
           ...s.previsionnels,

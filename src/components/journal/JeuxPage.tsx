@@ -37,7 +37,7 @@ export function JeuxPage() {
   const lienDe = (jeu: string) => jeuxMeta[jeu]?.lienProd?.trim() || '';
   const [nouveau, setNouveau] = useState('');
   const [actif, setActif] = useState<string | null>(null);
-  const { sort, toggle } = useSort({ key: 'date', dir: 'asc' });
+  const { sort, toggle } = useSort({ key: 'date', dir: 'asc' }, 'jeux');
 
   const bilans = useMemo(
     () => bilanJeux(entries, refs.categoriesJeux),

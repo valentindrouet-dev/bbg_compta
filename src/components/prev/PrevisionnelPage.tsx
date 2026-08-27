@@ -46,6 +46,7 @@ export function PrevisionnelPage() {
   const setPrevFormule = useStore(s => s.setPrevFormule);
   const creerCalculHeures = useStore(s => s.creerCalculHeures);
   const completerPrevisionnel = useStore(s => s.completerPrevisionnel);
+  const addPrevLignesParJeu = useStore(s => s.addPrevLignesParJeu);
 
   const [exercice, setExercice] = useEtatVue('prev.exercice', '2025-26',
     v => (EXERCICES as readonly string[]).includes(v));
@@ -114,6 +115,19 @@ export function PrevisionnelPage() {
   const alarmes = useMemo(() => alarmesPrevisionnel(lignes, reel, refs), [lignes, reel, refs]);
   const immos = useMemo(() => immoInfos(entries, refs), [entries, refs]);
 
+  /**
+   * Un poste de jeu se budgète jeu par jeu : l'ajouter crée une ligne pour
+   * chacun, comme le fait la grille. Sinon, une seule ligne.
+   */
+  const estCategorieJeu = (cat: string) => refs.categoriesJeux.includes(cat.trim());
+  function ajouterLigne() {
+    const cat = nouvelleCat.trim();
+    if (!cat) return;
+    if (estCategorieJeu(cat)) addPrevLignesParJeu(exercice, cat);
+    else addPrevLigne(exercice, cat);
+    setNouvelleCat('');
+  }
+
   const toutesCategories = [
     ...refs.categoriesProduits, ...refs.categoriesDepenses, ...refs.categoriesJeux,
   ];
@@ -123,7 +137,15 @@ export function PrevisionnelPage() {
   const largeurMini = Math.max(1050, Math.round(74 * moisList.length / 0.605));
 
   const totalLigne = (l: PrevLigne) => totalDeLigne(l, lignes);
-  const lignesDe = (sec: PrevSection) => lignes.filter(l => l.section === sec);
+  /**
+   * Le bloc d'une ligne suit la NATURE de sa catégorie, réglée dans l'onglet
+   * Catégories : passer un poste « à l'actif » déplace aussitôt ses lignes de
+   * prévisionnel vers les immobilisations, sans avoir à les refaire.
+   */
+  const sectionDe = (l: PrevLigne) => toutesCategories.includes(l.categorie)
+    ? sectionDeCategorie(l.categorie, refs)
+    : l.section;
+  const lignesDe = (sec: PrevSection) => lignes.filter(l => sectionDe(l) === sec);
   const totalSection = (sec: PrevSection) =>
     r2(lignesDe(sec).filter(l => !l.unite).reduce((s, l) => s + totalLigne(l) * coef(l), 0));
   /** Prévu d'une section, mois par mois, dans la base affichée. */
@@ -193,22 +215,23 @@ export function PrevisionnelPage() {
                 style={{ borderColor: 'var(--bbg-border)' }}
                 placeholder="Ajouter une ligne…"
                 list="categories-dispo"
+                title={estCategorieJeu(nouvelleCat)
+                  ? `Poste de jeu : une ligne sera créée pour chacun de tes ${jeuxCatalogue.length} jeux`
+                  : undefined}
                 value={nouvelleCat}
                 onChange={ev => setNouvelleCat(ev.target.value)}
-                onKeyDown={ev => {
-                  if (ev.key === 'Enter' && nouvelleCat.trim()) {
-                    addPrevLigne(exercice, nouvelleCat.trim());
-                    setNouvelleCat('');
-                  }
-                }}
+                onKeyDown={ev => { if (ev.key === 'Enter') ajouterLigne(); }}
               />
               <datalist id="categories-dispo">
                 {toutesCategories.map(c => <option key={c} value={c} />)}
               </datalist>
-              <Btn variant="primary" onClick={() => {
-                if (nouvelleCat.trim()) { addPrevLigne(exercice, nouvelleCat.trim()); setNouvelleCat(''); }
-              }}>
-                <Plus size={14} />
+              <Btn variant="primary" onClick={ajouterLigne}
+                title={estCategorieJeu(nouvelleCat)
+                  ? `Créer la ligne sur chacun de tes ${jeuxCatalogue.length} jeux`
+                  : 'Créer la ligne'}>
+                {estCategorieJeu(nouvelleCat)
+                  ? <span className="inline-flex items-center gap-1"><Gamepad2 size={14} /> × {jeuxCatalogue.length}</span>
+                  : <Plus size={14} />}
               </Btn>
             </div>
             <Btn onClick={() => completerPrevisionnel(exercice)}
@@ -518,6 +541,29 @@ export function PrevisionnelPage() {
                                       {!rattachee && <option value={l.categorie}>{l.categorie} (non rattachée)</option>}
                                       {toutesCategories.map(c => <option key={c} value={c}>{c}</option>)}
                                     </select>
+                                    {/* Poste de jeu : à quel jeu cette ligne
+                                        se rattache. C'est ce choix qui la range
+                                        sous le bon bandeau. */}
+                                    {estCategorieJeu(l.categorie) && estMontant && (
+                                      <select
+                                        className="text-[10px] px-0.5"
+                                        style={{
+                                          flex: '0 0 auto', width: 86,
+                                          backgroundColor: l.jeu ? 'var(--bbg-yellow-light)' : '#fde3e1',
+                                          color: l.jeu ? 'var(--bbg-yellow-dark)' : '#b7332e',
+                                        }}
+                                        value={l.jeu ?? ''}
+                                        title={l.jeu
+                                          ? `Poste rattaché à ${l.jeu}`
+                                          : 'Poste de jeu non rattaché : choisis le jeu concerné'}
+                                        onChange={ev => updatePrevLigne(exercice, l.id, {
+                                          jeu: ev.target.value || undefined,
+                                        })}
+                                      >
+                                        <option value="">— quel jeu ?</option>
+                                        {jeuxCatalogue.map(j => <option key={j} value={j}>{j}</option>)}
+                                      </select>
+                                    )}
                                     {l.unite && (
                                       <span className="text-[10px] px-1 rounded shrink-0"
                                         style={{ backgroundColor: '#e6e9f2', color: '#5c5280' }}>{l.unite}</span>

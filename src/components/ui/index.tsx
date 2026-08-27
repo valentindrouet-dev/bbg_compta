@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Palette, RotateCcw } from 'lucide-react';
+import { useEtatVue } from '../../utils/etatVue';
 import { parseMontant, r2 } from '../../utils/money';
 import { useStore } from '../../store';
 import { BLOC_PAR_CLE, teinteBloc, type BlocCle } from '../../utils/blocs';
@@ -294,8 +295,13 @@ export function MonthNav({ mois, moisList, labelOf, onChange }: {
 
 export interface SortState { key: string; dir: 'asc' | 'desc' }
 
-export function useSort(initial: SortState) {
-  const [sort, setSort] = useState<SortState>(initial);
+/**
+ * Le tri d'un tableau. Avec une clé, il est mémorisé : on retrouve la colonne
+ * et le sens qu'on avait choisis en revenant sur la page, comme les onglets.
+ */
+export function useSort(initial: SortState, cle?: string) {
+  const [sort, setSort] = useEtatVue<SortState>(cle ? `tri.${cle}` : 'tri.__volatile', initial,
+    v => typeof v?.key === 'string' && (v.dir === 'asc' || v.dir === 'desc'));
   const toggle = (key: string) => setSort(s =>
     s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' });
   return { sort, toggle };

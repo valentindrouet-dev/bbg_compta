@@ -60,7 +60,7 @@ export function JournalPage({ cible }: { cible?: Cible }) {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [clip, setClip] = useState<JournalEntry | null>(null);
-  const { sort, toggle } = useSort({ key: 'date', dir: 'asc' });
+  const { sort, toggle } = useSort({ key: 'date', dir: 'asc' }, 'journal');
 
   // Échap : sort du mode collage / vide la sélection
   useEffect(() => {

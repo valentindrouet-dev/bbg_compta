@@ -31,7 +31,7 @@ function teinte(v: number): string {
 export function FournisseursPage() {
   const entries = useStore(s => s.entries);
   const [search, setSearch] = useState('');
-  const { sort, toggle } = useSort({ key: 'ttc', dir: 'asc' });
+  const { sort, toggle } = useSort({ key: 'ttc', dir: 'asc' }, 'fournisseurs');
 
   const lignes = useMemo<LigneFournisseur[]>(() => {
     const par = new Map<string, {

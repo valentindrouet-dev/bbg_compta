@@ -94,6 +94,14 @@ sont recalculés en direct à partir des écritures.
 - **L'en-tête reste en haut** : le titre, les bascules HT/TTC et
   détaillée/simplifiée, et les **onglets** (mois du journal, exercices ailleurs)
   restent visibles quand on descend dans un long tableau.
+- **Rien ne se remet en place tout seul** : le tri d'un tableau (colonne et
+  sens) est retrouvé en revenant sur la page, comme les onglets et les bascules.
+- **Un poste de jeu se budgète jeu par jeu** : dans le prévisionnel, taper une
+  catégorie du bloc Jeux fait apparaître un bouton `🎮 × 3` qui crée **une ligne
+  par jeu**, chacune sous son bandeau. Sur une ligne existante, un petit
+  sélecteur jaune dit à quel jeu elle se rattache — il devient rouge quand elle
+  n'en a pas. Changer la **nature** de la catégorie (onglet Catégories) déplace
+  aussitôt ses lignes entre charges et immobilisations.
 - **Un onglet par exercice** partout où plusieurs exercices se lisent : synthèse
   annuelle, TVA, réel vs prévu, exports, tableau de bord — avec le nombre
   d'écritures en pastille.

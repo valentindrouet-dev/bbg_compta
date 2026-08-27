@@ -8,7 +8,7 @@ export function RemboursPage() {
   const entries = useStore(s => s.entries);
   const refs = useStore(s => s.referentiels);
   const [paiement, setPaiement] = useState('CB VAL');
-  const { sort, toggle } = useSort({ key: 'date', dir: 'asc' });
+  const { sort, toggle } = useSort({ key: 'date', dir: 'asc' }, 'rembours');
 
   const list = useMemo(
     () => entries.filter(e => e.paiement === paiement && e.type !== 'produit'),

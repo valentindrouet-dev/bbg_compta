@@ -118,7 +118,7 @@ export function ChronoPage() {
   const supprimerProjet = useStore(s => s.supprimerProjet);
   const setOrdreProjets = useStore(s => s.setOrdreProjets);
   const deplacerChrono = useStore(s => s.deplacerChrono);
-  const { sort, toggle } = useSort({ key: 'debut', dir: 'asc' });
+  const { sort, toggle } = useSort({ key: 'debut', dir: 'asc' }, 'chrono');
   const [vue, setVue] = useState<'timeline' | 'liste'>('timeline');
   const [glisse, setGlisse] = useState<Glissement | null>(null);
   /** Aperçu pendant le glissé : on ne touche au store qu'au relâchement. */

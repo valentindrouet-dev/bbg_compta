@@ -45,7 +45,7 @@ export function CategoriesPage() {
   const [nouvelle, setNouvelle] = useState('');
   const [nouveauKind, setNouveauKind] = useState<CatKind>('categoriesDepenses');
   const [nouveauGroupe, setNouveauGroupe] = useState('');
-  const { sort, toggle } = useSort({ key: 'total', dir: 'desc' });
+  const { sort, toggle } = useSort({ key: 'total', dir: 'desc' }, 'categories');
 
   const meta = refs.categoriesMeta ?? {};
   const groupes = refs.groupes ?? [];
