@@ -184,7 +184,8 @@ export function ImmosPage({ cible }: { cible?: Cible }) {
                           <td className="text-right tabular-nums font-semibold"
                             style={{ color: 'var(--bbg-purple-darker)', ...st('ht') }}>{euros(e.ht)}</td>
                           <td>
-                            <select style={st('duree')} value={e.immoDureeAns ?? 5}
+                            <select className="pill-blue" title="Durée d'amortissement"
+                              style={st('duree')} value={e.immoDureeAns ?? 5}
                               onChange={ev => update(e.id, { immoDureeAns: Number(ev.target.value) })}>
                               {DUREES.map(d => <option key={d} value={d}>{d} ans</option>)}
                             </select>

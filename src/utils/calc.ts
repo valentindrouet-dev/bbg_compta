@@ -244,7 +244,17 @@ export interface SyntheseExercice {
   produits: Map<string, Map<string, number>>;
   totalChargesParMois: Map<string, number>;
   totalPersonnelParMois: Map<string, number>;
+  /**
+   * Toutes les dépenses TTC de l'exercice : charges + personnel + jeux +
+   * immobilisations. À ne pas confondre avec `totalChargesTTCParMois`, qui ne
+   * porte que le bloc des charges — c'est lui, le pendant TTC du total HT
+   * affiché sous les charges.
+   */
   totalTTCParMois: Map<string, number>;
+  totalChargesTTCParMois: Map<string, number>;
+  totalPersonnelTTCParMois: Map<string, number>;
+  totalJeuxTTCParMois: Map<string, number>;
+  immoTTCParMois: Map<string, number>;
   totalJeuxParMois: Map<string, number>;
   totalProduitsParMois: Map<string, number>;
   totalProduitsTTCParMois: Map<string, number>;
@@ -280,6 +290,10 @@ export function syntheseExercice(
   const totalChargesParMois = new Map<string, number>();
   const totalPersonnelParMois = new Map<string, number>();
   const totalTTCParMois = new Map<string, number>();
+  const totalChargesTTCParMois = new Map<string, number>();
+  const totalPersonnelTTCParMois = new Map<string, number>();
+  const totalJeuxTTCParMois = new Map<string, number>();
+  const immoTTCParMois = new Map<string, number>();
   const totalJeuxParMois = new Map<string, number>();
   const totalProduitsParMois = new Map<string, number>();
   const totalProduitsTTCParMois = new Map<string, number>();
@@ -317,6 +331,7 @@ export function syntheseExercice(
       add(jeuxParJeuEtCategorie.get(jeu)!, e.categorie, e.mois, v);
       bump(totalJeuxParMois, e.mois, v);
       bump(totalTTCParMois, e.mois, e.ttc);
+      bump(totalJeuxTTCParMois, e.mois, e.ttc);
       if (e.tva) bump(baseTVADepensesParMois, e.mois, e.ht);
       bump(tvaDeductibleParMois, e.mois, e.tva);
     } else if (e.type === 'immo') {
@@ -325,18 +340,21 @@ export function syntheseExercice(
       add(immos, e.categorie, e.mois, v);
       bump(immoParMois, e.mois, v);
       bump(totalTTCParMois, e.mois, e.ttc);
+      bump(immoTTCParMois, e.mois, e.ttc);
       if (e.tva) bump(baseTVADepensesParMois, e.mois, e.ht);
       bump(tvaDeductibleParMois, e.mois, e.tva);
     } else if (estPersonnel(e.categorie, refs)) {
       add(personnel, e.categorie, e.mois, v);
       bump(totalPersonnelParMois, e.mois, v);
       bump(totalTTCParMois, e.mois, e.ttc);
+      bump(totalPersonnelTTCParMois, e.mois, e.ttc);
       if (e.tva) bump(baseTVADepensesParMois, e.mois, e.ht);
       bump(tvaDeductibleParMois, e.mois, e.tva);
     } else {
       add(charges, e.categorie, e.mois, v);
       bump(totalChargesParMois, e.mois, v);
       bump(totalTTCParMois, e.mois, e.ttc);
+      bump(totalChargesTTCParMois, e.mois, e.ttc);
       if (e.tva) bump(baseTVADepensesParMois, e.mois, e.ht);
       bump(tvaDeductibleParMois, e.mois, e.tva);
       // Les charges financières restent affichées avec les charges, mais on
@@ -347,6 +365,7 @@ export function syntheseExercice(
   return {
     moisList, base, charges, personnel, jeux, produits,
     totalChargesParMois, totalPersonnelParMois, totalTTCParMois,
+    totalChargesTTCParMois, totalPersonnelTTCParMois, totalJeuxTTCParMois, immoTTCParMois,
     totalJeuxParMois, totalProduitsParMois, totalProduitsTTCParMois, immoParMois,
     immos, jeuxParJeu, jeuxParJeuEtCategorie, chargesFinancieresParMois,
     baseTVADepensesParMois, baseTVAProduitsParMois,

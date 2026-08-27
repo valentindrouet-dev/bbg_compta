@@ -9,7 +9,7 @@ import { syntheseExercice, immoInfos, tableauTVA, tableauTreso, moisTresorerie }
 import { exporterFichiers, importerFichiers, listFiles, type FichierSerialise } from './files';
 import { creerZip, nomSur, type FichierZip } from './zip';
 import { pageLectureSeule } from './partage';
-import { valeursDe } from './previsionnel';
+import { ordreAffichage, valeursDe } from './previsionnel';
 
 function download(name: string, blob: Blob) {
   const url = URL.createObjectURL(blob);
@@ -114,8 +114,9 @@ export function blobExcel(state: AppState, exercice: string): Blob {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(tvaRows), 'TVA');
 
   // Prévisionnel : mêmes catégories et mêmes mois que la synthèse
-  for (const [ex, lignes] of Object.entries(previsionnels ?? {})) {
+  for (const [ex, brutes] of Object.entries(previsionnels ?? {})) {
     const mois = moisExercice(ex);
+    const lignes = ordreAffichage(brutes, referentiels);
     const rows = lignes.map(l => {
       const row: Record<string, string | number> = {
         'Bloc': l.section, 'Ligne': l.categorie, 'Unité': l.unite ?? '€',

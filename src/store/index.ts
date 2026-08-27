@@ -140,6 +140,16 @@ export interface AppState {
   mergeCategories: (noms: string[], cible: string) => void;
   removeCategories: (noms: string[]) => void;
   setGroupes: (groupes: string[]) => void;
+  /**
+   * Déplace une catégorie dans l'ordre d'affichage, juste avant ou juste après
+   * une autre. Si `groupe` est fourni, la catégorie change aussi de groupe —
+   * c'est ce qui se passe quand on la lâche sous un autre bandeau.
+   */
+  deplacerCategorie: (cat: string, cible: string, apres: boolean, groupe?: string) => void;
+  /** Déplace un groupe entier dans l'ordre des bandeaux. */
+  deplacerGroupe: (groupe: string, cible: string, apres: boolean) => void;
+  /** Déplace un jeu dans l'ordre du catalogue (et donc de la synthèse). */
+  deplacerJeu: (jeu: string, cible: string, apres: boolean) => void;
   addJeu: (name: string) => void;
   renameJeu: (ancien: string, nouveau: string) => void;
   removeJeu: (name: string) => void;
@@ -633,6 +643,42 @@ export const useStore = create<AppState>()(
       setGroupes: (groupes) => set(s => ({
         referentiels: { ...s.referentiels, groupes },
       })),
+
+      deplacerCategorie: (cat, cible, apres, groupe) => set(s => {
+        const KINDS: CatKind[] = ['categoriesDepenses', 'categoriesJeux', 'categoriesProduits'];
+        const refs = { ...s.referentiels };
+        const kind = KINDS.find(k => refs[k].includes(cat));
+        if (!kind || cat === cible) return s;
+        const liste = refs[kind].filter(c => c !== cat);
+        let i = liste.indexOf(cible);
+        if (i < 0) i = liste.length; else if (apres) i += 1;
+        liste.splice(i, 0, cat);
+        refs[kind] = liste;
+        if (groupe !== undefined) {
+          const meta = { ...(refs.categoriesMeta ?? {}) };
+          meta[cat] = { ...(meta[cat] ?? {}), groupe: groupe || undefined };
+          refs.categoriesMeta = meta;
+        }
+        return { referentiels: refs };
+      }),
+
+      deplacerGroupe: (groupe, cible, apres) => set(s => {
+        if (groupe === cible) return s;
+        const groupes = (s.referentiels.groupes ?? []).filter(g => g !== groupe);
+        let i = groupes.indexOf(cible);
+        if (i < 0) i = groupes.length; else if (apres) i += 1;
+        groupes.splice(i, 0, groupe);
+        return { referentiels: { ...s.referentiels, groupes } };
+      }),
+
+      deplacerJeu: (jeu, cible, apres) => set(s => {
+        if (jeu === cible) return s;
+        const jeux = (s.referentiels.jeux ?? JEUX_PAR_DEFAUT).filter(j => j !== jeu);
+        let i = jeux.indexOf(cible);
+        if (i < 0) i = jeux.length; else if (apres) i += 1;
+        jeux.splice(i, 0, jeu);
+        return { referentiels: { ...s.referentiels, jeux } };
+      }),
 
       addJeu: (name) => set(s => {
         const n = name.trim();

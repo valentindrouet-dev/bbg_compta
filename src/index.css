@@ -27,6 +27,11 @@
   --bbg-yellow-light:  #fff2cc;
   --bbg-yellow-dark:   #7f6000;
 
+  /* Bleu ciel : les immobilisations, qu'on distingue d'un coup d'œil des charges */
+  --bbg-blue:          #a4c2f4;
+  --bbg-blue-light:    #cfe2f3;
+  --bbg-blue-dark:     #1c4587;
+
   --bbg-border:        #c9c0e4;
   --bbg-border-soft:   #ddd6ef;
 }
@@ -103,9 +108,11 @@ input[type="number"]::-webkit-outer-spin-button { opacity: 0.5; }
 .sheet select.pill-green  { background: var(--bbg-green-light); }
 .sheet select.pill-orange { background: var(--bbg-orange-light); }
 .sheet select.pill-yellow { background: var(--bbg-yellow-light); }
+.sheet select.pill-blue   { background: var(--bbg-blue-light); color: var(--bbg-blue-dark); font-weight: 600; }
 .sheet select.pill-green:hover  { background: #cbe3c2; border-color: var(--bbg-border); }
 .sheet select.pill-orange:hover { background: #f8d9b6; border-color: var(--bbg-border); }
 .sheet select.pill-yellow:hover { background: #ffe9ad; border-color: var(--bbg-border); }
+.sheet select.pill-blue:hover   { background: var(--bbg-blue); border-color: var(--bbg-blue-dark); }
 
 /* Bandeaux de section dans les tableaux larges (budgets, synthèse) */
 .sheet tr.band-purple > td { background: var(--bbg-purple-light) !important; font-weight: 700; color: var(--bbg-purple-darker); }
@@ -113,6 +120,14 @@ input[type="number"]::-webkit-outer-spin-button { opacity: 0.5; }
 .sheet tr.band-orange > td { background: var(--bbg-orange) !important;       font-weight: 700; }
 .sheet tr.band-yellow > td { background: var(--bbg-yellow-light) !important; color: var(--bbg-yellow-dark); }
 .sheet tr.band-soft   > td { background: #efeafa !important; font-weight: 600; }
+
+/* Réorganisation à la souris : trait d'insertion et ligne en cours de glissé */
+.sheet tr[data-depot="avant"] > td { box-shadow: inset 0 3px 0 0 var(--bbg-purple-dark); }
+.sheet tr[data-depot="apres"] > td { box-shadow: inset 0 -3px 0 0 var(--bbg-purple-dark); }
+.sheet tr[data-glisse] > td { opacity: 0.4; }
+.poignee-glisse { opacity: 0; transition: opacity .12s; color: var(--bbg-purple-dark); }
+.sheet tr:hover .poignee-glisse { opacity: 0.55; }
+.poignee-glisse:hover { opacity: 1 !important; }
 
 /* Ligne atteinte depuis les contrôles comptables : on la voit tout de suite */
 @keyframes cible-pulse {

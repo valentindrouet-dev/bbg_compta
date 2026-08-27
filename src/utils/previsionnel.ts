@@ -328,3 +328,42 @@ export function categoriesManquantes(
     .filter(m => !vues.has(`${m.section}|${m.categorie}|${m.jeu ?? ''}`))
     .map(m => ({ categorie: m.categorie, section: m.section, jeu: m.jeu }));
 }
+
+/**
+ * L'ordre d'affichage du prévisionnel : le même que celui de la synthèse.
+ *
+ * Réordonner une catégorie ou un jeu dans la synthèse déplace donc aussi sa
+ * ligne ici — les deux tableaux restent en vis-à-vis, comme dans le tableur.
+ * Les lignes de quantités (les heures) restent collées juste au-dessus de la
+ * ligne qui les consomme, sinon le calcul ne se lit plus.
+ */
+export function ordreAffichage(lignes: PrevLigne[], refs: Referentiels): PrevLigne[] {
+  const rang = (liste: string[], valeur: string | undefined) => {
+    const i = valeur == null ? -1 : liste.indexOf(valeur);
+    return i < 0 ? liste.length : i;
+  };
+  const refDe = (l: PrevLigne) =>
+    l.section === 'produits' ? refs.categoriesProduits
+      : l.section === 'jeux' ? refs.categoriesJeux
+        : refs.categoriesDepenses;
+  const jeux = refs.jeux ?? [];
+
+  const clef = (l: PrevLigne, i: number): [number, number, number] =>
+    [l.section === 'jeux' ? rang(jeux, l.jeu) : 0, rang(refDe(l), l.categorie), i];
+
+  const trie = lignes
+    .map((l, i) => ({ l, k: clef(l, i) }))
+    .sort((a, b) => a.k[0] - b.k[0] || a.k[1] - b.k[1] || a.k[2] - b.k[2])
+    .map(x => x.l);
+
+  // Chaque ligne de quantités remonte juste avant celle qui s'en sert.
+  const out = [...trie];
+  for (const l of trie) {
+    if (!l.formule) continue;
+    const src = out.findIndex(x => x.id === l.formule!.sourceId);
+    if (src < 0) continue;
+    const [source] = out.splice(src, 1);
+    out.splice(out.findIndex(x => x.id === l.id), 0, source);
+  }
+  return out;
+}

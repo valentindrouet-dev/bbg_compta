@@ -12,12 +12,17 @@ sont recalculés en direct à partir des écritures.
 - **Journal du mois** — saisie des dépenses, dépenses jeux et produits, mois par mois
   (TVA automatique par taux 20 / 10 / 5,5 / 0 % ou saisie manuelle, HT calculé,
   catégories, plan comptable, mots clés, factures, alerte si la date sort du mois)
+- **Le mois en trois chiffres** — en haut du journal : dépenses (charges,
+  immobilisations et jeux), recettes, solde ; TTC en gros, HT rappelé dessous
 - **Synthèse annuelle** — les blocs dans l'ordre de lecture : **Produits, Charges,
   Personnel, Jeux** (un sous-bloc par jeu, toutes ses catégories listées),
   **Immobilisations**, puis le **compte de résultat** (EBE → REX → RC → IS → RN,
   barème PME), la **TVA**, un **récapitulatif** d'une page et des **contrôles
   comptables** automatiques. Chaque bloc porte son gros total en en-tête, et un
-  bouton bascule entre vue **détaillée** et vue **simplifiée** (totaux seuls)
+  bouton bascule entre vue **détaillée** et vue **simplifiée** (totaux seuls).
+  Sous chaque total HT, le **même bloc en TTC** — pas le total général : c'est
+  bien le pendant taxes comprises de la ligne du dessus. Le total de *toutes*
+  les dépenses TTC, lui, est au récapitulatif, sous « Sorti du compte »
 - **Immobilisations** — durées, dotations, VNC et fin d'amortissement calculées
 - **Trésorerie** — encaissements/décaissements TTC, mouvements financiers
   (capital, CCA, placements, intérêts) inclus
@@ -70,6 +75,13 @@ sont recalculés en direct à partir des écritures.
   journal** pour l'y attacher ; lâche-en plusieurs sur la **zone en bas d'un
   tableau** pour créer une ligne par fichier (le nom du fichier sert de libellé,
   et le fournisseur est reconnu s'il est déjà connu).
+- **Réorganiser les lignes** : dans la synthèse annuelle, attrape une ligne par
+  sa **poignée** (à gauche du nom, elle apparaît au survol) et remonte-la ou
+  descends-la. Un trait montre où elle va tomber. Ça marche aussi sur les
+  **bandeaux de groupe** et sur les **bandeaux de jeu** — tout le bloc suit.
+  Une catégorie lâchée sous un autre bandeau **change de groupe**. Le nouvel
+  ordre vaut partout : prévisionnel, listes déroulantes du journal, exports.
+  Un seul **Cmd+Z** annule un déplacement.
 - **Recolorer un bloc** : la palette dans l'en-tête d'un bloc. Une teinte majeure
   suffit — en-tête, bandes de groupe, lignes alternées blanc / très clair et ligne
   de total s'en déduisent, et la même teinte s'applique au journal, à la synthèse

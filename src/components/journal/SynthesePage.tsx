@@ -1,9 +1,10 @@
 import { Fragment, useMemo, useState } from 'react';
 import {
   Eye, EyeOff, Gamepad2, Info, Rows3, List, CheckCircle2, AlertTriangle, AlertCircle, Wrench,
-  ArrowRight,
+  ArrowRight, GripVertical,
 } from 'lucide-react';
 import { useStore } from '../../store';
+import { useReorganisation } from '../../utils/glisser';
 import { EXERCICES, labelMois, formatDateFR } from '../../utils/dates';
 import { euros, euros0, r2 } from '../../utils/money';
 import {
@@ -104,6 +105,19 @@ export function SynthesePage({ onAllerA }: { onAllerA?: (page: Page, ligne: stri
   const quitte = () => setApercu(null);
   const meta = refs.categoriesMeta ?? {};
   const groupes = refs.groupes ?? [];
+  const deplacerCategorie = useStore(s => s.deplacerCategorie);
+  const deplacerGroupe = useStore(s => s.deplacerGroupe);
+
+  /**
+   * Réorganisation à la souris. Une catégorie lâchée sur une autre prend sa
+   * place — et le groupe de la ligne d'arrivée, si c'est un autre bandeau.
+   */
+  const reorg = useReorganisation((source, cible, apres, genre) => {
+    if (genre === 'groupe') { deplacerGroupe(source, cible, apres); return; }
+    const groupeArrivee = meta[cible]?.groupe ?? '';
+    const groupeDepart = meta[source]?.groupe ?? '';
+    deplacerCategorie(source, cible, apres, groupeArrivee === groupeDepart ? undefined : groupeArrivee);
+  });
 
   // Catégories présentes dans l'exercice, dans l'ordre du référentiel
   const catsDe = (source: Map<string, Map<string, number>>, ref: string[]) =>
@@ -115,22 +129,24 @@ export function SynthesePage({ onAllerA }: { onAllerA?: (page: Page, ligne: stri
   const blocs: {
     cle: BlocCle; titre: string; cats: string[];
     data: Map<string, Map<string, number>>; totaux: Map<string, number>;
+    /** Le même bloc en TTC — le vrai pendant du total HT, bloc par bloc. */
+    ttc?: Map<string, number>;
     typeApercu: 'charges' | 'immo' | 'produit'; vide?: string;
   }[] = [
     {
       cle: 'produits', titre: `Produits par catégorie (${unite})`,
       cats: catsDe(syn.produits, refs.categoriesProduits), data: syn.produits,
-      totaux: syn.totalProduitsParMois, typeApercu: 'produit',
+      totaux: syn.totalProduitsParMois, ttc: syn.totalProduitsTTCParMois, typeApercu: 'produit',
     },
     {
       cle: 'charges', titre: `Charges par catégorie (${unite})`,
       cats: catsDe(syn.charges, refs.categoriesDepenses), data: syn.charges,
-      totaux: syn.totalChargesParMois, typeApercu: 'charges',
+      totaux: syn.totalChargesParMois, ttc: syn.totalChargesTTCParMois, typeApercu: 'charges',
     },
     {
       cle: 'personnel', titre: `Personnel & rémunérations (${unite})`,
       cats: catsDe(syn.personnel, refs.categoriesDepenses), data: syn.personnel,
-      totaux: syn.totalPersonnelParMois, typeApercu: 'charges',
+      totaux: syn.totalPersonnelParMois, ttc: syn.totalPersonnelTTCParMois, typeApercu: 'charges',
       vide: 'Aucune charge de personnel sur cet exercice. Les cotisations du gérant, '
         + 'les salaires bruts et les charges patronales viendront se ranger ici : il suffit '
         + 'de mettre leur catégorie dans le groupe « Personnel » (onglet Catégories).',
@@ -264,18 +280,30 @@ export function SynthesePage({ onAllerA }: { onAllerA?: (page: Page, ligne: stri
                       {ordreGroupes.map(g => (
                         <Fragment key={`grp-${g}`}>
                           {avecGroupes && (
-                            <tr className="band-bloc">
+                            <tr className="band-bloc" {...(g ? reorg.ligne('groupe', g) : {})}>
                               <td colSpan={syn.moisList.length + 3} className="py-1">
-                                {g || '— sans groupe —'}
+                                <span className="inline-flex items-center gap-1.5">
+                                  {g && (
+                                    <span className="poignee-glisse" {...reorg.poignee()}
+                                      title="Glisser pour déplacer tout le groupe">
+                                      <GripVertical size={13} />
+                                    </span>
+                                  )}
+                                  {g || '— sans groupe —'}
+                                </span>
                               </td>
                             </tr>
                           )}
                           {(simple ? [] : parGroupe.get(g)!).map(cat => {
                             const tot = totalLigne(bloc.data, cat);
                             return (
-                              <tr key={cat}>
+                              <tr key={cat} {...reorg.ligne('categorie', cat)}>
                                 <td>
                                   <span className="inline-flex items-center gap-1.5">
+                                    <span className="poignee-glisse shrink-0" {...reorg.poignee()}
+                                      title="Glisser pour remonter ou descendre cette catégorie">
+                                      <GripVertical size={13} />
+                                    </span>
                                     <span
                                       className="inline-block w-2.5 h-2.5 rounded-sm shrink-0"
                                       style={{ backgroundColor: meta[cat]?.couleur || t.base }}
@@ -331,25 +359,16 @@ export function SynthesePage({ onAllerA }: { onAllerA?: (page: Page, ligne: stri
                         <td className="text-right tabular-nums grand">{euros(grandTotal)}</td>
                         <td className="text-right tabular-nums">{euros0(r2(grandTotal / nbMois))}</td>
                       </tr>
-                      {bloc.cle === 'produits' && (
+                      {bloc.ttc && unite === 'HT' && (
                         <tr>
-                          <td>Total produits (TTC)</td>
-                          {syn.moisList.map(m => (
-                            <td key={m} className="text-right tabular-nums">{euros(r2(syn.totalProduitsTTCParMois.get(m) ?? 0))}</td>
-                          ))}
-                          <td className="text-right tabular-nums">{euros(totalDe(syn.totalProduitsTTCParMois))}</td>
-                          <td></td>
-                        </tr>
-                      )}
-                      {bloc.cle === 'charges' && (
-                        <tr>
-                          <td title="Charges + personnel + dépenses jeux + immobilisations, toutes taxes comprises">
-                            Total dépenses (TTC)
+                          <td title="Le même bloc, taxes comprises : c'est le montant réellement sorti du compte.">
+                            Total {bloc.cle === 'produits' ? 'produits'
+                              : bloc.cle === 'personnel' ? 'personnel' : 'charges'} (TTC)
                           </td>
                           {syn.moisList.map(m => (
-                            <td key={m} className="text-right tabular-nums">{euros(r2(syn.totalTTCParMois.get(m) ?? 0))}</td>
+                            <td key={m} className="text-right tabular-nums">{euros(r2(bloc.ttc!.get(m) ?? 0))}</td>
                           ))}
-                          <td className="text-right tabular-nums">{euros(totalDe(syn.totalTTCParMois))}</td>
+                          <td className="text-right tabular-nums">{euros(totalDe(bloc.ttc))}</td>
                           <td></td>
                         </tr>
                       )}
@@ -424,6 +443,12 @@ function BlocJeux({ syn, refs, couleurs, unite, survol, quitte, nbMois, simple }
 }) {
   const t = teinteBloc('jeux', couleurs);
   const cats = refs.categoriesJeux;
+  const deplacerCategorie = useStore(s => s.deplacerCategorie);
+  const deplacerJeu = useStore(s => s.deplacerJeu);
+  const reorg = useReorganisation((source, cible, apres, genre) => {
+    if (genre === 'jeu') deplacerJeu(source, cible, apres);
+    else deplacerCategorie(source, cible, apres);
+  });
   // Les jeux du catalogue, plus ceux qui portent des dépenses sans y figurer.
   const jeux = [...new Set([...(refs.jeux ?? []), ...syn.jeuxParJeuEtCategorie.keys()])]
     .filter(j => (refs.jeux ?? []).includes(j) || syn.jeuxParJeuEtCategorie.has(j));
@@ -463,9 +488,13 @@ function BlocJeux({ syn, refs, couleurs, unite, survol, quitte, nbMois, simple }
           <tbody>
             {jeux.map(jeu => (
               <Fragment key={jeu}>
-                <tr className="band-bloc">
+                <tr className="band-bloc" {...reorg.ligne('jeu', jeu)}>
                   <td colSpan={syn.moisList.length + 3} className="py-1">
                     <span className="inline-flex items-center gap-1.5">
+                      <span className="poignee-glisse" {...reorg.poignee()}
+                        title="Glisser pour changer l'ordre des jeux">
+                        <GripVertical size={13} />
+                      </span>
                       <Gamepad2 size={13} /> {jeu}
                     </span>
                   </td>
@@ -473,8 +502,17 @@ function BlocJeux({ syn, refs, couleurs, unite, survol, quitte, nbMois, simple }
                 {(simple ? [] : cats).map(cat => {
                   const tot = r2(syn.moisList.reduce((s, m) => s + valeur(jeu, cat, m), 0));
                   return (
-                    <tr key={`${jeu}-${cat}`} style={tot ? undefined : { color: '#b3aecb' }}>
-                      <td className="pl-4">{cat}</td>
+                    <tr key={`${jeu}-${cat}`} style={tot ? undefined : { color: '#b3aecb' }}
+                      {...reorg.ligne('categorie', cat)}>
+                      <td className="pl-4">
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="poignee-glisse shrink-0" {...reorg.poignee()}
+                            title="Glisser pour réordonner les postes — l'ordre vaut pour tous les jeux">
+                            <GripVertical size={13} />
+                          </span>
+                          {cat}
+                        </span>
+                      </td>
                       {syn.moisList.map(m => {
                         const v = valeur(jeu, cat, m);
                         return (
@@ -517,6 +555,22 @@ function BlocJeux({ syn, refs, couleurs, unite, survol, quitte, nbMois, simple }
               <td className="text-right tabular-nums grand">{euros(grandTotal)}</td>
               <td className="text-right tabular-nums">{euros0(r2(grandTotal / nbMois))}</td>
             </tr>
+            {unite === 'HT' && (
+              <tr>
+                <td title="Le même bloc, taxes comprises : le montant réellement sorti du compte.">
+                  Total dépenses jeux (TTC)
+                </td>
+                {syn.moisList.map(m => (
+                  <td key={m} className="text-right tabular-nums">
+                    {euros(r2(syn.totalJeuxTTCParMois.get(m) ?? 0))}
+                  </td>
+                ))}
+                <td className="text-right tabular-nums">
+                  {euros(r2([...syn.totalJeuxTTCParMois.values()].reduce((s, v) => s + v, 0)))}
+                </td>
+                <td></td>
+              </tr>
+            )}
           </tfoot>
         </table>
       </div>
@@ -539,7 +593,12 @@ function BlocImmos({ syn, couleurs, unite, meta, survol, quitte, immos, simple }
   immos: ReturnType<typeof immoInfos>; simple: boolean;
 }) {
   const t = teinteBloc('immos', couleurs);
-  const cats = [...syn.immos.keys()];
+  const ordreRef = useStore(s => s.referentiels.categoriesDepenses);
+  const deplacerCategorie = useStore(s => s.deplacerCategorie);
+  const reorg = useReorganisation((source, cible, apres) => deplacerCategorie(source, cible, apres));
+  // Même ordre que partout ailleurs : celui du référentiel, puis les intrus.
+  const cats = ordreRef.filter(c => syn.immos.has(c))
+    .concat([...syn.immos.keys()].filter(c => !ordreRef.includes(c)));
   const grandTotal = r2([...syn.immoParMois.values()].reduce((s, v) => s + v, 0));
   const totalDotations = r2(syn.moisList.reduce((s, m) => s + dotationDuMois(immos, m), 0));
   if (!cats.length) return null;
@@ -568,9 +627,13 @@ function BlocImmos({ syn, couleurs, unite, meta, survol, quitte, immos, simple }
           </thead>
           <tbody>
             {(simple ? [] : cats).map(cat => (
-              <tr key={cat}>
+              <tr key={cat} {...reorg.ligne('categorie', cat)}>
                 <td>
                   <span className="inline-flex items-center gap-1.5">
+                    <span className="poignee-glisse shrink-0" {...reorg.poignee()}
+                      title="Glisser pour remonter ou descendre cette catégorie">
+                      <GripVertical size={13} />
+                    </span>
                     <span className="inline-block w-2.5 h-2.5 rounded-sm shrink-0"
                       style={{ backgroundColor: meta[cat]?.couleur || t.base }} />
                     {cat}
@@ -627,6 +690,21 @@ function BlocImmos({ syn, couleurs, unite, meta, survol, quitte, immos, simple }
               ))}
               <td className="text-right tabular-nums grand">{euros(grandTotal)}</td>
             </tr>
+            {unite === 'HT' && (
+              <tr>
+                <td title="Le même bloc, taxes comprises : le montant réellement sorti du compte.">
+                  Total investi (TTC)
+                </td>
+                {syn.moisList.map(m => (
+                  <td key={m} className="text-right tabular-nums">
+                    {euros(r2(syn.immoTTCParMois.get(m) ?? 0))}
+                  </td>
+                ))}
+                <td className="text-right tabular-nums">
+                  {euros(r2([...syn.immoTTCParMois.values()].reduce((s, v) => s + v, 0)))}
+                </td>
+              </tr>
+            )}
           </tfoot>
         </table>
       </div>
@@ -899,6 +977,11 @@ function Recapitulatif({ syn, resultat, couleurs, unite, exercice }: {
             <div className="flex justify-between text-sm py-0.5">
               <span>Investissements de l'exercice</span>
               <b className="tabular-nums">{euros(investi)}</b>
+            </div>
+            <div className="flex justify-between text-sm py-0.5"
+              title="Charges + personnel + jeux + immobilisations, taxes comprises : tout ce qui est réellement sorti du compte.">
+              <span>Sorti du compte (toutes dépenses TTC)</span>
+              <b className="tabular-nums">{euros(total(syn.totalTTCParMois))}</b>
             </div>
             <div className="flex justify-between text-sm py-0.5">
               <span>{soldeTVA > 0 ? 'TVA à reverser à l\'État' : 'Crédit de TVA sur l\'État'}</span>

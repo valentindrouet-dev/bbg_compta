@@ -9,7 +9,7 @@ import { EXERCICES, labelMois, moisExercice } from '../../utils/dates';
 import { euros, euros0, r2, pourcent, parseMontant } from '../../utils/money';
 import {
   SECTIONS, SECTIONS_DEPENSES, alarmesPrevisionnel, reelParCategorie, reelParCategorieEtMois,
-  reelParJeuEtCategorie, sectionDeCategorie, totalDeLigne, valeursDe,
+  ordreAffichage, reelParJeuEtCategorie, sectionDeCategorie, totalDeLigne, valeursDe,
 } from '../../utils/previsionnel';
 import { teinteBloc, estChargeFinanciere, GROUPE_PERSONNEL, type BlocCle } from '../../utils/blocs';
 import {
@@ -50,7 +50,11 @@ export function PrevisionnelPage() {
   });
 
   const moisList = moisExercice(exercice);
-  const lignes = previsionnels[exercice] ?? [];
+  // Même ordre que la synthèse : celui du référentiel, jeux compris.
+  const lignes = useMemo(
+    () => ordreAffichage(previsionnels[exercice] ?? [], refs),
+    [previsionnels, exercice, refs],
+  );
   const meta = refs.categoriesMeta ?? {};
   const groupes = refs.groupes ?? [];
   const jeuxCatalogue = refs.jeux ?? [];

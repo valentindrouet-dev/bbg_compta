@@ -22,11 +22,17 @@ import { useCibleLigne, type Cible } from '../../utils/cible';
 
 type SectionKind = 'depenses' | 'jeux' | 'produits';
 
-/** Largeurs de colonnes en % : tout doit tenir à l'écran, sans coupure. */
-const COLS_DEPENSES = [2, 7.5, 9, 12.5, 10.5, 5, 5, 5, 5.5, 6, 8.5, 9, 5.5, 7, 2];
-const COLS_PRODUITS = [2, 8, 11, 15, 12.5, 6, 5.5, 6, 6.5, 7, 9, 5, 4, 2.5];
+/**
+ * Largeurs de colonnes en %. Les colonnes de montants (TTC, TVA, HT) sont
+ * dimensionnées pour que « 12 345,67 € » tienne en entier — en-tête, ligne
+ * courante et ligne de totaux, sans que deux nombres se chevauchent.
+ */
+const COLS_DEPENSES = [2, 7, 8.5, 12, 9.5, 6.5, 5, 6, 6.5, 6, 7.5, 9, 6, 6.5, 2];
+const COLS_PRODUITS = [2, 7.5, 10, 15.5, 11, 7, 5, 6.5, 7, 6.5, 9, 6, 4, 3];
 /** La section Jeux intercale une colonne « Jeu » après la catégorie. */
-const COLS_JEUX = [2, 7, 8.5, 12, 10, 7, 4.7, 4.7, 4.7, 5.2, 5.5, 7, 8.5, 4.5, 6.7, 2];
+const COLS_JEUX = [2, 6.5, 8.5, 11.5, 9, 6.5, 6.5, 5, 6, 6.5, 5.5, 6.5, 8, 4.5, 5.5, 2];
+/** Assez large pour qu'une colonne de montant fasse au moins ~85 px. */
+const LARGEUR_MINI = 1400;
 
 export function JournalPage({ cible }: { cible?: Cible }) {
   const entries = useStore(s => s.entries);
@@ -178,6 +184,8 @@ export function JournalPage({ cible }: { cible?: Cible }) {
         onChange={setMois}
       />
 
+      <ResumeMois depenses={depenses} jeux={jeux} produits={produits} />
+
       {/* Bandeau mode collage */}
       {clip && (
         <div
@@ -256,6 +264,73 @@ function BatchSelect({ label, options, labelOf, onPick }: {
       <option value="">{label}…</option>
       {options.map(o => <option key={o} value={o}>{labelOf ? labelOf(o) : o}</option>)}
     </select>
+  );
+}
+
+// ------------------------------------------------------------ Résumé mois ---
+
+/**
+ * Le mois en trois chiffres, lu avant d'ouvrir les tableaux : ce qui est sorti,
+ * ce qui est rentré, et ce qu'il en reste. Le gros chiffre est le TTC — c'est
+ * lui qui passe sur le compte ; le HT est rappelé dessous, c'est lui qui pèse
+ * sur le résultat.
+ */
+function ResumeMois({ depenses, jeux, produits }: {
+  depenses: JournalEntry[]; jeux: JournalEntry[]; produits: JournalEntry[];
+}) {
+  const somme = (rows: JournalEntry[], champ: 'ttc' | 'ht') =>
+    r2(rows.reduce((s, e) => s + e[champ], 0));
+
+  if (!depenses.length && !jeux.length && !produits.length) return null;
+
+  const sortiesTTC = r2(somme(depenses, 'ttc') + somme(jeux, 'ttc'));
+  const sortiesHT = r2(somme(depenses, 'ht') + somme(jeux, 'ht'));
+  const entreesTTC = somme(produits, 'ttc');
+  const entreesHT = somme(produits, 'ht');
+
+  const tuiles = [
+    {
+      titre: 'Dépenses',
+      aide: `Charges et immobilisations (${depenses.length} ligne(s)) + dépenses jeux (${jeux.length})`,
+      ttc: sortiesTTC, ht: sortiesHT,
+      fond: 'var(--bbg-orange-light)', bord: 'var(--bbg-orange)', encre: 'var(--bbg-orange-dark)',
+      detail: jeux.length ? `dont jeux ${euros(somme(jeux, 'ttc'))}` : null,
+    },
+    {
+      titre: 'Recettes',
+      aide: `${produits.length} produit(s) sur ce mois`,
+      ttc: entreesTTC, ht: entreesHT,
+      fond: 'var(--bbg-green-light)', bord: 'var(--bbg-green)', encre: 'var(--bbg-green-dark)',
+      detail: null,
+    },
+    {
+      titre: 'Solde du mois',
+      aide: 'Recettes moins dépenses, sur les seules lignes de ce mois',
+      ttc: r2(entreesTTC - sortiesTTC), ht: r2(entreesHT - sortiesHT),
+      fond: entreesTTC >= sortiesTTC ? 'var(--bbg-green-light)' : '#fde3e1',
+      bord: entreesTTC >= sortiesTTC ? 'var(--bbg-green)' : '#f3b5b1',
+      encre: entreesTTC >= sortiesTTC ? 'var(--bbg-green-dark)' : '#b7332e',
+      detail: null,
+    },
+  ];
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
+      {tuiles.map(t => (
+        <div key={t.titre} className="rounded-lg border px-3 py-2" title={t.aide}
+          style={{ backgroundColor: t.fond, borderColor: t.bord }}>
+          <div className="text-[11px] uppercase tracking-wide font-semibold" style={{ color: t.encre }}>
+            {t.titre}
+          </div>
+          <div className="text-xl font-extrabold tabular-nums leading-tight" style={{ color: t.encre }}>
+            {euros(t.ttc)} <span className="text-xs font-semibold opacity-70">TTC</span>
+          </div>
+          <div className="text-xs tabular-nums" style={{ color: '#6f6690' }}>
+            {euros(t.ht)} HT{t.detail ? ` · ${t.detail}` : ''}
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -417,7 +492,7 @@ function Section({
           <table
             data-table={`journal:${kind}`} data-bloc={bloc}
             className="sheet text-[13px]"
-            style={{ tableLayout: 'fixed', minWidth: 1150, ...styleBloc(t) }}
+            style={{ tableLayout: 'fixed', minWidth: LARGEUR_MINI, ...styleBloc(t) }}
           >
             <colgroup>
               {cols.map((w, i) => <col key={i} style={{ width: `${w}%` }} />)}
@@ -673,7 +748,8 @@ function Row({ e, kind, categories, isSelected, onToggleRow, clip, onCopy, onPas
         <td>
           <div className="flex items-center gap-0.5">
             <select
-              className="pill-orange" style={colStyle(formats.type)} value={e.type}
+              className={e.type === 'immo' ? 'pill-blue' : 'pill-orange'}
+              style={colStyle(formats.type)} value={e.type}
               onChange={ev => update(e.id, { type: ev.target.value as JournalEntry['type'] })}
             >
               <option value="charges">charges</option>
@@ -681,7 +757,7 @@ function Row({ e, kind, categories, isSelected, onToggleRow, clip, onCopy, onPas
             </select>
             {e.type === 'immo' && (
               <select
-                className="pill-orange" title="Durée d'amortissement"
+                className="pill-blue" title="Durée d'amortissement"
                 value={e.immoDureeAns ?? 5}
                 onChange={ev => update(e.id, { immoDureeAns: Number(ev.target.value) })}
               >
