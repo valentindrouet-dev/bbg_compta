@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type {
   JournalEntry, FinanceEntry, BudgetExercice, ChronoEvent, TresoPrevLine, Referentiels, CategorieMeta,
-  FormulePrev, JeuMeta, PrevLigne, PrevSection,
+  FormulePrev, JeuMeta, PrevLigne, PrevSection, TresoManuel,
 } from '../types';
 import {
   categoriesImmobilisees, categoriesManquantes, estLigneCalculee, gabaritPrevisionnel,
@@ -157,7 +157,7 @@ export type CatKind = 'categoriesDepenses' | 'categoriesJeux' | 'categoriesProdu
 export type ColWidths = Record<string, number[]>;
 
 /** Clés dont la modification est enregistrée dans l'historique d'annulation. */
-const DATA_KEYS = ['entries', 'finances', 'referentiels', 'budgets', 'previsionnels', 'chronologie', 'tresoPrev', 'journalFormats', 'blocCouleurs'] as const;
+const DATA_KEYS = ['entries', 'finances', 'referentiels', 'budgets', 'previsionnels', 'chronologie', 'tresoPrev', 'tresoManuel', 'journalFormats', 'blocCouleurs'] as const;
 type DataKey = typeof DATA_KEYS[number];
 type Snapshot = Pick<AppState, DataKey>;
 
@@ -168,6 +168,8 @@ export interface AppState {
   budgets: Record<string, BudgetExercice>;
   /** Prévisionnel par exercice, aligné sur les catégories de la synthèse. */
   previsionnels: Record<string, PrevLigne[]>;
+  /** Corrections manuelles de la trésorerie, mois par mois. */
+  tresoManuel: Record<string, TresoManuel>;
   chronologie: ChronoEvent[];
   tresoPrev: TresoPrevLine[];
   /** Mise en forme par colonne des tableaux, indexée par « table:colonne ». */
@@ -231,7 +233,20 @@ export interface AppState {
 
   addChrono: (c: Omit<ChronoEvent, 'id'>) => void;
   updateChrono: (id: string, patch: Partial<ChronoEvent>) => void;
+  /** Même correction sur plusieurs étapes d'un coup, en une seule annulation. */
+  updateChronos: (ids: string[], patch: Partial<ChronoEvent>) => void;
+  /** Décale plusieurs étapes ensemble : chacune garde ses dates propres. */
+  decalerChronos: (dates: { id: string; debut: string; fin: string }[]) => void;
   removeChrono: (id: string) => void;
+  removeChronos: (ids: string[]) => void;
+  /** Renomme un projet entier — toutes ses étapes suivent, sous-projets compris. */
+  renommerProjet: (ancien: string, nouveau: string) => void;
+  /** Supprime un projet et toutes ses étapes. */
+  supprimerProjet: (projet: string) => void;
+  /** Ordre d'affichage des projets sur la frise. */
+  setOrdreProjets: (projets: string[]) => void;
+  /** Déplace une étape juste avant ou juste après une autre. */
+  deplacerChrono: (id: string, cible: string, apres: boolean) => void;
 
   addCategorie: (kind: CatKind, name: string) => void;
   removeCategorie: (kind: CatKind, name: string) => void;
@@ -244,6 +259,8 @@ export interface AppState {
   /** Fusionne des catégories dans une seule : les écritures suivent. */
   mergeCategories: (noms: string[], cible: string) => void;
   removeCategories: (noms: string[]) => void;
+  /** Corrige un mois de trésorerie : ajustement de flux et/ou relevé bancaire. */
+  setTresoManuel: (mois: string, patch: TresoManuel) => void;
   setGroupes: (groupes: string[]) => void;
   /**
    * Déplace une catégorie dans l'ordre d'affichage, juste avant ou juste après
@@ -286,6 +303,7 @@ function seedState() {
     // reçoivent la même grille de lignes, mais toutes cellules vides.
     previsionnels: previsionnelsInitiaux(refs, entries),
     chronologie: structuredClone(seedChronologie) as ChronoEvent[],
+    tresoManuel: {} as Record<string, TresoManuel>,
     tresoPrev: structuredClone(seedTresorerie.previsionnel) as TresoPrevLine[],
     journalFormats: {} as Record<string, ColFormat>,
     colWidths: {} as ColWidths,
@@ -383,7 +401,7 @@ function snapshot(s: AppState): Snapshot {
   return {
     entries: s.entries, finances: s.finances, referentiels: s.referentiels,
     budgets: s.budgets, previsionnels: s.previsionnels,
-    chronologie: s.chronologie, tresoPrev: s.tresoPrev,
+    chronologie: s.chronologie, tresoPrev: s.tresoPrev, tresoManuel: s.tresoManuel,
     journalFormats: s.journalFormats, blocCouleurs: s.blocCouleurs,
   };
 }
@@ -682,7 +700,64 @@ export const useStore = create<AppState>()(
       updateChrono: (id, patch) => set(s => ({
         chronologie: s.chronologie.map(c => c.id === id ? { ...c, ...patch } : c),
       })),
+      updateChronos: (ids, patch) => set(s => {
+        const set_ = new Set(ids);
+        return { chronologie: s.chronologie.map(c => set_.has(c.id) ? { ...c, ...patch } : c) };
+      }),
+
+      decalerChronos: (dates) => set(s => {
+        const par = new Map(dates.map(d => [d.id, d]));
+        return {
+          chronologie: s.chronologie.map(c => {
+            const d = par.get(c.id);
+            return d ? { ...c, debut: d.debut, fin: d.fin } : c;
+          }),
+        };
+      }),
+
       removeChrono: (id) => set(s => ({ chronologie: s.chronologie.filter(c => c.id !== id) })),
+      removeChronos: (ids) => set(s => {
+        const set_ = new Set(ids);
+        return { chronologie: s.chronologie.filter(c => !set_.has(c.id)) };
+      }),
+
+      renommerProjet: (ancien, nouveau) => set(s => {
+        const n = nouveau.trim();
+        if (!n || n === ancien) return s;
+        // « EDIT - Tirage 2 » suit « EDIT » : on ne remplace que la racine.
+        const suit = (projet: string) => projet === ancien
+          ? n
+          : projet.startsWith(ancien + ' - ') ? n + projet.slice(ancien.length) : projet;
+        const projets = (s.referentiels.chronoProjets ?? []).map(p => p === ancien ? n : p);
+        return {
+          chronologie: s.chronologie.map(c => ({ ...c, projet: suit(c.projet) })),
+          referentiels: { ...s.referentiels, chronoProjets: [...new Set(projets)] },
+        };
+      }),
+
+      supprimerProjet: (projet) => set(s => ({
+        chronologie: s.chronologie.filter(c =>
+          c.projet !== projet && !c.projet.startsWith(projet + ' - ')),
+        referentiels: {
+          ...s.referentiels,
+          chronoProjets: (s.referentiels.chronoProjets ?? []).filter(p => p !== projet),
+        },
+      })),
+
+      setOrdreProjets: (projets) => set(s => ({
+        referentiels: { ...s.referentiels, chronoProjets: projets },
+      })),
+
+      deplacerChrono: (id, cible, apres) => set(s => {
+        if (id === cible) return s;
+        const liste = s.chronologie.filter(c => c.id !== id);
+        const bouge = s.chronologie.find(c => c.id === id);
+        if (!bouge) return s;
+        let i = liste.findIndex(c => c.id === cible);
+        if (i < 0) i = liste.length; else if (apres) i += 1;
+        liste.splice(i, 0, bouge);
+        return { chronologie: liste };
+      }),
 
       addCategorie: (kind, name) => set(s => {
         const list = s.referentiels[kind];
@@ -769,6 +844,17 @@ export const useStore = create<AppState>()(
         for (const n of set_) delete meta[n];
         refs.categoriesMeta = meta;
         return { referentiels: refs };
+      }),
+
+      setTresoManuel: (mois, patch) => set(s => {
+        const suivant = { ...(s.tresoManuel[mois] ?? {}), ...patch };
+        for (const [k, v] of Object.entries(patch)) {
+          if (v === undefined || v === null) delete (suivant as Record<string, unknown>)[k];
+        }
+        const tresoManuel = { ...s.tresoManuel };
+        if (Object.keys(suivant).length) tresoManuel[mois] = suivant;
+        else delete tresoManuel[mois];
+        return { tresoManuel };
       }),
 
       setGroupes: (groupes) => set(s => ({
@@ -984,7 +1070,7 @@ export const useStore = create<AppState>()(
       partialize: (s) => ({
         entries: s.entries, finances: s.finances, referentiels: s.referentiels,
         budgets: s.budgets, previsionnels: s.previsionnels,
-        chronologie: s.chronologie, tresoPrev: s.tresoPrev,
+        chronologie: s.chronologie, tresoPrev: s.tresoPrev, tresoManuel: s.tresoManuel,
         journalFormats: s.journalFormats, colWidths: s.colWidths,
         blocCouleurs: s.blocCouleurs,
       }) as unknown as AppState,

@@ -21,6 +21,9 @@ import { saveFile, deleteFile } from '../../utils/files';
 import { fichiersDeposes, transporteDesFichiers, libelleDepuisNom, fournisseurDepuisNom } from '../../utils/depot';
 import { useCibleLigne, type Cible } from '../../utils/cible';
 
+/** Référence stable : un `?? []` dans un sélecteur reboucle à l'infini. */
+const AUCUN_JEU: string[] = [];
+
 type SectionKind = 'depenses' | 'jeux' | 'produits';
 
 /**
@@ -356,7 +359,7 @@ function Section({
   const updateEntry = useStore(s => s.updateEntry);
   const pasteInto = useStore(s => s.pasteInto);
   const formats = useStore(s => s.journalFormats);
-  const jeux = useStore(s => s.referentiels.jeux ?? []);
+  const jeux = useStore(s => s.referentiels.jeux) ?? AUCUN_JEU;
   const setColFormat = useStore(s => s.setColFormat);
   const resetColFormat = useStore(s => s.resetColFormat);
   const couleurs = useStore(s => s.blocCouleurs);

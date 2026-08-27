@@ -34,6 +34,21 @@ export interface JournalEntry {
 export type FinanceType =
   | 'capital' | 'cca' | 'remboursement_cca' | 'placement' | 'produit_financier' | 'autre';
 
+/**
+ * Ce qu'on corrige à la main sur un mois de trésorerie.
+ *
+ * Le calcul part du journal et des mouvements financiers, en supposant que tout
+ * est encaissé ou payé dans son mois comptable. La réalité décale : un
+ * fournisseur payé le mois suivant, un prélèvement en retard, une avance
+ * remboursée plus tard. `ajustement` entre dans le calcul, `soldeReel` n'y entre
+ * pas — c'est le relevé bancaire, en regard, pour voir l'écart.
+ */
+export interface TresoManuel {
+  ajustement?: number;
+  soldeReel?: number;
+  note?: string;
+}
+
 export interface FinanceEntry {
   id: string;
   date: string;
@@ -167,6 +182,8 @@ export interface JeuMeta {
 }
 
 export interface Referentiels {
+  /** Ordre d'affichage des grands projets de la chronologie. */
+  chronoProjets?: string[];
   categoriesDepenses: string[];
   categoriesJeux: string[];
   categoriesProduits: string[];

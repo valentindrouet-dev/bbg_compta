@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { useStore } from '../../store';
 import type { FinanceEntry } from '../../types';
-import { labelMois, formatDateFR, moisCourant, todayISO } from '../../utils/dates';
+import { labelMois, moisCourant, todayISO } from '../../utils/dates';
 import { euros, r2 } from '../../utils/money';
 import { tableauTreso, moisTresorerie } from '../../utils/calc';
 import { PageHeader, Card, Btn, MoneyInput, StatCard } from '../ui';
@@ -28,7 +28,12 @@ export function TresoPage() {
     [entries, finances],
   );
 
-  const rows = useMemo(() => tableauTreso(entries, finances, moisList), [entries, finances, moisList]);
+  const tresoManuel = useStore(s => s.tresoManuel);
+  const setTresoManuel = useStore(s => s.setTresoManuel);
+  const rows = useMemo(
+    () => tableauTreso(entries, finances, moisList, tresoManuel),
+    [entries, finances, moisList, tresoManuel],
+  );
   const dernier = rows[rows.length - 1];
   const totalPlace = r2(-finances.filter(f => f.type === 'placement').reduce((s, f) => s + f.montant, 0));
 
@@ -107,10 +112,24 @@ export function TresoPage() {
               <tr className="text-left text-[#5c5280]">
                 <th>Mois</th>
                 <th className="text-right">Solde initial</th>
-                <th className="text-right">Encaissements</th>
-                <th className="text-right">Décaissements</th>
-                <th className="text-right">Solde mensuel</th>
-                <th className="text-right">Solde cumulé</th>
+                <th className="text-right" title="Produits TTC du journal de ce mois">
+                  Encaissements journal
+                </th>
+                <th className="text-right" title="Dépenses TTC du journal de ce mois, immobilisations comprises">
+                  Décaissements journal
+                </th>
+                <th className="text-right" title="Capital, compte courant, placements, intérêts — hors journal">
+                  Mouvements financiers
+                </th>
+                <th className="text-right" title="Correction saisie à la main : un décalage de paiement, un oubli…">
+                  Ajustement
+                </th>
+                <th className="text-right">Solde du mois</th>
+                <th className="text-right">Solde calculé</th>
+                <th className="text-right" title="Le solde de ton relevé bancaire à la fin du mois">
+                  Relevé bancaire
+                </th>
+                <th className="text-right">Écart</th>
               </tr>
             </thead>
             <tbody>
@@ -118,23 +137,62 @@ export function TresoPage() {
                 <tr key={row.mois} className={row.mois === moisCourant() ? 'bg-[#efeafa]' : ''}>
                   <td className="font-medium">{labelMois(row.mois)}</td>
                   <td className="text-right tabular-nums text-[#6f6690]">{euros(row.soldeInitial)}</td>
-                  <td className="text-right tabular-nums text-[#38761d]">{row.encaissements ? euros(row.encaissements) : '·'}</td>
-                  <td className="text-right tabular-nums text-[#b7332e]">{row.decaissements ? '−' + euros(row.decaissements) : '·'}</td>
+                  <td className="text-right tabular-nums text-[#38761d]">
+                    {row.encJournal ? euros(row.encJournal) : '·'}
+                  </td>
+                  <td className="text-right tabular-nums text-[#b7332e]">
+                    {row.decJournal ? '−' + euros(row.decJournal) : '·'}
+                  </td>
+                  <td className="text-right tabular-nums"
+                    style={{ color: row.financier >= 0 ? '#38761d' : '#b7332e' }}>
+                    {row.financier ? euros(row.financier) : '·'}
+                  </td>
+                  <td className="text-right p-0.5!">
+                    <MoneyInput
+                      value={row.ajustement || null}
+                      onCommit={v => setTresoManuel(row.mois, { ajustement: v ?? undefined })}
+                      className="w-24 border-transparent hover:border-[#ddd6ef] bg-transparent"
+                    />
+                  </td>
                   <td className={`text-right tabular-nums ${row.soldeMensuel >= 0 ? 'text-[#38761d]' : 'text-[#b7332e]'}`}>
                     {euros(row.soldeMensuel)}
                   </td>
                   <td className={`text-right tabular-nums font-semibold ${row.soldeCumule >= 0 ? '' : 'text-[#b7332e]'}`}>
                     {euros(row.soldeCumule)}
                   </td>
+                  <td className="text-right p-0.5!">
+                    <MoneyInput
+                      value={row.soldeReel ?? null}
+                      onCommit={v => setTresoManuel(row.mois, { soldeReel: v ?? undefined })}
+                      className="w-28 border-transparent hover:border-[#ddd6ef] bg-transparent"
+                    />
+                  </td>
+                  <td className="text-right tabular-nums font-semibold"
+                    style={{ color: row.ecart == null ? '#9a92b5'
+                      : Math.abs(row.ecart) < 0.01 ? '#38761d' : '#b7332e' }}>
+                    {row.ecart == null ? '·' : Math.abs(row.ecart) < 0.01 ? '✓' : euros(row.ecart)}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <p className="text-xs text-[#9a92b5] mt-2">
-          Les mouvements financiers du {formatDateFR(finances[0]?.date ?? '')} et suivants (capital, CCA, placements)
-          sont inclus dans les encaissements/décaissements de leur mois.
-        </p>
+        <div className="text-xs text-[#5c5280] mt-3 space-y-1.5 max-w-4xl">
+          <p>
+            <b>Trois flux, trois colonnes.</b> Les deux premières se retrouvent ligne à ligne dans
+            « Journal du mois » : ce sont les produits et les dépenses TTC du mois comptable.
+            Les <b>mouvements financiers</b> (capital, compte courant d'associé, placements,
+            intérêts) ne sont dans aucun journal — ils se saisissent ici, dans le tableau du dessus.
+          </p>
+          <p>
+            <b>Pourquoi ça peut ne pas coller avec ton relevé.</b> Le calcul suppose qu'une écriture
+            est réglée dans son mois comptable. Une facture de septembre payée en octobre, un
+            prélèvement en retard, une note de frais remboursée plus tard : le compte bancaire, lui,
+            bouge un mois plus tard. Saisis alors le <b>solde de ton relevé</b> : l'écart s'affiche,
+            et l'<b>ajustement</b> te permet de le corriger — il entre dans le calcul et se reporte
+            sur les mois suivants.
+          </p>
+        </div>
       </Card>
     </div>
   );

@@ -14,6 +14,9 @@ sont recalculés en direct à partir des écritures.
   catégories, plan comptable, mots clés, factures, alerte si la date sort du mois)
 - **Le mois en trois chiffres** — en haut du journal : dépenses (charges,
   immobilisations et jeux), recettes, solde ; TTC en gros, HT rappelé dessous
+- **Synthèse totale** — la même lecture, mais **une colonne par exercice** au
+  lieu d'une par mois : catégories, blocs, ventilation par jeu, compte de
+  résultat et cumul sur les cinq ans
 - **Synthèse annuelle** — les blocs dans l'ordre de lecture : **Produits, Charges,
   Personnel, Jeux** (un sous-bloc par jeu, toutes ses catégories listées),
   **Immobilisations**, puis le **compte de résultat** (EBE → REX → RC → IS → RN,
@@ -24,9 +27,12 @@ sont recalculés en direct à partir des écritures.
   bien le pendant taxes comprises de la ligne du dessus. Le total de *toutes*
   les dépenses TTC, lui, est au récapitulatif, sous « Sorti du compte »
 - **Immobilisations** — durées, dotations, VNC et fin d'amortissement calculées
-- **Trésorerie** — encaissements/décaissements TTC, mouvements financiers
-  inclus : capital, apport et **remboursement** de compte courant d'associé,
-  placements, intérêts. Rembourser un compte courant sort de la trésorerie sans
+- **Trésorerie** — chaque montant rattaché à sa source : **encaissements** et
+  **décaissements du journal** (retrouvables ligne à ligne), **mouvements
+  financiers** (capital, apport et remboursement de compte courant d'associé,
+  placements, intérêts — qui ne sont dans aucun journal), et un **ajustement**
+  saisi à la main quand un paiement tombe un autre mois. Une colonne **relevé
+  bancaire** permet de pointer : l'écart s'affiche. Rembourser un compte courant sort de la trésorerie sans
   être une charge — c'est une dette qu'on éteint, elle ne touche pas le résultat
 - **TVA** — collectée / déductible / solde par mois, calculée écriture par écriture ;
   rouge = dû à l'État, vert = crédit de TVA en ta faveur
@@ -58,11 +64,15 @@ sont recalculés en direct à partir des écritures.
   résultat et trajectoire
 - **Réel vs Prévu** — le réalisé vient du journal, sans IMPORTRANGE
 - **Trésorerie prévisionnelle vs réalisée** — par exercice
-- **Chronologie** — frise 2025-30 des projets (dev, tirages, sorties, ventes),
-  **modifiable à la souris** : glisse une barre pour décaler l'étape, attrape
-  son bord pour l'allonger ou la raccourcir, survole-la pour tout savoir,
-  double-clique son libellé pour le renommer, `+ étape` en ajoute une au projet
-  et la corbeille en retire une
+- **Chronologie** — frise 2025-30 des projets, **modifiable à la souris** :
+  glisse une barre pour décaler l'étape, attrape son bord pour l'allonger.
+  Les bandes **s'aimantent** au 1er du mois ou au 1er / 16 (réglable, ou au jour
+  près). **Clique** une barre pour la sélectionner, **Maj / Cmd** pour en
+  ajouter : glisser l'une déplace tout le lot, et la barre du bas les renomme ou
+  les supprime ensemble. **Double-clic** sur un libellé propose de renommer
+  toutes les étapes qui portent le même nom. Chaque **projet** se renomme, se
+  monte, se descend et se supprime depuis son bandeau ; `Nouveau projet` en
+  crée un
 
 **Outils**
 - **Exports** — les quatre exports d'un coup dans une archive `.zip`

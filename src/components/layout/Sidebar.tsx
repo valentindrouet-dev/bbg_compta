@@ -21,6 +21,7 @@ const NAV: { section: string; items: { page: Page; label: string; icon: typeof C
     items: [
       { page: 'journal', label: 'Journal du mois', icon: NotebookPen },
       { page: 'synthese', label: 'Synthèse annuelle', icon: Table2 },
+      { page: 'totale', label: 'Synthèse totale', icon: Table2 },
       { page: 'immos', label: 'Immobilisations', icon: Building2 },
       { page: 'treso', label: 'Trésorerie', icon: Wallet },
       { page: 'tva', label: 'TVA', icon: Percent },

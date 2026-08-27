@@ -20,6 +20,9 @@ import { PageHeader, Card, Btn, BlocColorMenu, TotalBloc, styleBloc } from '../u
 import type { JournalEntry } from '../../types';
 import { useEtatVue } from '../../utils/etatVue';
 
+/** Référence stable : un `?? []` dans un sélecteur reboucle à l'infini. */
+const AUCUN_JEU: string[] = [];
+
 /** Petit panneau listant les écritures derrière une valeur de la synthèse. */
 function ApercuCellule({ ecritures, titre, x, y }: {
   ecritures: JournalEntry[]; titre: string; x: number; y: number;
@@ -522,7 +525,7 @@ function BlocImmos({ syn, couleurs, unite, meta, survol, quitte, immos, simple }
   const catsJeux = new Set(
     [...syn.immosParJeuEtCategorie.values()].flatMap(m => [...m.keys()]));
   const catsHorsJeux = cats.filter(c => !catsJeux.has(c));
-  const catalogue = useStore(st => st.referentiels.jeux ?? []);
+  const catalogue = useStore(st => st.referentiels.jeux) ?? AUCUN_JEU;
   const brutsJeux = [...syn.immosParJeuEtCategorie.keys()];
   const jeuxImmo = [
     ...catalogue.filter(j => brutsJeux.includes(j)),

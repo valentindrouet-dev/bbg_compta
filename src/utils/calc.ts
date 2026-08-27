@@ -1,4 +1,6 @@
-import type { JournalEntry, FinanceEntry, Referentiels } from '../types';
+import type {
+  JournalEntry, FinanceEntry, Referentiels, TresoManuel,
+} from '../types';
 import { dureeCategorie, estChargeFinanciere, estImmobilisation, estPersonnel } from './blocs';
 import { compareMois, moisExercice, addYears, PRE_IMMAT } from './dates';
 import { r2 } from './money';
@@ -197,32 +199,70 @@ export function tableauTVA(entries: JournalEntry[], moisList: string[]): TvaMois
 export interface TresoMois {
   mois: string;
   soldeInitial: number;
+  /** Produits TTC du journal — retrouvables ligne à ligne dans Journal du mois. */
+  encJournal: number;
+  /** Dépenses TTC du journal, immobilisations comprises. */
+  decJournal: number;
+  /** Capital, compte courant, placements, intérêts : signé, hors journal. */
+  financier: number;
+  /** Correction saisie à la main sur ce mois. */
+  ajustement: number;
+  /** Totaux d'entrée et de sortie, tous flux confondus. */
   encaissements: number;
   decaissements: number;
   soldeMensuel: number;
   soldeCumule: number;
+  /** Relevé bancaire saisi à la main, et l'écart avec le solde calculé. */
+  soldeReel?: number;
+  ecart?: number;
 }
 
 /**
  * Trésorerie mensuelle réalisée : produits TTC + mouvements financiers positifs
  * en encaissements ; charges + immos TTC + mouvements négatifs en décaissements.
  */
-export function tableauTreso(entries: JournalEntry[], finances: FinanceEntry[], moisList: string[]): TresoMois[] {
+/**
+ * La trésorerie mois par mois, chaque montant rattaché à sa source.
+ *
+ * Trois flux se mélangent, et c'est ce mélange qui rendait le tableau illisible
+ * quand on le comparait au journal :
+ *   - le journal, en TTC : ce sont les seules lignes qu'on retrouve dans
+ *     « Journal du mois » ;
+ *   - les mouvements financiers (capital, compte courant, placements,
+ *     intérêts) : ils ne sont dans aucun journal, ils vivent dans l'onglet
+ *     Trésorerie ;
+ *   - l'ajustement saisi à la main, pour rattraper un décalage de paiement.
+ *
+ * Le calcul suppose qu'une écriture est réglée dans son mois comptable. Quand
+ * ce n'est pas le cas, c'est l'ajustement qui remet le solde d'aplomb.
+ */
+export function tableauTreso(
+  entries: JournalEntry[], finances: FinanceEntry[], moisList: string[],
+  manuel: Record<string, TresoManuel> = {},
+): TresoMois[] {
   const rows: TresoMois[] = [];
   let solde = 0;
   for (const mois of moisList) {
     const du = entriesDuMois(entries, mois);
     const finDuMois = finances.filter(f => moisDeFinance(f) === mois);
-    const enc = du.filter(e => e.type === 'produit').reduce((s, e) => s + e.ttc, 0)
-      + finDuMois.filter(f => f.montant > 0).reduce((s, f) => s + f.montant, 0);
-    const dec = du.filter(e => e.type !== 'produit').reduce((s, e) => s + e.ttc, 0)
-      - finDuMois.filter(f => f.montant < 0).reduce((s, f) => s + f.montant, 0);
+    const encJournal = du.filter(e => e.type === 'produit').reduce((s, e) => s + e.ttc, 0);
+    const decJournal = du.filter(e => e.type !== 'produit').reduce((s, e) => s + e.ttc, 0);
+    const financier = finDuMois.reduce((s, f) => s + f.montant, 0);
+    const ajustement = manuel[mois]?.ajustement ?? 0;
+
     const soldeInitial = solde;
-    const mensuel = r2(enc - dec);
+    const mensuel = r2(encJournal - decJournal + financier + ajustement);
     solde = r2(solde + mensuel);
     rows.push({
-      mois, soldeInitial, encaissements: r2(enc), decaissements: r2(dec),
+      mois, soldeInitial,
+      encJournal: r2(encJournal), decJournal: r2(decJournal),
+      financier: r2(financier), ajustement: r2(ajustement),
+      // Conservés pour les pages qui lisent des totaux d'un bloc.
+      encaissements: r2(encJournal + Math.max(0, financier) + Math.max(0, ajustement)),
+      decaissements: r2(decJournal - Math.min(0, financier) - Math.min(0, ajustement)),
       soldeMensuel: mensuel, soldeCumule: solde,
+      soldeReel: manuel[mois]?.soldeReel,
+      ecart: manuel[mois]?.soldeReel == null ? undefined : r2(manuel[mois]!.soldeReel! - solde),
     });
   }
   return rows;

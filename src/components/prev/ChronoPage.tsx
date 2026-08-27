@@ -1,12 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Plus, Trash2, GripHorizontal, CalendarDays } from 'lucide-react';
+import { Plus, Trash2, GripHorizontal, CalendarDays, FolderPlus, ChevronUp, ChevronDown, X
+} from 'lucide-react';
 import { useStore } from '../../store';
+import { useEtatVue } from '../../utils/etatVue';
 import type { ChronoEvent } from '../../types';
 import { formatDateFR, todayISO } from '../../utils/dates';
 import { PageHeader, Card, Btn, useSort, sortBy, ThSort } from '../ui';
 
 // Palette catégorielle validée (dataviz) — ordre fixe, une couleur par projet
 const COLORS = ['#674ea7', '#e69138', '#38761d', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948'];
+
+/** Référence stable pour « aucun ordre enregistré ». */
+const SANS_ORDRE: string[] = [];
 
 const LARGEUR_LIBELLE = 210;
 /** Largeur d'un mois sur la frise, en pixels — règle aussi la finesse du glissé. */
@@ -40,20 +45,81 @@ interface Glissement {
   xDepart: number;
   debut: string;
   fin: string;
+  /** Les autres étapes emmenées avec elle, quand plusieurs sont sélectionnées. */
+  suite: { id: string; debut: string; fin: string }[];
+}
+
+/** Finesse du glissé : au mois, à la quinzaine, ou au jour près. */
+type Pas = 'mois' | 'quinzaine' | 'jour';
+
+const PAS_LABEL: Record<Pas, string> = {
+  mois: 'au mois',
+  quinzaine: 'à la quinzaine',
+  jour: 'au jour',
+};
+
+/**
+ * Ramène une date sur la borne la plus proche : le 1er du mois, ou le 1er / le
+ * 16. Une bande ainsi posée s'aligne sur la grille au lieu de flotter à deux
+ * jours près.
+ */
+function aimanter(iso: string, pas: Pas): string {
+  if (pas === 'jour') return iso;
+  const [y, m, d] = iso.split('-').map(Number);
+  const dernier = new Date(y, m, 0).getDate();
+  const bornes = pas === 'mois'
+    ? [1, dernier + 1]
+    : [1, 16, dernier + 1];
+  let meilleure = bornes[0];
+  for (const b of bornes) {
+    if (Math.abs(b - d) < Math.abs(meilleure - d)) meilleure = b;
+  }
+  if (meilleure > dernier) {
+    // On a basculé sur le mois suivant.
+    return m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`;
+  }
+  return `${y}-${String(m).padStart(2, '0')}-${String(meilleure).padStart(2, '0')}`;
+}
+
+/** Fin de bande aimantée : la veille d'une borne, pour que deux bandes s'accolent. */
+function aimanterFin(iso: string, pas: Pas): string {
+  if (pas === 'jour') return iso;
+  const cale = aimanter(isoDe(jours(iso) + 1), pas);
+  return isoDe(jours(cale) - 1);
 }
 
 export function ChronoPage() {
   const chronologie = useStore(s => s.chronologie);
+  // Le défaut est appliqué HORS du sélecteur : un `?? []` à l'intérieur
+  // renverrait un tableau neuf à chaque rendu, et Zustand rebouclerait sans fin.
+  const ordreProjets = useStore(s => s.referentiels.chronoProjets) ?? SANS_ORDRE;
   const addChrono = useStore(s => s.addChrono);
   const updateChrono = useStore(s => s.updateChrono);
+  const updateChronos = useStore(s => s.updateChronos);
+  const decalerChronos = useStore(s => s.decalerChronos);
   const removeChrono = useStore(s => s.removeChrono);
+  const removeChronos = useStore(s => s.removeChronos);
+  const renommerProjet = useStore(s => s.renommerProjet);
+  const supprimerProjet = useStore(s => s.supprimerProjet);
+  const setOrdreProjets = useStore(s => s.setOrdreProjets);
+  const deplacerChrono = useStore(s => s.deplacerChrono);
   const { sort, toggle } = useSort({ key: 'debut', dir: 'asc' });
   const [vue, setVue] = useState<'timeline' | 'liste'>('timeline');
   const [glisse, setGlisse] = useState<Glissement | null>(null);
   /** Aperçu pendant le glissé : on ne touche au store qu'au relâchement. */
-  const [apercu, setApercu] = useState<{ id: string; debut: string; fin: string } | null>(null);
+  const [apercu, setApercu] = useState<
+    { id: string; debut: string; fin: string; suite: { id: string; debut: string; fin: string }[] } | null
+  >(null);
   const [survol, setSurvol] = useState<{ c: ChronoEvent; x: number; y: number } | null>(null);
   const [renomme, setRenomme] = useState<string | null>(null);
+  const [renommeProjet, setRenommeProjet] = useState<string | null>(null);
+  /** Étapes sélectionnées : elles se déplacent et se suppriment ensemble. */
+  const [selection, setSelection] = useState<Set<string>>(new Set());
+  const [pas, setPas] = useEtatVue<Pas>('chrono.pas', 'quinzaine');
+  const selRef = useRef<Set<string>>(new Set());
+  selRef.current = selection;
+  const pasRef = useRef<Pas>(pas);
+  pasRef.current = pas;
   const glisseRef = useRef<Glissement | null>(null);
   glisseRef.current = glisse;
 
@@ -80,8 +146,16 @@ export function ChronoPage() {
         debutMois: jours(`${y}-${String(m + 1).padStart(2, '0')}-01`),
       });
     }
-    return { origineJour: jours(`${y0}-${String(m0).padStart(2, '0')}-01`), nMois, moisLabels, groupes: [...new Set(valides.map(c => racine(c.projet)))] };
-  }, [valides]);
+    const vus = [...new Set(valides.map(c => racine(c.projet)))];
+    const groupes = [
+      ...ordreProjets.filter(p => vus.includes(p)),
+      ...vus.filter(p => !ordreProjets.includes(p)),
+    ];
+    return {
+      origineJour: jours(`${y0}-${String(m0).padStart(2, '0')}-01`),
+      nMois, moisLabels, groupes,
+    };
+  }, [valides, ordreProjets]);
 
   const largeur = nMois * PX_MOIS;
   const x = (iso: string) => (jours(iso) - origineJour) * PX_JOUR;
@@ -92,15 +166,25 @@ export function ChronoPage() {
     function bouge(ev: MouseEvent) {
       const g = glisseRef.current;
       if (!g) return;
+      const p = pasRef.current;
       const dj = Math.round((ev.clientX - g.xDepart) / PX_JOUR);
       if (g.mode === 'deplacer') {
-        setApercu({ id: g.id, debut: isoDe(jours(g.debut) + dj), fin: isoDe(jours(g.fin) + dj) });
+        // On aimante le début, puis on reporte le même décalage sur la fin et
+        // sur les étapes emmenées : leurs durées et leurs écarts sont préservés.
+        const debut = aimanter(isoDe(jours(g.debut) + dj), p);
+        const cale = Math.round(jours(debut) - jours(g.debut));
+        setApercu({
+          id: g.id, debut, fin: isoDe(jours(g.fin) + cale),
+          suite: g.suite.map(x => ({
+            id: x.id, debut: isoDe(jours(x.debut) + cale), fin: isoDe(jours(x.fin) + cale),
+          })),
+        });
       } else if (g.mode === 'debut') {
-        const d = Math.min(jours(g.debut) + dj, jours(g.fin));
-        setApercu({ id: g.id, debut: isoDe(d), fin: g.fin });
+        const d = aimanter(isoDe(Math.min(jours(g.debut) + dj, jours(g.fin))), p);
+        setApercu({ id: g.id, debut: d > g.fin ? g.fin : d, fin: g.fin, suite: [] });
       } else {
-        const f = Math.max(jours(g.fin) + dj, jours(g.debut));
-        setApercu({ id: g.id, debut: g.debut, fin: isoDe(f) });
+        const f = aimanterFin(isoDe(Math.max(jours(g.fin) + dj, jours(g.debut))), p);
+        setApercu({ id: g.id, debut: g.debut, fin: f < g.debut ? g.debut : f, suite: [] });
       }
     }
     function fin() {
@@ -110,7 +194,8 @@ export function ChronoPage() {
       document.body.style.userSelect = '';
       setApercu(a => {
         if (a && g && (a.debut !== g.debut || a.fin !== g.fin)) {
-          updateChrono(a.id, { debut: a.debut, fin: a.fin });
+          // Une seule étape d'annulation, même quand plusieurs bandes bougent.
+          decalerChronos([{ id: a.id, debut: a.debut, fin: a.fin }, ...a.suite]);
         }
         return null;
       });
@@ -121,17 +206,55 @@ export function ChronoPage() {
       window.removeEventListener('mousemove', bouge);
       window.removeEventListener('mouseup', fin);
     };
-  }, [glisse, updateChrono]);
+  }, [glisse, decalerChronos]);
 
   function demarrer(ev: React.MouseEvent, c: ChronoEvent, mode: Glissement['mode']) {
     ev.preventDefault();
     ev.stopPropagation();
     const fin = estDate(c.fin) ? c.fin : c.debut;
-    setGlisse({ id: c.id, mode, xDepart: ev.clientX, debut: c.debut, fin });
-    setApercu({ id: c.id, debut: c.debut, fin });
+    // Si la bande attrapée fait partie de la sélection, tout le lot suit.
+    const suite = mode === 'deplacer' && selRef.current.has(c.id)
+      ? chronologie
+        .filter(x => x.id !== c.id && selRef.current.has(x.id) && estDate(x.debut))
+        .map(x => ({ id: x.id, debut: x.debut, fin: estDate(x.fin) ? x.fin : x.debut }))
+      : [];
+    setGlisse({ id: c.id, mode, xDepart: ev.clientX, debut: c.debut, fin, suite });
+    setApercu({ id: c.id, debut: c.debut, fin, suite });
     setSurvol(null);
     document.body.style.cursor = mode === 'deplacer' ? 'grabbing' : 'col-resize';
     document.body.style.userSelect = 'none';
+  }
+
+  /** Monte ou descend un projet entier dans la frise. */
+  function bougerProjet(g: string, sens: -1 | 1) {
+    const liste = [...groupes];
+    const i = liste.indexOf(g);
+    const j = i + sens;
+    if (i < 0 || j < 0 || j >= liste.length) return;
+    [liste[i], liste[j]] = [liste[j], liste[i]];
+    setOrdreProjets(liste);
+  }
+
+  /** Monte ou descend une étape dans son projet. */
+  function bougerEtape(c: ChronoEvent, sens: -1 | 1) {
+    const freres = chronologie.filter(x => racine(x.projet) === racine(c.projet));
+    const i = freres.findIndex(x => x.id === c.id);
+    const j = i + sens;
+    if (i < 0 || j < 0 || j >= freres.length) return;
+    deplacerChrono(c.id, freres[j].id, sens > 0);
+  }
+
+  /** Toutes les étapes qui portent exactement ce nom, projet compris ou non. */
+  const memeNom = (c: ChronoEvent, toutProjet: boolean) => chronologie.filter(x =>
+    x.action.trim() === c.action.trim() && (toutProjet || racine(x.projet) === racine(c.projet)));
+
+  /** Clic sur une bande : sélection simple, ou ajout avec Maj / Cmd. */
+  function selectionner(ev: React.MouseEvent, id: string) {
+    setSelection(prec => {
+      const suivant = new Set(ev.shiftKey || ev.metaKey || ev.ctrlKey ? prec : []);
+      if (suivant.has(id)) suivant.delete(id); else suivant.add(id);
+      return suivant;
+    });
   }
 
   const rows = sortBy(chronologie, sort, {
@@ -140,7 +263,9 @@ export function ChronoPage() {
 
   const ajouter = (projet = 'Nouveau projet') => addChrono({
     projet, action: 'Nouvelle étape',
-    debut: todayISO(), fin: isoDe(jours(todayISO()) + 30), detail: '',
+    debut: aimanter(todayISO(), pas),
+    fin: aimanterFin(isoDe(jours(todayISO()) + 30), pas),
+    detail: '',
   });
 
   return (
@@ -164,6 +289,25 @@ export function ChronoPage() {
                 </button>
               ))}
             </div>
+            <select
+              className="border rounded-md px-2 py-1.5 text-sm bg-white font-medium"
+              style={{ borderColor: 'var(--bbg-border)', color: 'var(--bbg-purple-darker)' }}
+              value={pas}
+              title="Les bandes s'accrochent à ces bornes quand on les glisse"
+              onChange={ev => setPas(ev.target.value as Pas)}
+            >
+              {(Object.keys(PAS_LABEL) as Pas[]).map(k => (
+                <option key={k} value={k}>Aimanter {PAS_LABEL[k]}</option>
+              ))}
+            </select>
+            <Btn onClick={() => {
+              const nom = prompt('Nom du nouveau projet ?', 'Nouveau projet');
+              if (!nom?.trim()) return;
+              setOrdreProjets([...ordreProjets.filter(p => p !== nom.trim()), nom.trim()]);
+              ajouter(nom.trim());
+            }}>
+              <span className="inline-flex items-center gap-1"><FolderPlus size={14} /> Nouveau projet</span>
+            </Btn>
             <Btn variant="primary" onClick={() => ajouter()}>
               <span className="inline-flex items-center gap-1"><Plus size={14} /> Ajouter une étape</span>
             </Btn>
@@ -190,9 +334,31 @@ export function ChronoPage() {
                 const couleur = COLORS[gi % COLORS.length];
                 return (
                   <div key={g} className="border-t py-1.5" style={{ borderColor: 'var(--bbg-border-soft)' }}>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: couleur }} />
-                      <span className="text-xs font-bold" style={{ color: 'var(--bbg-purple-darker)' }}>{g}</span>
+                    <div className="flex items-center gap-2 mb-1 group/projet">
+                      <span className="inline-block w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: couleur }} />
+                      {renommeProjet === g ? (
+                        <input
+                          autoFocus
+                          className="border rounded px-1 py-0.5 text-xs font-bold"
+                          style={{ borderColor: 'var(--bbg-purple)' }}
+                          defaultValue={g}
+                          onBlur={ev => { renommerProjet(g, ev.target.value); setRenommeProjet(null); }}
+                          onKeyDown={ev => {
+                            if (ev.key === 'Enter') (ev.target as HTMLInputElement).blur();
+                            if (ev.key === 'Escape') setRenommeProjet(null);
+                          }}
+                        />
+                      ) : (
+                        <span
+                          className="text-xs font-bold cursor-text"
+                          style={{ color: 'var(--bbg-purple-darker)' }}
+                          title="Double-clic pour renommer tout le projet"
+                          onDoubleClick={() => setRenommeProjet(g)}
+                        >
+                          {g}
+                        </span>
+                      )}
+                      <span className="text-[10px]" style={{ color: '#9a92b5' }}>{evts.length} étape(s)</span>
                       <button
                         className="text-[11px] underline opacity-60 hover:opacity-100"
                         style={{ color: 'var(--bbg-purple-dark)' }}
@@ -201,6 +367,22 @@ export function ChronoPage() {
                       >
                         + étape
                       </button>
+                      <span className="opacity-0 group-hover/projet:opacity-100 flex items-center gap-1">
+                        <button
+                          title="Monter le projet" style={{ color: 'var(--bbg-purple-dark)' }}
+                          onClick={() => bougerProjet(g, -1)}
+                        ><ChevronUp size={13} /></button>
+                        <button
+                          title="Descendre le projet" style={{ color: 'var(--bbg-purple-dark)' }}
+                          onClick={() => bougerProjet(g, 1)}
+                        ><ChevronDown size={13} /></button>
+                        <button
+                          title="Supprimer le projet et toutes ses étapes" style={{ color: '#d98b86' }}
+                          onClick={() => {
+                            if (confirm(`Supprimer « ${g} » et ses ${evts.length} étape(s) ?`)) supprimerProjet(g);
+                          }}
+                        ><Trash2 size={13} /></button>
+                      </span>
                     </div>
                     {evts.map(brut => {
                       const c = vu(brut);
@@ -225,7 +407,22 @@ export function ChronoPage() {
                                 className="flex-1 min-w-0 border rounded px-1 py-0.5 text-[11px]"
                                 style={{ borderColor: 'var(--bbg-purple)' }}
                                 defaultValue={c.action}
-                                onBlur={ev => { updateChrono(c.id, { action: ev.target.value }); setRenomme(null); }}
+                                onBlur={ev => {
+                                  const nom = ev.target.value.trim();
+                                  setRenomme(null);
+                                  if (!nom || nom === c.action.trim()) return;
+                                  // Un même intitulé revient souvent sur plusieurs jeux
+                                  // (« Tirage », « Sortie ») : on propose de tout renommer.
+                                  const jumelles = memeNom(brut, true).filter(x => x.id !== c.id);
+                                  if (jumelles.length && confirm(
+                                    `« ${c.action} » revient sur ${jumelles.length + 1} étapes.\n\n`
+                                    + `OK : renommer les ${jumelles.length + 1} en « ${nom} »\n`
+                                    + 'Annuler : ne renommer que celle-ci')) {
+                                    updateChronos([c.id, ...jumelles.map(x => x.id)], { action: nom });
+                                  } else {
+                                    updateChrono(c.id, { action: nom });
+                                  }
+                                }}
                                 onKeyDown={ev => {
                                   if (ev.key === 'Enter') (ev.target as HTMLInputElement).blur();
                                   if (ev.key === 'Escape') setRenomme(null);
@@ -240,15 +437,24 @@ export function ChronoPage() {
                                 {c.projet !== g ? `${c.projet.slice(g.length).replace(/^ - /, '')} · ` : ''}{c.action}
                               </span>
                             )}
-                            <button
-                              data-chrono-suppr={c.id}
-                              className="opacity-0 group-hover:opacity-100 shrink-0"
-                              style={{ color: '#d98b86' }}
-                              title="Supprimer cette étape"
-                              onClick={() => { if (confirm(`Supprimer « ${c.projet} — ${c.action} » ?`)) removeChrono(c.id); }}
-                            >
-                              <Trash2 size={12} />
-                            </button>
+                            <span className="opacity-0 group-hover:opacity-100 flex items-center shrink-0">
+                              <button
+                                title="Monter cette étape" style={{ color: 'var(--bbg-purple-dark)' }}
+                                onClick={() => bougerEtape(brut, -1)}
+                              ><ChevronUp size={12} /></button>
+                              <button
+                                title="Descendre cette étape" style={{ color: 'var(--bbg-purple-dark)' }}
+                                onClick={() => bougerEtape(brut, 1)}
+                              ><ChevronDown size={12} /></button>
+                              <button
+                                data-chrono-suppr={c.id}
+                                style={{ color: '#d98b86' }}
+                                title="Supprimer cette étape"
+                                onClick={() => { if (confirm(`Supprimer « ${c.projet} — ${c.action} » ?`)) removeChrono(c.id); }}
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </span>
                           </div>
                           <div className="relative h-6" style={{ width: largeur }}>
                             {/* Repères de mois */}
@@ -264,10 +470,13 @@ export function ChronoPage() {
                                 width: largeurBarre,
                                 backgroundColor: couleur,
                                 opacity: enCours ? 1 : 0.88,
-                                boxShadow: enCours ? '0 0 0 2px #fff, 0 0 0 4px ' + couleur : undefined,
+                                boxShadow: enCours || selection.has(c.id)
+                                  ? '0 0 0 2px #fff, 0 0 0 4px ' + (selection.has(c.id) ? 'var(--bbg-purple-dark)' : couleur)
+                                  : undefined,
                                 cursor: 'grab',
                               }}
                               onMouseDown={ev => demarrer(ev, brut, 'deplacer')}
+                              onClick={ev => selectionner(ev, c.id)}
                               onMouseEnter={ev => !glisse && setSurvol({ c, x: ev.clientX, y: ev.clientY })}
                               onMouseMove={ev => !glisse && setSurvol({ c, x: ev.clientX, y: ev.clientY })}
                               onMouseLeave={() => setSurvol(null)}
@@ -307,7 +516,9 @@ export function ChronoPage() {
           <p className="text-xs mt-2" style={{ color: '#9a92b5' }}>
             <b>Glisse une barre</b> pour décaler l'étape sans changer sa durée ·
             <b> attrape son bord</b> gauche ou droit pour l'allonger ou la raccourcir ·
-            <b> survole-la</b> pour voir le détail · <b>double-clic</b> sur un libellé pour le renommer ·
+            <b> clique-la</b> pour la sélectionner (<b>Maj</b> ou <b>Cmd</b> pour en ajouter, puis
+            glisse : tout le lot suit) · <b>survole-la</b> pour voir le détail ·
+            <b> double-clic</b> sur un libellé pour le renommer (partout à la fois si tu veux) ·
             <b> + étape</b> en ajoute une au projet.
             Une seule annulation (Cmd+Z) suffit à revenir en arrière après un déplacement.
           </p>
@@ -334,6 +545,32 @@ export function ChronoPage() {
         </Card>
       )}
 
+      {/* Sélection : ce qu'on peut faire du lot, sans quitter la frise. */}
+      {selection.size > 0 && !glisse && (
+        <div
+          className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full border shadow-lg
+            flex items-center gap-3 text-sm"
+          style={{ backgroundColor: 'var(--bbg-purple-light)', borderColor: 'var(--bbg-purple)', color: 'var(--bbg-purple-darker)' }}
+        >
+          <b>{selection.size} étape{selection.size > 1 ? 's' : ''} sélectionnée{selection.size > 1 ? 's' : ''}</b>
+          <span style={{ color: '#7a6fa5' }}>— glisse l'une d'elles, toutes suivent</span>
+          <Btn onClick={() => {
+            const nom = prompt('Nouveau nom pour ces étapes ?');
+            if (nom?.trim()) { updateChronos([...selection], { action: nom.trim() }); setSelection(new Set()); }
+          }}>Renommer</Btn>
+          <Btn variant="danger" onClick={() => {
+            if (confirm(`Supprimer ${selection.size} étape(s) ?`)) {
+              removeChronos([...selection]); setSelection(new Set());
+            }
+          }}>
+            <span className="inline-flex items-center gap-1"><Trash2 size={13} /> Supprimer</span>
+          </Btn>
+          <Btn variant="ghost" onClick={() => setSelection(new Set())}>
+            <span className="inline-flex items-center gap-1"><X size={13} /> Désélectionner</span>
+          </Btn>
+        </div>
+      )}
+
       {survol && !glisse && <Bulle c={survol.c} x={survol.x} y={survol.y} />}
       {glisse && apercu && (
         <div
@@ -343,6 +580,10 @@ export function ChronoPage() {
         >
           <b>{formatDateFR(apercu.debut)} → {formatDateFR(apercu.fin)}</b>
           <span className="ml-2">{libelleDuree(duree(apercu.debut, apercu.fin))}</span>
+          <span className="ml-2 opacity-70">aimanté {PAS_LABEL[pas]}</span>
+          {!!apercu.suite.length && (
+            <span className="ml-2 opacity-70">+ {apercu.suite.length} autre(s)</span>
+          )}
         </div>
       )}
     </div>

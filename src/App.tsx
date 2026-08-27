@@ -6,6 +6,7 @@ import { appliquerLargeurs, installerResize } from './utils/colresize';
 import type { Cible } from './utils/cible';
 import { Dashboard } from './components/dashboard/Dashboard';
 import { JournalPage } from './components/journal/JournalPage';
+import { SyntheseTotalePage } from './components/journal/SyntheseTotalePage';
 import { SynthesePage } from './components/journal/SynthesePage';
 import { ImmosPage } from './components/journal/ImmosPage';
 import { TresoPage } from './components/journal/TresoPage';
@@ -26,14 +27,14 @@ import { useEtatVue } from './utils/etatVue';
 
 export type Page =
   | 'dashboard'
-  | 'journal' | 'synthese' | 'immos' | 'treso' | 'tva' | 'rembours' | 'fournisseurs' | 'jeux' | 'factures'
+  | 'journal' | 'synthese' | 'totale' | 'immos' | 'treso' | 'tva' | 'rembours' | 'fournisseurs' | 'jeux' | 'factures'
   | 'budgets' | 'cinqans' | 'reelprevu' | 'tresoprev' | 'chrono'
   | 'exports' | 'categories' | 'settings';
 
 /** Les pages existantes : une valeur mémorisée qui n'en fait plus partie est ignorée. */
 const PAGES: readonly Page[] = [
   'dashboard',
-  'journal', 'synthese', 'immos', 'treso', 'tva', 'rembours', 'fournisseurs', 'jeux', 'factures',
+  'journal', 'synthese', 'totale', 'immos', 'treso', 'tva', 'rembours', 'fournisseurs', 'jeux', 'factures',
   'budgets', 'cinqans', 'reelprevu', 'tresoprev', 'chrono',
   'exports', 'categories', 'settings',
 ];
@@ -107,6 +108,7 @@ export default function App() {
         {page === 'dashboard' && <Dashboard onNavigate={setPage} />}
         {page === 'journal' && <JournalPage cible={cibleDe('journal')} />}
         {page === 'synthese' && <SynthesePage onAllerA={allerA} />}
+        {page === 'totale' && <SyntheseTotalePage />}
         {page === 'immos' && <ImmosPage cible={cibleDe('immos')} />}
         {page === 'treso' && <TresoPage />}
         {page === 'tva' && <TVAPage />}
