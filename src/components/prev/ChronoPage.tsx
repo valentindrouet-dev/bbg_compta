@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Plus, Trash2, GripHorizontal, CalendarDays, FolderPlus, ChevronUp, ChevronDown, X, ZoomIn, ZoomOut
+import {
+  Plus, Trash2, GripHorizontal, CalendarDays, FolderPlus, ChevronUp, ChevronDown, X,
+  ZoomIn, ZoomOut, Smile,
 } from 'lucide-react';
 import { useStore } from '../../store';
 import { useEtatVue } from '../../utils/etatVue';
 import { COULEURS_JEUX, couleurJeu } from '../../utils/jeux';
 import { memeJeu } from '../../utils/previsionnel';
 import type { ChronoEvent } from '../../types';
-import { formatDateFR, todayISO } from '../../utils/dates';
+import { EXERCICES, formatDateFR, todayISO } from '../../utils/dates';
 import { PageHeader, Card, Btn, useSort, sortBy, ThSort } from '../ui';
 
 /**
@@ -180,7 +182,7 @@ export function ChronoPage() {
    * sautaient d'autant. En arrondissant au 1er janvier et au 31 décembre, un
    * déplacement ordinaire ne bouge plus rien autour.
    */
-  const { origineJour, nMois, moisLabels, groupes } = useMemo(() => {
+  const { origineJour, nMois, moisLabels, groupes, exercices } = useMemo(() => {
     const dates = valides.flatMap(c => [c.debut, estDate(c.fin) ? c.fin : c.debut]);
     const min = dates.length ? dates.reduce((a, b) => a < b ? a : b) : '2025-08-01';
     const max = dates.length ? dates.reduce((a, b) => a > b ? a : b) : '2030-09-30';
@@ -202,10 +204,26 @@ export function ChronoPage() {
       ...ordreProjets.filter(p => vus.includes(p)),
       ...vus.filter(p => !ordreProjets.includes(p)),
     ];
-    return { origineJour: jours(`${y0}-01-01`), nMois, moisLabels, groupes };
+    // Les bornes d'exercice : l'année comptable court du 1er octobre au
+    // 30 septembre. C'est elle qui décide dans quel exercice tombe une étape,
+    // pas l'année civile — la frise doit donc la montrer.
+    const exercices: { cle: string; debut: number; fin: number }[] = [];
+    for (const ex of EXERCICES) {
+      const y = Number(ex.slice(0, 4));
+      const debut = jours(`${y}-10-01`);
+      const fin = jours(`${y + 1}-10-01`);
+      exercices.push({ cle: ex, debut, fin });
+    }
+    return { origineJour: jours(`${y0}-01-01`), nMois, moisLabels, groupes, exercices };
   }, [valides, ordreProjets]);
 
   const largeur = nMois * pxMois;
+  /** Les exercices projetés sur la frise, bornés à sa largeur. */
+  const bandesExercice = exercices.map(e => {
+    const g = (e.debut - origineJour) * pxJour;
+    const d = (e.fin - origineJour) * pxJour;
+    return { cle: e.cle, gauche: Math.max(0, g), largeur: Math.min(largeur, d) - Math.max(0, g), depart: g };
+  }).filter(b => b.largeur > 0 && b.gauche < largeur);
   /** Position du jour en cours sur la frise, recalculée à chaque affichage. */
   const xAujourdhui = (jours(todayISO()) - origineJour) * pxJour;
   const x = (iso: string) => (jours(iso) - origineJour) * pxJour;
@@ -393,25 +411,55 @@ export function ChronoPage() {
 
       {vue === 'timeline' && (
         <Card>
-          <div className="overflow-x-auto -mx-4 px-4 pb-2">
+          {/* La frise a son propre cadre de défilement : son en-tête peut alors
+              rester collé en haut pendant qu'on descend dans les projets. */}
+          <div
+            className="-mx-4 px-4 pb-2 overflow-auto"
+            style={{ maxHeight: 'calc(100vh - var(--bbg-entete-h, 96px) - 190px)', minHeight: 260 }}
+          >
             <div style={{ minWidth: largeur + LARGEUR_LIBELLE }}>
-              {/* En-tête années / mois */}
-              <div className="flex sticky top-0 z-10 bg-white relative" style={{ paddingLeft: LARGEUR_LIBELLE }}>
-                {xAujourdhui >= 0 && xAujourdhui <= largeur && (
-                  <div className="absolute top-3 bottom-0 z-[2] flex items-start"
-                    style={{ left: LARGEUR_LIBELLE + xAujourdhui }}>
-                    <span className="text-[9px] px-1 rounded -translate-x-1/2 whitespace-nowrap"
-                      style={{ backgroundColor: '#b7332e', color: '#fff' }}>
-                      {formatDateFR(todayISO())}
-                    </span>
-                  </div>
-                )}
-                {moisLabels.map((m, i) => (
-                  <div key={i} className="text-center shrink-0" style={{ width: pxMois }}>
-                    <div className="text-[10px] font-bold h-4" style={{ color: 'var(--bbg-purple-darker)' }}>{m.annee ?? ''}</div>
-                    <div className="text-[10px]" style={{ color: '#9a92b5' }}>{m.label}</div>
-                  </div>
-                ))}
+              {/* En-tête exercices / années / mois — il descend avec le défilé */}
+              <div
+                className="sticky top-0 z-20 pt-1"
+                style={{ backgroundColor: '#fff' }}
+              >
+                {/* Bande des exercices comptables (1er octobre → 30 septembre) */}
+                <div className="relative h-5" style={{ marginLeft: LARGEUR_LIBELLE, width: largeur }}>
+                  {bandesExercice.map((b, i) => (
+                    <div
+                      key={b.cle}
+                      className="absolute top-0 bottom-0 flex items-center justify-center rounded-sm overflow-hidden"
+                      style={{
+                        left: b.gauche, width: b.largeur,
+                        backgroundColor: i % 2 ? 'var(--bbg-purple-light)' : '#ece6f8',
+                        borderLeft: b.depart >= 0 ? '2px solid var(--bbg-purple)' : undefined,
+                      }}
+                      title={`Exercice ${b.cle} — du 1er octobre ${b.cle.slice(0, 4)} au 30 septembre ${Number(b.cle.slice(0, 4)) + 1}`}
+                    >
+                      <span className="text-[10px] font-bold whitespace-nowrap px-1"
+                        style={{ color: 'var(--bbg-purple-darker)' }}>
+                        {b.largeur > 46 ? `Exercice ${b.cle}` : b.largeur > 26 ? b.cle : ''}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex relative" style={{ paddingLeft: LARGEUR_LIBELLE }}>
+                  {xAujourdhui >= 0 && xAujourdhui <= largeur && (
+                    <div className="absolute top-3 bottom-0 z-[2] flex items-start"
+                      style={{ left: LARGEUR_LIBELLE + xAujourdhui }}>
+                      <span className="text-[9px] px-1 rounded -translate-x-1/2 whitespace-nowrap"
+                        style={{ backgroundColor: '#b7332e', color: '#fff' }}>
+                        {formatDateFR(todayISO())}
+                      </span>
+                    </div>
+                  )}
+                  {moisLabels.map((m, i) => (
+                    <div key={i} className="text-center shrink-0" style={{ width: pxMois }}>
+                      <div className="text-[10px] font-bold h-4" style={{ color: 'var(--bbg-purple-darker)' }}>{m.annee ?? ''}</div>
+                      <div className="text-[10px]" style={{ color: '#9a92b5' }}>{m.label}</div>
+                    </div>
+                  ))}
+                </div>
               </div>
 
               {groupes.map(g => {
@@ -542,9 +590,14 @@ export function ChronoPage() {
                                 onDoubleClick={() => setRenomme(c.id)}
                                 title="Double-clic pour renommer"
                               >
+                                {c.emoji && <span className="mr-1">{c.emoji}</span>}
                                 {c.projet !== g ? `${c.projet.slice(g.length).replace(/^ - /, '')} · ` : ''}{c.action}
                               </span>
                             )}
+                            <ChoixEmoji
+                              valeur={c.emoji}
+                              onChoisir={emoji => updateChrono(c.id, { emoji })}
+                            />
                             <span className="opacity-0 group-hover:opacity-100 flex items-center shrink-0">
                               <button
                                 title="Monter cette étape" style={{ color: 'var(--bbg-purple-dark)' }}
@@ -575,6 +628,11 @@ export function ChronoPage() {
                               <div key={i} className="absolute top-0 bottom-0 border-l"
                                 style={{ left: i * pxMois, borderColor: m.annee ? 'var(--bbg-border)' : '#f0edf8' }} />
                             ))}
+                            {/* Ouverture de chaque exercice : le 1er octobre */}
+                            {bandesExercice.map(b => b.depart >= 0 && b.depart <= largeur && (
+                              <div key={`ex-${b.cle}`} className="absolute top-0 bottom-0 w-px"
+                                style={{ left: b.depart, backgroundColor: 'var(--bbg-purple)', opacity: 0.4 }} />
+                            ))}
                             <div
                               data-chrono-bar={c.id}
                               className="absolute top-1 h-4 rounded-full flex items-center"
@@ -594,6 +652,14 @@ export function ChronoPage() {
                               onMouseMove={ev => !glisse && setSurvol({ c, x: ev.clientX, y: ev.clientY })}
                               onMouseLeave={() => setSurvol(null)}
                             >
+                              {c.emoji && (
+                                <span
+                                  className="absolute -left-1 -top-1 text-[13px] leading-none pointer-events-none select-none"
+                                  style={{ textShadow: '0 0 3px #fff, 0 0 3px #fff' }}
+                                >
+                                  {c.emoji}
+                                </span>
+                              )}
                               {!jalon && (
                                 <>
                                   <span
@@ -643,6 +709,7 @@ export function ChronoPage() {
           <table data-table="chrono" className="sheet text-sm border-collapse w-full">
             <thead>
               <tr className="text-left text-[#5c5280]">
+                <th className="w-8"></th>
                 <ThSort label="Projet" k="projet" sort={sort} onToggle={toggle} />
                 <ThSort label="Action" k="action" sort={sort} onToggle={toggle} />
                 <ThSort label="Début" k="debut" sort={sort} onToggle={toggle} />
@@ -734,6 +801,78 @@ function Bulle({ c, x, y }: { c: ChronoEvent; x: number; y: number }) {
   );
 }
 
+/**
+ * Poser un emoji sur une étape. Une petite palette de ce qui revient dans un
+ * planning de jeu — un tirage, une sortie, un salon, une échéance — plus la
+ * saisie libre pour tout le reste.
+ */
+const EMOJIS = [
+  '🎯', '🚀', '🏭', '📦', '🎲', '🖌️', '✍️', '📣', '🤝', '🎪', '🏆', '💶',
+  '📸', '🧪', '🧩', '📝', '⏰', '⚠️', '✅', '🔥', '🌍', '🎁',
+];
+
+function ChoixEmoji({ valeur, onChoisir }: {
+  valeur?: string; onChoisir: (e: string | undefined) => void;
+}) {
+  const [ancre, setAncre] = useState<{ x: number; y: number } | null>(null);
+  return (
+    <>
+      <button
+        className={`shrink-0 leading-none ${valeur ? '' : 'opacity-0 group-hover:opacity-100'}`}
+        title={valeur ? `Emoji : ${valeur} — cliquer pour changer` : 'Poser un emoji sur cette étape'}
+        style={{ color: 'var(--bbg-purple-dark)' }}
+        onClick={ev => {
+          const r = (ev.currentTarget as HTMLElement).getBoundingClientRect();
+          setAncre(a => a ? null : { x: r.left, y: r.bottom + 4 });
+        }}
+      >
+        {valeur ? <span className="text-[12px]">{valeur}</span> : <Smile size={12} />}
+      </button>
+      {ancre && (
+        <>
+          <div className="fixed inset-0 z-[60]" onClick={() => setAncre(null)} />
+          <div
+            className="fixed z-[61] p-2 rounded-lg border shadow-lg bg-white grid grid-cols-6 gap-0.5"
+            style={{
+              borderColor: 'var(--bbg-border)', width: 200,
+              left: Math.min(ancre.x, window.innerWidth - 210),
+              top: Math.min(ancre.y, window.innerHeight - 220),
+            }}
+          >
+            {EMOJIS.map(e => (
+              <button
+                key={e} className="text-base leading-none p-1 rounded hover:bg-[#f4f1fb]"
+                onClick={() => { onChoisir(e); setAncre(null); }}
+              >{e}</button>
+            ))}
+            <button
+              className="col-span-6 mt-1 text-[11px] py-1 rounded hover:bg-[#f4f1fb]"
+              style={{ color: '#6f6690' }}
+              onClick={() => {
+                const libre = prompt('Un autre emoji ? (colle-le ici)', valeur ?? '');
+                if (libre !== null) onChoisir(libre.trim() || undefined);
+                setAncre(null);
+              }}
+            >
+              Autre emoji…
+            </button>
+            {valeur && (
+              <button
+                className="col-span-6 text-[11px] py-1 rounded hover:bg-[#f4f1fb]"
+                style={{ color: '#b7332e' }}
+                onClick={() => { onChoisir(undefined); setAncre(null); }}
+              >
+                Retirer l'emoji
+              </button>
+            )}
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
+
 function RowC({ c, onUpdate, onRemove }: {
   c: ChronoEvent;
   onUpdate: (id: string, patch: Partial<ChronoEvent>) => void;
@@ -742,6 +881,9 @@ function RowC({ c, onUpdate, onRemove }: {
   const fin = estDate(c.fin) ? c.fin : c.debut;
   return (
     <tr className="group hover:bg-[#f4f1fb]">
+      <td className="text-center">
+        <ChoixEmoji valeur={c.emoji} onChoisir={emoji => onUpdate(c.id, { emoji })} />
+      </td>
       <td>
         <input className="border border-[#ddd6ef] rounded px-1.5 py-1 text-sm w-40"
           defaultValue={c.projet} onBlur={ev => onUpdate(c.id, { projet: ev.target.value })} />

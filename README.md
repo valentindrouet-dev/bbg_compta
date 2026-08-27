@@ -36,6 +36,12 @@ sont recalculés en direct à partir des écritures.
   jour, affichée sous « BBG Compta », décide de la frontière ; elle se remet à
   jour toute seule à minuit.
 - **Immobilisations** — durées, dotations, VNC et fin d'amortissement calculées
+- **Stocks** — les **exemplaires**, pas les euros : un tirage entre, une vente
+  sort, une casse aussi, un inventaire corrige. La position de chaque jeu s'en
+  déduit — entrés, sortis, stock, **valeur au coût moyen pondéré**, ventes,
+  coût des ventes et marge — avec la comparaison au stock prévu. La valeur du
+  stock figure **à l'actif** : elle ne pèse au résultat qu'une fois les
+  exemplaires vendus
 - **Trésorerie** — chaque montant rattaché à sa source : **encaissements** et
   **décaissements du journal** (retrouvables ligne à ligne), **mouvements
   financiers** (capital, apport et remboursement de compte courant d'associé,
@@ -54,9 +60,24 @@ sont recalculés en direct à partir des écritures.
 - **Remboursements Val** — dépenses avancées sur carte personnelle
 
 **Prévisionnel 2025-30**
-- **Prévisionnel** — mêmes blocs, même ordre, mêmes catégories et mêmes couleurs
-  que la synthèse annuelle, avec Prévu / Réel / Écart par ligne, un compte de
-  résultat prévisionnel identique, les mêmes boutons **HT / TTC** et
+- **Prévisionnel** — la page se lit maintenant en **cinq onglets**, au-dessus des
+  onglets d'exercice :
+  - **Charges** — charges externes, personnel et rémunérations
+  - **Produits** — les workshops d'un côté, les **ventes de jeux** de l'autre.
+    Ces dernières ne se saisissent pas : elles sont le produit des exemplaires
+    vendus par leur prix, dans l'onglet Stock
+  - **Immobilisations** — ce qui s'inscrit à l'actif et s'amortit
+  - **Stock** — jeu par jeu, deux lignes à remplir (fabriqués, vendus) et tout le
+    reste calculé : stock restant, coût des tirages, ventes, **coût des
+    exemplaires vendus**, **variation de stock** et **marge**. Le tirage payé à
+    l'usine est une charge du mois où il est réglé ; la variation de stock la
+    neutralise pour les exemplaires encore en carton, si bien que **seul le coût
+    de ce qui est vendu pèse sur le résultat**. Le coût de revient unitaire se
+    recopie depuis le Production Calculator — c'est lui qui tient les devis usine
+  - **Total** — tout le prévisionnel de l'exercice d'un seul tenant et
+    **non modifiable** : chaque bloc, le stock, puis le compte de résultat
+- Dans les onglets de saisie : mêmes blocs, même ordre, mêmes catégories et mêmes couleurs
+  que la synthèse annuelle, avec Prévu / Réel / Écart par ligne, les mêmes boutons **HT / TTC** et
   **détaillée / simplifiée**, et des alarmes quand une ligne ne correspond
   à rien dans la synthèse. En vue TTC, chaque ligne porte son **taux de TVA**,
   repris du journal par défaut et modifiable ; les montants restent stockés
@@ -72,7 +93,13 @@ sont recalculés en direct à partir des écritures.
 - **Vue 5 ans** — les cinq exercices côte à côte : prévu, réel, compte de
   résultat et trajectoire
 - **Réel vs Prévu** — le réalisé vient du journal, sans IMPORTRANGE
-- **Trésorerie prévisionnelle vs réalisée** — par exercice
+- **Trésorerie prévisionnelle vs réalisée** — par exercice. Le prévisionnel n'est
+  plus recopié à la main : chaque ligne est la somme d'un bloc du prévisionnel,
+  **convertie en TTC ligne à ligne** (chacune garde son taux ; cotisations et
+  rémunérations n'en portent pas). Les **ventes de jeux** et les **tirages
+  d'usine** viennent de l'onglet Stock. Capital, compte courant d'associé et
+  placements restent des mouvements financiers. La saisie d'origine du tableur
+  est conservée en dessous, repliée, pour mémoire
 - **Chronologie** — frise 2025-30 des projets, **modifiable à la souris** :
   glisse une barre pour décaler l'étape, attrape son bord pour l'allonger.
   Les bandes **s'aimantent** au 1er du mois ou au 1er / 16 (réglable, ou au jour
@@ -88,7 +115,14 @@ sont recalculés en direct à partir des écritures.
   étape de quelques jours devient assez large pour être attrapée, et le niveau
   choisi est retrouvé au retour sur la page. La fenêtre de la frise est **calée
   sur des années pleines** : déplacer ou renommer une bande ne fait plus bouger
-  les autres d'un pixel. Un **trait rouge** marque le jour en cours
+  les autres d'un pixel. Un **trait rouge** marque le jour en cours.
+  Un **emoji** se pose sur n'importe quelle étape (🏭 tirage, 🚀 sortie,
+  🎪 salon…) : il s'affiche sur la bande et dans le libellé, pour repérer d'un
+  coup d'œil ce qui compte. La frise a son **propre cadre de défilement** :
+  l'en-tête des mois et des années **reste en haut** pendant qu'on descend dans
+  les projets. Au-dessus des mois, une bande donne les **bornes des exercices
+  comptables** (1er octobre → 30 septembre), avec un trait à chaque ouverture :
+  on voit tout de suite dans quel exercice tombe une étape ou un paiement
 
 **Outils**
 - **Exports** — les cinq exports d'un coup dans une archive `.zip`
@@ -103,16 +137,21 @@ sont recalculés en direct à partir des écritures.
     prévisionnel de chacun des cinq exercices (jeu, taux de TVA et formule
     en clair), chronologie dans son ordre et avec ses couleurs, référentiel
     des catégories (groupe, nature charge/immobilisation, durée), catalogue
-    des jeux et vue d'ensemble sur cinq ans
+    des jeux, **stock prévu**, **stock réel** et ses mouvements, et vue
+    d'ensemble sur cinq ans (20 feuilles)
   - **Rapport PDF** — compte de résultat, synthèse mensuelle, journal détaillé,
-    immobilisations et dépenses par jeu, TVA, trésorerie, mouvements financiers
-    et prévisionnel de l'exercice
+    immobilisations et dépenses par jeu, TVA, trésorerie, mouvements financiers,
+    stocks et prévisionnel de l'exercice
   - **CSV du journal** (format français), **sauvegarde JSON intégrale**
-    (elle emporte aussi les corrections de trésorerie et les couleurs des blocs)
+    (elle emporte aussi les corrections de trésorerie, les couleurs des blocs
+    et tout le stock)
   - **Copie HTML en lecture seule** à envoyer à l'expert-comptable — un seul
-    fichier, rien de modifiable, aucune connexion : synthèse, résultat, TVA,
-    journal, immobilisations, trésorerie, dépenses par jeu, chronologie
-    et contrôles comptables
+    fichier, rien de modifiable, aucune connexion. Elle a **la tête de l'app** :
+    même barre latérale violette, mêmes cartes de chiffres, mêmes couleurs de
+    blocs, en-têtes de colonnes figés et **colonnes Catégorie et Total gelées**
+    quand on balaie les mois. Neuf sections : synthèse, résultat & TVA, journal,
+    immobilisations, stocks, trésorerie, jeux, chronologie et contrôles
+    comptables. Elle s'imprime en PDF d'un `Cmd + P`
 - **Paramètres** — catégories, moyens de paiement, plan comptable,
   sauvegarde / restauration / réinitialisation
 

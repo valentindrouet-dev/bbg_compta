@@ -1,7 +1,8 @@
 import { Fragment, useMemo, useState } from 'react';
 import {
   Plus, Trash2, AlertTriangle, AlertCircle, Info, Wand2, ArrowRightLeft, Gamepad2,
-  Sigma, ListPlus, Clock, List, Rows3, GripVertical, Percent, Calculator
+  Sigma, ListPlus, Clock, List, Rows3, GripVertical, Percent, Calculator,
+  Receipt, TrendingUp, Landmark, Boxes, Table2,
 } from 'lucide-react';
 import { useStore } from '../../store';
 import { BAREME_TNS, cotisationsTNS } from '../../utils/tns';
@@ -17,18 +18,46 @@ import {
   jeuDeLigne, ordreAffichage, reelParJeuEtCategorie, sectionDeCategorie, tauxDeLigne, tauxObserves,
   totalDeLigne, valeursDe,
 } from '../../utils/previsionnel';
-import { teinteBloc, estChargeFinanciere, GROUPE_PERSONNEL, type BlocCle } from '../../utils/blocs';
-import {
-  compteResultat, dotationsParMois, immoInfos, produitsFinanciersParMois, type LigneResultat,
-} from '../../utils/calc';
+import { teinteBloc, GROUPE_PERSONNEL, type BlocCle } from '../../utils/blocs';
+import { immoInfos, type LigneResultat } from '../../utils/calc';
+import { resultatPrevisionnel, sommeMap } from '../../utils/prevCalc';
+import { apportStock } from '../../utils/stock';
+import { StockPrev } from './StockPrev';
+import { TotalPrev } from './TotalPrev';
 import {
   PageHeader, Card, Btn, StatCard, MoneyInput, BlocColorMenu, TotalBloc, styleBloc, MonthTabs,
+  VueTabs,
 } from '../ui';
 import { useSelectionCellules } from '../../utils/selection';
 import { useEtatVue } from '../../utils/etatVue';
 
-/** Durée d'amortissement retenue pour une immobilisation prévue, faute de mieux. */
-const DUREE_IMMO_PREVUE = 5;
+/**
+ * Les onglets du prévisionnel. Chacun ne montre que ce qui le regarde ; le
+ * dernier rassemble tout, sans rien laisser modifier.
+ */
+type VuePrev = 'charges' | 'produits' | 'immos' | 'stock' | 'total';
+
+const VUES: { cle: VuePrev; titre: string; icone: React.ReactNode; aide: string }[] = [
+  { cle: 'charges', titre: 'Charges', icone: <Receipt size={14} />,
+    aide: 'Charges externes, personnel et rémunérations' },
+  { cle: 'produits', titre: 'Produits', icone: <TrendingUp size={14} />,
+    aide: 'Workshops et ventes de jeux' },
+  { cle: 'immos', titre: 'Immobilisations', icone: <Landmark size={14} />,
+    aide: "Ce qui s'inscrit à l'actif et s'amortit" },
+  { cle: 'stock', titre: 'Stock', icone: <Boxes size={14} />,
+    aide: 'Fabrication, écoulement et marge, jeu par jeu' },
+  { cle: 'total', titre: 'Total', icone: <Table2 size={14} />,
+    aide: "Tout le prévisionnel de l'exercice, non modifiable" },
+];
+
+/** Les blocs montrés par chaque onglet. */
+const SECTIONS_DE_VUE: Record<VuePrev, PrevSection[]> = {
+  charges: ['charges', 'personnel'],
+  produits: ['produits', 'indicateurs'],
+  immos: ['immos'],
+  stock: [],
+  total: [],
+};
 
 export function PrevisionnelPage() {
   const entries = useStore(s => s.entries);
@@ -36,6 +65,7 @@ export function PrevisionnelPage() {
   const refs = useStore(s => s.referentiels);
   const couleurs = useStore(s => s.blocCouleurs);
   const previsionnels = useStore(s => s.previsionnels);
+  const stocks = useStore(s => s.stocks);
   const setPrevCell = useStore(s => s.setPrevCell);
   const viderPrevCells = useStore(s => s.viderPrevCells);
   const addPrevLigne = useStore(s => s.addPrevLigne);
@@ -55,6 +85,9 @@ export function PrevisionnelPage() {
   const [base, setBase] = useEtatVue<'ht' | 'ttc'>('prev.base', 'ht');
   /** Vue simplifiée : les totaux seuls, comme dans la synthèse. */
   const [simple, setSimple] = useEtatVue('prev.simple', false);
+  /** L'onglet regardé : charges, produits, immobilisations, stock ou total. */
+  const [vue, setVue] = useEtatVue<VuePrev>('prev.vue', 'charges',
+    v => VUES.some(x => x.cle === v));
   /** Ligne dont le calculateur de rémunération est déplié. */
   const [calculOuvert, setCalculOuvert] = useState<string | null>(null);
   const [nouvelleCat, setNouvelleCat] = useState('');
@@ -166,50 +199,31 @@ export function PrevisionnelPage() {
   const erreurs = alarmes.filter(a => a.niveau === 'erreur');
   const attentions = alarmes.filter(a => a.niveau === 'attention');
 
-  // ----- Compte de résultat prévisionnel, mêmes lignes que la synthèse -----
-  const resultat: LigneResultat[] = useMemo(() => {
-    const carte = (calc: (i: number) => number) =>
-      new Map(moisList.map((m, i) => [m, r2(calc(i))]));
-    const sectionMois = (sec: PrevSection) => carte(i =>
-      lignes.filter(l => l.section === sec && !l.unite)
-        .reduce((s, l) => s + (valeursDe(l, lignes)[i] ?? 0), 0));
+  // ----- Compte de résultat prévisionnel, stock compris --------------------
+  const stock = useMemo(
+    () => apportStock(stocks, exercice, jeuxCatalogue), [stocks, exercice, jeuxCatalogue]);
+  const resultat: LigneResultat[] = useMemo(
+    () => resultatPrevisionnel({ lignes, moisList, immos, finances, stock }),
+    [lignes, moisList, immos, finances, stock]);
 
-    // Dotations : celles des immobilisations déjà au bilan, plus celles que
-    // déclencheraient les investissements prévus (linéaire, 5 ans).
-    const dotationsReelles = dotationsParMois(immos, moisList);
-    const immosPrevues = sectionMois('immos');
-    const dotations = carte(i => {
-      let d = dotationsReelles.get(moisList[i]) ?? 0;
-      for (let j = 0; j <= i; j++) {
-        d += (immosPrevues.get(moisList[j]) ?? 0) / (DUREE_IMMO_PREVUE * 12);
-      }
-      return d;
-    });
-
-    const chargesFinancieres = carte(i => lignes
-      .filter(l => l.section === 'charges' && !l.unite && estChargeFinanciere(l.categorie))
-      .reduce((s, l) => s + (valeursDe(l, lignes)[i] ?? 0), 0));
-
-    return compteResultat({
-      moisList,
-      produits: sectionMois('produits'),
-      charges: sectionMois('charges'),
-      personnel: sectionMois('personnel'),
-      jeux: sectionMois('jeux'),
-      dotations,
-      // Les intérêts prévus sont saisis une seule fois, en trésorerie.
-      produitsFinanciers: produitsFinanciersParMois(finances, moisList),
-      chargesFinancieres,
-    });
-  }, [lignes, moisList, immos, finances]);
+  /** Les onglets Stock et Total ne se saisissent pas au clavier des catégories. */
+  const saisie = vue !== 'stock' && vue !== 'total';
+  const sousTitre: Record<VuePrev, string> = {
+    charges: 'Charges externes, personnel et rémunérations — mêmes catégories que la synthèse',
+    produits: 'Ce qui rentre : workshops et ventes de jeux',
+    immos: "Ce qui s'inscrit à l'actif et s'amortit au lieu de peser d'un coup",
+    stock: 'Fabrication, écoulement et marge, jeu par jeu',
+    total: "Tout le prévisionnel de l'exercice, non modifiable",
+  };
 
   return (
     <div className="p-4 w-full">
       <PageHeader
-        title="Prévisionnel"
-        subtitle="Mêmes blocs, mêmes catégories et mêmes mois que la synthèse annuelle — dans le même ordre"
+        title={`Prévisionnel — ${VUES.find(v => v.cle === vue)!.titre}`}
+        subtitle={sousTitre[vue]}
         actions={
           <>
+            {saisie && <>
             <div className="flex gap-1">
               <input
                 className="border rounded px-2 py-1.5 text-sm w-52 bg-white"
@@ -273,17 +287,21 @@ export function PrevisionnelPage() {
                 </button>
               ))}
             </div>
+            </>}
           </>
         }
         tabs={
-          <MonthTabs
+          <div className="space-y-2">
+            <VueTabs vue={vue} vues={VUES} onChange={setVue} />
+            <MonthTabs
         mois={exercice}
         moisList={[...EXERCICES]}
         labelOf={ex => ex}
         badgeOf={ex => (previsionnels[ex] ?? []).reduce(
           (n, l) => n + l.valeurs.filter(v => v != null).length, 0)}
         onChange={setExercice}
-          />
+            />
+          </div>
         }
       />
 
@@ -301,9 +319,13 @@ export function PrevisionnelPage() {
         </div>
       )}
 
+      {vue !== 'stock' && (
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
-        <StatCard label="Produits prévus" value={euros0(totalProduits)} tone="good"
-          sub={`réel ${euros0(reelProduits)}`} />
+        <StatCard label="Produits prévus" value={euros0(r2(totalProduits + sommeMap(stock.caParMois)))}
+          tone="good"
+          sub={sommeMap(stock.caParMois)
+            ? `dont ${euros0(sommeMap(stock.caParMois))} de ventes de jeux`
+            : `réel ${euros0(reelProduits)}`} />
         <StatCard label="Dépenses prévues" value={euros0(totalPrevu)} tone="accent"
           sub={`réel ${euros0(reelDepenses)}`} />
         <StatCard label="Résultat net prévu"
@@ -317,6 +339,7 @@ export function PrevisionnelPage() {
           tone={erreurs.length ? 'bad' : attentions.length ? 'accent' : 'good'}
           sub={erreurs.length ? `${erreurs.length} à corriger` : 'cohérent avec la synthèse'} />
       </div>
+      )}
 
       {/* Alarmes de cohérence */}
       {alarmes.length > 0 && (
@@ -379,8 +402,65 @@ export function PrevisionnelPage() {
         </Card>
       )}
 
+      {vue === 'produits' && stock.caParJeuEtMois.size > 0 && (
+        <Card className="mb-5" title="Ventes de jeux — calculées dans l'onglet Stock"
+          actions={
+            <TotalBloc label="Total ventes de jeux"
+              valeur={euros(sommeMap(stock.caParMois))} t={teinteBloc('produits', couleurs)} />
+          }>
+          <div className="overflow-x-auto -mx-4 px-4" style={styleBloc(teinteBloc('produits', couleurs))}>
+            <table data-table="prev:ventesjeux" className="sheet text-sm border-collapse w-full">
+              <thead>
+                <tr className="text-left" style={{ color: '#5c5280' }}>
+                  <th className="min-w-52">Jeu</th>
+                  {moisList.map(m => <th key={m} className="text-right">{labelMois(m)}</th>)}
+                  <th className="text-right bg-[var(--bloc-total)]">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...stock.caParJeuEtMois.entries()].map(([jeu, parMois]) => (
+                  <tr key={jeu}>
+                    <td>
+                      <span className="px-1.5 py-0.5 rounded text-[11px] font-bold"
+                        style={{ backgroundColor: couleurJeu(jeu, refs), color: encreSur(couleurJeu(jeu, refs)) }}>
+                        {jeu}
+                      </span>
+                    </td>
+                    {moisList.map(m => {
+                      const v = parMois.get(m) ?? 0;
+                      return <td key={m} className="text-right tabular-nums">{v ? euros0(v) : '·'}</td>;
+                    })}
+                    <td className="text-right tabular-nums bg-[var(--bloc-total)] font-medium">
+                      {euros(r2([...parMois.values()].reduce((x, v) => x + v, 0)))}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="total-bloc">
+                  <td>TOTAL VENTES DE JEUX (HT)</td>
+                  {moisList.map(m => {
+                    const v = stock.caParMois.get(m) ?? 0;
+                    return <td key={m} className="text-right tabular-nums">{v ? euros0(v) : '·'}</td>;
+                  })}
+                  <td className="text-right tabular-nums grand">{euros(sommeMap(stock.caParMois))}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <p className="text-xs mt-2" style={{ color: '#9a92b5' }}>
+            Ces montants ne se saisissent pas ici : ils sont le produit des exemplaires vendus par
+            leur prix de vente, dans l'onglet <b>Stock</b>. Ils entrent dans le résultat et dans la
+            trésorerie prévisionnelle comme n'importe quel produit.
+          </p>
+        </Card>
+      )}
+
+      {vue === 'stock' && <StockPrev exercice={exercice} moisList={moisList} />}
+      {vue === 'total' && <TotalPrev exercice={exercice} moisList={moisList} />}
+
       <div className="space-y-5">
-        {SECTIONS.map(sec => {
+        {SECTIONS.filter(sec => SECTIONS_DE_VUE[vue].includes(sec.cle)).map(sec => {
           const lignesSec = lignesDe(sec.cle);
           const reelSec = reelParSection.get(sec.cle) ?? new Map<string, number>();
           const catsSec = new Set(lignesSec.map(l => l.categorie));
@@ -799,8 +879,6 @@ export function PrevisionnelPage() {
           );
         })}
 
-        {/* ------------------------------- Résultat prévisionnel ---------- */}
-        <ResultatPrev lignes={resultat} moisList={moisList} couleurs={couleurs} />
       </div>
 
       <p className="text-xs mt-4" style={{ color: '#9a92b5' }}>
@@ -812,79 +890,6 @@ export function PrevisionnelPage() {
   );
 }
 
-// ------------------------------------------- Compte de résultat prévu ------
-
-function ResultatPrev({ lignes, moisList, couleurs }: {
-  lignes: LigneResultat[]; moisList: string[]; couleurs: Record<string, string>;
-}) {
-  const t = teinteBloc('resultat', couleurs);
-  const rn = lignes.find(l => l.cle === 'rn')!;
-  const couleurValeur = (l: LigneResultat, v: number) =>
-    l.signe ? (v > 0 ? '#38761d' : v < 0 ? '#b7332e' : '#9a92b5') : undefined;
-
-  return (
-    <Card
-      title="Résultat prévisionnel de l'exercice (HT)"
-      actions={
-        <>
-          <TotalBloc label="Résultat net prévu" valeur={euros(rn.total)} t={t} />
-          <BlocColorMenu bloc="resultat" />
-        </>
-      }
-    >
-      <div className="overflow-x-auto -mx-4 px-4">
-        <table
-          data-table={`prev:resultat:${moisList.length}`} data-bloc="resultat"
-          className="sheet text-xs" style={{ minWidth: 900, ...styleBloc(t) }}
-        >
-          <thead>
-            <tr>
-              <th className="text-left" style={{ minWidth: 230 }}>Solde intermédiaire de gestion</th>
-              {moisList.map(m => <th key={m} className="num" style={{ minWidth: 74 }}>{labelMois(m)}</th>)}
-              <th className="num" style={{ minWidth: 110 }}>Exercice</th>
-            </tr>
-          </thead>
-          <tbody>
-            {lignes.filter(l => l.cle !== 'rn').map(l => (
-              <tr key={l.cle} className={l.niveau === 'agregat' ? 'band-bloc' : undefined} title={l.aide}>
-                <td className={l.niveau === 'detail' ? 'pl-4' : undefined}>{l.label}</td>
-                {moisList.map(m => {
-                  const v = l.parMois?.get(m) ?? null;
-                  return (
-                    <td key={m} className="text-right tabular-nums"
-                      style={{ color: v == null ? '#c9c0e4' : couleurValeur(l, v) }}>
-                      {v == null ? '—' : v ? euros(v) : '·'}
-                    </td>
-                  );
-                })}
-                <td className="text-right tabular-nums font-semibold col-total"
-                  style={{ color: couleurValeur(l, l.total) }}>
-                  {euros(l.total)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr className="total-bloc">
-              <td>RÉSULTAT NET PRÉVU</td>
-              {moisList.map(m => <td key={m}></td>)}
-              <td className="text-right tabular-nums grand"
-                style={{ color: rn.total >= 0 ? '#2c5d16' : '#8f2b26' }}>
-                {euros(rn.total)}
-              </td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-      <p className="text-xs mt-2" style={{ color: '#9a92b5' }}>
-        Même enchaînement que la synthèse : EBE → REX → RC → RN, avec le barème PME de l'IS.
-        Les dotations prévues cumulent celles des immobilisations déjà au bilan et celles que
-        déclencheraient les investissements prévus, amortis en linéaire sur {DUREE_IMMO_PREVUE} ans
-        à partir du mois d'achat.
-      </p>
-    </Card>
-  );
-}
 
 // ------------------------------------------------- Taux d'une ligne calculée ---
 

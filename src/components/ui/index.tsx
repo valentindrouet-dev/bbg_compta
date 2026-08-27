@@ -19,8 +19,24 @@ export function PageHeader({ title, subtitle, actions, tabs }: {
   /** Onglets (mois, exercices) : ils restent collés avec le titre. */
   tabs?: ReactNode;
 }) {
+  const ref = useRef<HTMLDivElement>(null);
+  // La hauteur de l'en-tête est publiée en variable CSS : les frises et les
+  // en-têtes de tableau qui doivent rester visibles s'y accrochent juste
+  // dessous, sans avoir à deviner combien il mesure.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const publier = () => document.documentElement.style
+      .setProperty('--bbg-entete-h', `${Math.round(el.getBoundingClientRect().height)}px`);
+    publier();
+    const ro = new ResizeObserver(publier);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [title, tabs, actions]);
+
   return (
     <div
+      ref={ref}
       className="sticky top-0 z-30 -mx-4 -mt-4 px-4 pt-4 pb-2 mb-4"
       style={{ backgroundColor: '#f6f4fc', boxShadow: '0 1px 0 var(--bbg-border-soft)' }}
     >
@@ -54,6 +70,38 @@ export function ExerciceTabs({ exercice, exercices, badgeOf, onChange }: {
       badgeOf={badgeOf}
       onChange={onChange}
     />
+  );
+}
+
+/**
+ * Les vues d'une même page, en pastilles. On les distingue exprès des onglets
+ * d'exercice, juste au-dessus : ceux-là changent l'année, celles-ci changent ce
+ * qu'on regarde.
+ */
+export function VueTabs<T extends string>({ vue, vues, onChange }: {
+  vue: T;
+  vues: readonly { cle: T; titre: string; icone?: ReactNode; aide?: string }[];
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {vues.map(v => {
+        const active = v.cle === vue;
+        return (
+          <button
+            key={v.cle}
+            onClick={() => onChange(v.cle)}
+            title={v.aide}
+            className="px-3 py-1.5 text-sm rounded-full border transition-colors inline-flex items-center gap-1.5"
+            style={active
+              ? { backgroundColor: 'var(--bbg-purple-dark)', borderColor: 'var(--bbg-purple-dark)', color: '#fff', fontWeight: 700 }
+              : { backgroundColor: '#fff', borderColor: 'var(--bbg-border)', color: '#5c5280' }}
+          >
+            {v.icone}{v.titre}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 

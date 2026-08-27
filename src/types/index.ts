@@ -142,6 +142,55 @@ export interface PrevLigne {
   note?: string;
 }
 
+/**
+ * Un exercice de stock pour un jeu : ce qu'on fabrique, ce qu'on écoule, et les
+ * deux prix qui transforment des exemplaires en euros. Le coût de revient
+ * unitaire se recopie depuis le Production Calculator — c'est lui qui tient les
+ * devis usine, pas cette app.
+ */
+export interface LigneStock {
+  id: string;
+  exercice: string;
+  jeu: string;
+  /** Coût de revient unitaire HT (fabrication + transport), par exemplaire. */
+  coutUnitaire: number;
+  /** Prix de vente unitaire HT, par exemplaire. */
+  prixUnitaire: number;
+  /** TVA des ventes, en % (20 par défaut). */
+  tauxTVA?: number;
+  /** Stock d'ouverture, en exemplaires — seulement sur le premier exercice. */
+  stockInitial?: number;
+  /** Exemplaires fabriqués, une case par mois de l'exercice. */
+  fabrique: (number | null)[];
+  /** Exemplaires vendus, une case par mois de l'exercice. */
+  vendue: (number | null)[];
+  note?: string;
+}
+
+/** Un mouvement de stock réel, saisi dans la page Stocks du journal. */
+export interface MouvementStock {
+  id: string;
+  /** Date réelle (ISO yyyy-mm-dd). */
+  date: string;
+  /** Mois comptable de rattachement. */
+  mois: string;
+  jeu: string;
+  /**
+   * `fabrication` fait entrer des exemplaires, `vente` et `perte` en font
+   * sortir, `ajustement` corrige un inventaire (quantité signée).
+   */
+  type: 'fabrication' | 'vente' | 'perte' | 'ajustement';
+  quantite: number;
+  /**
+   * Prix unitaire HT : coût de revient pour une entrée, prix de vente pour une
+   * vente. Une perte n'en a pas — elle est valorisée au coût moyen.
+   */
+  unitaire: number;
+  /** Écriture du journal correspondante, quand il y en a une. */
+  entryId?: string;
+  note?: string;
+}
+
 export interface ChronoEvent {
   id: string;
   projet: string;
@@ -149,6 +198,12 @@ export interface ChronoEvent {
   debut: string;
   fin: string;
   detail?: string;
+  /**
+   * Un emoji posé sur l'étape, pour repérer d'un coup d'œil ce qui compte :
+   * un tirage, une sortie, un salon. Il s'affiche dans la bande et dans le
+   * libellé.
+   */
+  emoji?: string;
 }
 
 export interface TresoPrevLine {

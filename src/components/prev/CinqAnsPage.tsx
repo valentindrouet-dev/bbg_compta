@@ -13,10 +13,12 @@ import {
   type LigneResultat,
 } from '../../utils/calc';
 import { SECTIONS_DEPENSES, valeursDe } from '../../utils/previsionnel';
-import { estChargeFinanciere, teinteBloc, type BlocCle } from '../../utils/blocs';
+import { resultatPrevisionnel, sommeMap } from '../../utils/prevCalc';
+import { apportStock } from '../../utils/stock';
+import { teinteBloc, type BlocCle } from '../../utils/blocs';
 import { PageHeader, Card, StatCard, TotalBloc, styleBloc } from '../ui';
 
-const DUREE_IMMO_PREVUE = 5;
+const AUCUN_JEU: string[] = [];
 const GRID = '#ddd6ef';
 const INK = '#6f6690';
 
@@ -43,6 +45,7 @@ interface ColonneExercice {
 export function CinqAnsPage() {
   const entries = useStore(s => s.entries);
   const finances = useStore(s => s.finances);
+  const stocks = useStore(s => s.stocks);
   const refs = useStore(s => s.referentiels);
   const previsionnels = useStore(s => s.previsionnels);
   const couleurs = useStore(s => s.blocCouleurs);
@@ -61,8 +64,18 @@ export function CinqAnsPage() {
         .reduce((s, l) => s + (valeursDe(l, lignes)[i] ?? 0), 0));
     const somme = (m: Map<string, number>) => r2([...m.values()].reduce((s, v) => s + v, 0));
 
+    // Le stock nourrit le prévisionnel comme dans l'onglet Total : ses ventes
+    // s'ajoutent aux produits, ses tirages aux charges, corrigés de la
+    // variation de stock. Sans cela, deux pages annonceraient deux résultats.
+    const stock = apportStock(stocks, exercice, refs.jeux ?? AUCUN_JEU);
     const prevu = new Map<PrevSection, number>();
-    for (const b of BLOCS_SUIVIS) prevu.set(b.section, somme(prevuMois(b.section)));
+    for (const b of BLOCS_SUIVIS) {
+      const apport = b.section === 'produits' ? sommeMap(stock.caParMois)
+        : b.section === 'charges'
+          ? r2(sommeMap(stock.fabricationParMois) - sommeMap(stock.variationParMois))
+          : 0;
+      prevu.set(b.section, r2(somme(prevuMois(b.section)) + apport));
+    }
 
     const reel = new Map<PrevSection, number>([
       ['produits', somme(syn.totalProduitsParMois)],
@@ -71,28 +84,8 @@ export function CinqAnsPage() {
       ['immos', somme(syn.immoParMois)],
     ]);
 
-    // Dotations prévues : biens déjà au bilan + investissements prévus.
     const dotationsReelles = dotationsParMois(immos, moisList);
-    const immosPrevues = prevuMois('immos');
-    const dotationsPrevues = carte(i => {
-      let d = dotationsReelles.get(moisList[i]) ?? 0;
-      for (let j = 0; j <= i; j++) d += (immosPrevues.get(moisList[j]) ?? 0) / (DUREE_IMMO_PREVUE * 12);
-      return d;
-    });
-    const chargesFinPrevues = carte(i => lignes
-      .filter(l => l.section === 'charges' && !l.unite && estChargeFinanciere(l.categorie))
-      .reduce((s, l) => s + (valeursDe(l, lignes)[i] ?? 0), 0));
-
-    const resultatPrevu = compteResultat({
-      moisList,
-      produits: prevuMois('produits'),
-      charges: prevuMois('charges'),
-      personnel: prevuMois('personnel'),
-      jeux: new Map<string, number>(),   // les postes de jeu sont dans les charges
-      dotations: dotationsPrevues,
-      produitsFinanciers: produitsFinanciersParMois(finances, moisList),
-      chargesFinancieres: chargesFinPrevues,
-    });
+    const resultatPrevu = resultatPrevisionnel({ lignes, moisList, immos, finances, stock });
 
     const resultatReel = compteResultat({
       moisList,
@@ -110,7 +103,7 @@ export function CinqAnsPage() {
       aDuPrevu: [...prevu.values()].some(v => v !== 0),
       aDuReel: [...reel.values()].some(v => v !== 0),
     };
-  }), [entries, finances, refs, previsionnels, immos]);
+  }), [entries, finances, refs, previsionnels, immos, stocks]);
 
   const de = (lignes: LigneResultat[], cle: string) => lignes.find(l => l.cle === cle)?.total ?? 0;
 

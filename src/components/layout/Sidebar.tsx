@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   Coins, LayoutDashboard, NotebookPen, Table2, Building2, Wallet, Percent,
   UserRound, Target, GitCompareArrows, Landmark, CalendarRange, FileDown, Settings, Store, Tags, Gamepad2,
-  ReceiptText, TrendingUp,
+  ReceiptText, TrendingUp, Boxes,
 } from 'lucide-react';
 import type { Page } from '../../App';
 import { APP_VERSION } from '../../version';
@@ -25,6 +25,7 @@ const NAV: { section: string; items: { page: Page; label: string; icon: typeof C
       { page: 'synthese', label: 'Synthèse annuelle', icon: Table2 },
       { page: 'totale', label: 'Synthèse totale', icon: Table2 },
       { page: 'immos', label: 'Immobilisations', icon: Building2 },
+      { page: 'stocks', label: 'Stocks', icon: Boxes },
       { page: 'treso', label: 'Trésorerie', icon: Wallet },
       { page: 'tva', label: 'TVA', icon: Percent },
       { page: 'jeux', label: 'Jeux', icon: Gamepad2 },

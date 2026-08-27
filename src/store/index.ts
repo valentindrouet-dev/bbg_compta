@@ -2,8 +2,11 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type {
   JournalEntry, FinanceEntry, BudgetExercice, ChronoEvent, TresoPrevLine, Referentiels, CategorieMeta,
-  FormulePrev, JeuMeta, PrevLigne, PrevSection, TresoManuel,
+  FormulePrev, JeuMeta, LigneStock, MouvementStock, PrevLigne, PrevSection, TresoManuel,
 } from '../types';
+import {
+  CATEGORIE_FABRICATION, CATEGORIE_VARIATION_STOCK, CATEGORIE_VENTES_JEUX, ligneStockVide,
+} from '../utils/stock';
 import {
   categoriesImmobilisees, categoriesManquantes, estLigneCalculee, gabaritPrevisionnel,
   migrerBudgets, sectionDeCategorie, sectionDunPosteDeJeu, memeJeu,
@@ -159,7 +162,7 @@ export type CatKind = 'categoriesDepenses' | 'categoriesJeux' | 'categoriesProdu
 export type ColWidths = Record<string, number[]>;
 
 /** Clés dont la modification est enregistrée dans l'historique d'annulation. */
-const DATA_KEYS = ['entries', 'finances', 'referentiels', 'budgets', 'previsionnels', 'chronologie', 'tresoPrev', 'tresoManuel', 'journalFormats', 'blocCouleurs'] as const;
+const DATA_KEYS = ['entries', 'finances', 'referentiels', 'budgets', 'previsionnels', 'stocks', 'mouvementsStock', 'chronologie', 'tresoPrev', 'tresoManuel', 'journalFormats', 'blocCouleurs'] as const;
 type DataKey = typeof DATA_KEYS[number];
 type Snapshot = Pick<AppState, DataKey>;
 
@@ -174,6 +177,10 @@ export interface AppState {
   tresoManuel: Record<string, TresoManuel>;
   chronologie: ChronoEvent[];
   tresoPrev: TresoPrevLine[];
+  /** Prévisionnel de stock : une ligne par jeu et par exercice. */
+  stocks: LigneStock[];
+  /** Mouvements de stock réels, saisis dans la page Stocks du journal. */
+  mouvementsStock: MouvementStock[];
   /** Mise en forme par colonne des tableaux, indexée par « table:colonne ». */
   journalFormats: Record<string, ColFormat>;
   /** Largeurs de colonnes redimensionnées à la souris, par tableau. */
@@ -289,8 +296,59 @@ export interface AppState {
   addPaiement: (name: string) => void;
   addComptePlanComptable: (name: string) => void;
 
-  restoreAll: (data: Partial<Pick<AppState, 'entries' | 'finances' | 'referentiels' | 'budgets' | 'previsionnels' | 'chronologie' | 'tresoPrev' | 'journalFormats' | 'colWidths' | 'blocCouleurs'>>) => void;
+  // ----- Stock ----------------------------------------------------------
+  /** Crée la ligne de stock d'un jeu pour un exercice (sans doublon). */
+  addLigneStock: (exercice: string, jeu: string) => void;
+  updateLigneStock: (id: string, patch: Partial<LigneStock>) => void;
+  removeLigneStock: (id: string) => void;
+  /** Écrit une quantité fabriquée ou vendue dans une case du mois. */
+  setStockCell: (id: string, champ: 'fabrique' | 'vendue', i: number, v: number | null) => void;
+  addMouvementStock: (mv: Omit<MouvementStock, 'id'>) => void;
+  updateMouvementStock: (id: string, patch: Partial<MouvementStock>) => void;
+  removeMouvementStock: (id: string) => void;
+
+  restoreAll: (data: Partial<Pick<AppState, 'entries' | 'finances' | 'referentiels' | 'budgets' | 'previsionnels' | 'stocks' | 'mouvementsStock' | 'chronologie' | 'tresoPrev' | 'journalFormats' | 'colWidths' | 'blocCouleurs'>>) => void;
   resetToSeed: () => void;
+}
+
+/**
+ * Les trois catégories qui font entrer le stock au compte de résultat : les
+ * ventes qui en sortent, les tirages payés à l'usine, et la variation de stock
+ * qui rattache le coût aux seuls exemplaires vendus.
+ */
+/**
+ * Les produits se lisent en deux familles : ce que rapportent les workshops, et
+ * ce que rapportent les jeux. Les groupes existent déjà pour les catégories —
+ * on s'en sert, plutôt que d'inventer un second classement.
+ */
+export const GROUPE_WORKSHOPS = 'Workshops';
+export const GROUPE_VENTES_JEUX = 'Ventes de jeux';
+
+function avecGroupesProduits(refs: Referentiels): Referentiels {
+  const meta = { ...(refs.categoriesMeta ?? {}) };
+  for (const c of refs.categoriesProduits) {
+    if (meta[c]?.groupe) continue;
+    const n = c.toLowerCase();
+    const groupe = /vente|jeu/.test(n) ? GROUPE_VENTES_JEUX
+      : /note de frais|notes de frais|remboursement/.test(n) ? undefined
+        : GROUPE_WORKSHOPS;
+    if (groupe) meta[c] = { ...(meta[c] ?? {}), groupe };
+  }
+  const groupes = [...(refs.groupes ?? [])];
+  for (const g of [GROUPE_WORKSHOPS, GROUPE_VENTES_JEUX]) {
+    if (!groupes.includes(g)) groupes.push(g);
+  }
+  return { ...refs, categoriesMeta: meta, groupes };
+}
+
+function avecCategoriesStock(refs: Referentiels): Referentiels {
+  const prod = refs.categoriesProduits.includes(CATEGORIE_VENTES_JEUX)
+    ? refs.categoriesProduits : [...refs.categoriesProduits, CATEGORIE_VENTES_JEUX];
+  const dep = [...refs.categoriesDepenses];
+  for (const c of [CATEGORIE_FABRICATION, CATEGORIE_VARIATION_STOCK]) {
+    if (!dep.includes(c)) dep.push(c);
+  }
+  return { ...refs, categoriesProduits: prod, categoriesDepenses: dep };
 }
 
 function seedState() {
@@ -302,7 +360,7 @@ function seedState() {
   const sansRemb = remboursementsEnReductionDeCharges(brutes, refs);
   const rangees = rangerPostesDeJeu(sansRemb.entries, sansRemb.referentiels);
   const entries = rangees.entries;
-  refs = rangees.referentiels;
+  refs = avecGroupesProduits(avecCategoriesStock(rangees.referentiels));
   return {
     entries,
     finances: structuredClone(seedTresorerie.mouvementsFinanciers) as FinanceEntry[],
@@ -314,6 +372,8 @@ function seedState() {
     chronologie: structuredClone(seedChronologie) as ChronoEvent[],
     tresoManuel: {} as Record<string, TresoManuel>,
     tresoPrev: structuredClone(seedTresorerie.previsionnel) as TresoPrevLine[],
+    stocks: [] as LigneStock[],
+    mouvementsStock: [] as MouvementStock[],
     journalFormats: {} as Record<string, ColFormat>,
     colWidths: {} as ColWidths,
     blocCouleurs: {} as Record<string, string>,
@@ -411,6 +471,7 @@ function snapshot(s: AppState): Snapshot {
     entries: s.entries, finances: s.finances, referentiels: s.referentiels,
     budgets: s.budgets, previsionnels: s.previsionnels,
     chronologie: s.chronologie, tresoPrev: s.tresoPrev, tresoManuel: s.tresoManuel,
+    stocks: s.stocks, mouvementsStock: s.mouvementsStock,
     journalFormats: s.journalFormats, blocCouleurs: s.blocCouleurs,
   };
 }
@@ -989,13 +1050,37 @@ export const useStore = create<AppState>()(
         return { referentiels: { ...s.referentiels, planComptable: [...s.referentiels.planComptable, name.trim()] } };
       }),
 
+      // ----- Stock --------------------------------------------------------
+      addLigneStock: (exercice, jeu) => set(s => {
+        if (s.stocks.some(l => l.exercice === exercice && l.jeu === jeu)) return s;
+        return { stocks: [...s.stocks, ligneStockVide(jeu, exercice, uid())] };
+      }),
+      updateLigneStock: (id, patch) => set(s => ({
+        stocks: s.stocks.map(l => l.id === id ? { ...l, ...patch } : l),
+      })),
+      removeLigneStock: (id) => set(s => ({ stocks: s.stocks.filter(l => l.id !== id) })),
+      setStockCell: (id, champ, i, v) => set(s => ({
+        stocks: s.stocks.map(l => l.id === id
+          ? { ...l, [champ]: l[champ].map((x, j) => j === i ? v : x) }
+          : l),
+      })),
+      addMouvementStock: (mv) => set(s => ({
+        mouvementsStock: [...s.mouvementsStock, { ...mv, id: uid() }],
+      })),
+      updateMouvementStock: (id, patch) => set(s => ({
+        mouvementsStock: s.mouvementsStock.map(m => m.id === id ? { ...m, ...patch } : m),
+      })),
+      removeMouvementStock: (id) => set(s => ({
+        mouvementsStock: s.mouvementsStock.filter(m => m.id !== id),
+      })),
+
       restoreAll: (data) => set(() => ({ ...data })),
       resetToSeed: () => set(() => seedState()),
       };
     },
     {
       name: 'bbg-compta-v1',
-      version: 13,
+      version: 14,
       // v2 : ajout de la liste des jeux et rattachement des dépenses de
       // développement au jeu concerné (déduit des mots clés / de la catégorie).
       migrate: (persisted, version) => {
@@ -1123,6 +1208,25 @@ export const useStore = create<AppState>()(
                 ? { ...l, section: sectionDunPosteDeJeu(l.categorie) }
                 : l)]));
         }
+        // v14 : le stock entre dans la comptabilité. Les trois catégories qui
+        // le portent au compte de résultat sont créées si elles manquent :
+        // les ventes issues du stock, les tirages payés à l'usine, et la
+        // variation de stock qui rattache le coût aux exemplaires vendus.
+        if (version < 14) {
+          s.stocks = s.stocks ?? [];
+          s.mouvementsStock = s.mouvementsStock ?? [];
+          if (s.referentiels) {
+            const refs = s.referentiels;
+            const prod = [...(refs.categoriesProduits ?? [])];
+            if (!prod.includes(CATEGORIE_VENTES_JEUX)) prod.push(CATEGORIE_VENTES_JEUX);
+            const dep = [...(refs.categoriesDepenses ?? [])];
+            for (const c of [CATEGORIE_FABRICATION, CATEGORIE_VARIATION_STOCK]) {
+              if (!dep.includes(c)) dep.push(c);
+            }
+            s.referentiels = avecGroupesProduits(
+              { ...refs, categoriesProduits: prod, categoriesDepenses: dep });
+          }
+        }
         return s;
       },
       // Seules les données sont persistées : l'historique repart à zéro
@@ -1131,6 +1235,7 @@ export const useStore = create<AppState>()(
         entries: s.entries, finances: s.finances, referentiels: s.referentiels,
         budgets: s.budgets, previsionnels: s.previsionnels,
         chronologie: s.chronologie, tresoPrev: s.tresoPrev, tresoManuel: s.tresoManuel,
+        stocks: s.stocks, mouvementsStock: s.mouvementsStock,
         journalFormats: s.journalFormats, colWidths: s.colWidths,
         blocCouleurs: s.blocCouleurs,
       }) as unknown as AppState,

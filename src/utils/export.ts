@@ -15,6 +15,7 @@ import { pageLectureSeule } from './partage';
 import { ordreAffichage, valeursDe, SECTIONS } from './previsionnel';
 import { natureCategorie, dureeCategorie } from './blocs';
 import { couleurJeu } from './jeux';
+import { positionsStock, stocksExercice } from './stock';
 
 function download(name: string, blob: Blob) {
   const url = URL.createObjectURL(blob);
@@ -249,6 +250,47 @@ export function blobExcel(state: AppState, exercice: string): Blob {
     'Note': refs.jeuxMeta?.[j]?.note ?? '',
   })));
 
+  // Stock prévu : une ligne par jeu et par exercice, avec ce qui en découle.
+  const lignesStockPrev: Record<string, string | number>[] = [];
+  for (const ex of Object.keys(previsionnels ?? {}).sort()) {
+    for (const s of stocksExercice(state.stocks ?? [], ex, refs.jeux ?? [])) {
+      lignesStockPrev.push({
+        'Exercice': ex,
+        'Jeu': s.ligne.jeu,
+        'Coût de revient unitaire HT': s.ligne.coutUnitaire,
+        'Prix de vente unitaire HT': s.ligne.prixUnitaire,
+        'TVA %': s.ligne.tauxTVA ?? 20,
+        'Stock ouverture': s.total.stockDebut,
+        'Fabriqués': s.total.fabrique,
+        'Vendus': s.total.vendue,
+        'Stock clôture': s.total.stockFin,
+        'Tirages payés HT': s.total.coutFabrication,
+        'Ventes HT': s.total.ca,
+        'Ventes TTC': s.total.caTTC,
+        'Coût des ventes': s.total.cogs,
+        'Variation de stock': s.total.variationStock,
+        'Marge': s.total.marge,
+        'Valeur du stock': s.total.valeurStock,
+      });
+    }
+  }
+  feuille('Stock prévu', lignesStockPrev);
+
+  // Stock réel : la position de chaque jeu, puis le détail des mouvements.
+  feuille('Stock réel', positionsStock(state.mouvementsStock ?? [], refs.jeux ?? []).map(p => ({
+    'Jeu': p.jeu,
+    'Entrés': p.entrees, 'Sortis': p.sorties, 'En stock': p.stock,
+    'Coût moyen pondéré': p.coutMoyen, 'Valeur du stock': p.valeur,
+    'Ventes HT': p.ca, 'Coût des ventes': p.cogs, 'Marge': p.marge,
+  })));
+  feuille('Mouvements de stock', [...(state.mouvementsStock ?? [])]
+    .sort((a, b) => compareMois(a.mois, b.mois) || a.date.localeCompare(b.date))
+    .map(m => ({
+      'Date': m.date, 'Mois': labelMois(m.mois), 'Jeu': m.jeu, 'Type': m.type,
+      'Quantité': m.quantite, 'Prix unitaire HT': m.unitaire,
+      'Montant HT': r2(m.quantite * m.unitaire), 'Note': m.note ?? '',
+    })));
+
   // Vue d'ensemble : une ligne par exercice, réel puis prévu.
   const exercices = Object.keys(previsionnels ?? {}).sort();
   feuille('Synthèse totale', exercices.map(ex => {
@@ -314,6 +356,7 @@ const eurosPDF = (v: number) =>
 
 function documentPDF(state: AppState, exercice: string): jsPDF {
   const { entries, referentiels: refs, finances, tresoManuel, previsionnels } = state;
+
   const doc = new jsPDF({ orientation: 'landscape' });
   const syn = syntheseExercice(entries, exercice, refs);
   const mois = syn.moisList;
@@ -458,6 +501,45 @@ function documentPDF(state: AppState, exercice: string): jsPDF {
     });
   }
 
+  // Stock : la position réelle, puis ce qui est prévu sur l'exercice.
+  const positions = positionsStock(state.mouvementsStock ?? [], refs.jeux ?? []);
+  const stockPrevu = stocksExercice(state.stocks ?? [], exercice, refs.jeux ?? []);
+  if (positions.length || stockPrevu.length) {
+    doc.addPage();
+    titre(`Stocks — exercice ${exercice}`);
+    if (positions.length) {
+      autoTable(doc, {
+        startY: 20,
+        head: [['Jeu', 'Entrés', 'Sortis', 'En stock', 'Coût moyen', 'Valeur',
+          'Ventes HT', 'Coût des ventes', 'Marge']],
+        body: positions.map(p => [
+          p.jeu, String(p.entrees), String(p.sorties), String(p.stock),
+          eurosPDF(p.coutMoyen), eurosPDF(p.valeur),
+          eurosPDF(p.ca), eurosPDF(p.cogs), eurosPDF(p.marge),
+        ]),
+        styles: { fontSize: 8, halign: 'right' },
+        headStyles: { fillColor: NOIR },
+        columnStyles: { 0: { halign: 'left' } },
+      });
+    }
+    if (stockPrevu.length) {
+      autoTable(doc, {
+        startY: (positions.length ? finY() + 8 : 20),
+        head: [['Jeu (prévu)', 'Coût rev.', 'Prix vente', 'Fabriqués', 'Vendus',
+          'Stock clôture', 'Tirages HT', 'Ventes HT', 'Variation stock', 'Marge']],
+        body: stockPrevu.map(x => [
+          x.ligne.jeu, eurosPDF(x.ligne.coutUnitaire), eurosPDF(x.ligne.prixUnitaire),
+          String(x.total.fabrique), String(x.total.vendue), String(x.total.stockFin),
+          eurosPDF(x.total.coutFabrication), eurosPDF(x.total.ca),
+          eurosPDF(x.total.variationStock), eurosPDF(x.total.marge),
+        ]),
+        styles: { fontSize: 8, halign: 'right' },
+        headStyles: { fillColor: NOIR },
+        columnStyles: { 0: { halign: 'left' } },
+      });
+    }
+  }
+
   // Prévisionnel de l'exercice
   const lignesPrev = ordreAffichage(previsionnels?.[exercice] ?? [], refs);
   if (lignesPrev.length) {
@@ -500,9 +582,10 @@ export async function blobBackup(state: AppState, avecFichiers = true): Promise<
   const fichiers = avecFichiers ? await exporterFichiers() : [];
   const data = {
     format: 'bbg-compta-backup',
-    // v3 : les corrections manuelles de trésorerie et les couleurs des blocs
-    // entrent dans la sauvegarde. Sans elles, une restauration les perdait.
-    version: 3,
+    // v4 : le stock — prévisionnel et mouvements réels — entre dans la
+    // sauvegarde. v3 y avait fait entrer les corrections manuelles de
+    // trésorerie et les couleurs des blocs, qu'une restauration perdait.
+    version: 4,
     exportedAt: new Date().toISOString(),
     entries: state.entries,
     finances: state.finances,
@@ -512,6 +595,8 @@ export async function blobBackup(state: AppState, avecFichiers = true): Promise<
     chronologie: state.chronologie,
     tresoPrev: state.tresoPrev,
     tresoManuel: state.tresoManuel,
+    stocks: state.stocks,
+    mouvementsStock: state.mouvementsStock,
     journalFormats: state.journalFormats,
     colWidths: state.colWidths,
     blocCouleurs: state.blocCouleurs,
@@ -586,13 +671,14 @@ function lisezMoi(exercice: string, jour: string, nbFactures: number): string {
       'Classeur complet : journal, synthèse par bloc (HT et TTC),',
       'compte de résultat, dépenses par jeu, immobilisations, trésorerie',
       'et mouvements financiers, TVA, prévisionnel de chaque exercice,',
-      'chronologie, catégories, jeux et vue d\'ensemble sur cinq ans.',
+      'stock prévu et stock réel avec ses mouvements, chronologie,',
+      'catégories, jeux et vue d\'ensemble sur cinq ans.',
       'S\'importe dans Google Sheets par Fichier > Importer.',
     ]],
     [`BBG_Rapport_${exercice}.pdf`, [
       'Rapport imprimable : compte de résultat, synthèse par catégorie,',
       'journal détaillé, immobilisations et dépenses par jeu, TVA,',
-      'trésorerie, mouvements financiers et prévisionnel.',
+      'trésorerie, mouvements financiers, stocks et prévisionnel.',
     ]],
     ['BBG_Journal.csv', [
       'Toutes les écritures (séparateur « ; », virgule décimale),',
@@ -676,6 +762,8 @@ export async function importBackup(file: File): Promise<{
       tresoPrev: data.tresoPrev ?? [],
       // Absents des sauvegardes v2 : on ne remplace alors rien.
       ...(data.tresoManuel ? { tresoManuel: data.tresoManuel } : {}),
+      ...(data.stocks ? { stocks: data.stocks } : {}),
+      ...(data.mouvementsStock ? { mouvementsStock: data.mouvementsStock } : {}),
       ...(data.journalFormats ? { journalFormats: data.journalFormats } : {}),
       ...(data.colWidths ? { colWidths: data.colWidths } : {}),
       ...(data.blocCouleurs ? { blocCouleurs: data.blocCouleurs } : {}),
