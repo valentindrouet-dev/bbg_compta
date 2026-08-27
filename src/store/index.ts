@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { createJSONStorage, persist } from 'zustand/middleware';
 import type {
   JournalEntry, FinanceEntry, BudgetExercice, ChronoEvent, TresoPrevLine, Referentiels, CategorieMeta,
   CanalVente, FormulePrev, JeuMeta, LigneStock, MouvementStock, PrevLigne, PrevSection,
@@ -18,6 +18,7 @@ import {
   estPosteJeuImmobilise,
 } from '../utils/blocs';
 import { EXERCICES, moisExercice, PREMIER_EXERCICE } from '../utils/dates';
+import { stockageSurveille } from '../utils/coffre';
 import seedJournal from '../data/journal.json';
 import seedReferentiels from '../data/referentiels.json';
 import seedBudgets from '../data/budgets.json';
@@ -305,6 +306,8 @@ export interface AppState {
   removeLigneStock: (id: string) => void;
   /** Écrit une quantité fabriquée dans une case du mois. */
   setStockFabrique: (id: string, i: number, v: number | null) => void;
+  /** Écrit le rythme d'écoulement d'un mois, en % du tirage. */
+  setVentesPourcent: (id: string, i: number, v: number | null) => void;
   /** Écrit une valeur (exemplaires ou %) dans la case d'un canal de vente. */
   setCanalCell: (id: string, canalId: string, i: number, v: number | null) => void;
   addCanal: (id: string, nom: string) => void;
@@ -1076,6 +1079,15 @@ export const useStore = create<AppState>()(
           ? { ...l, fabrique: l.fabrique.map((x, j) => j === i ? v : x) }
           : l),
       })),
+      setVentesPourcent: (id, i, v) => set(s => ({
+        stocks: s.stocks.map(l => l.id === id
+          ? {
+            ...l,
+            ventesPourcent: (l.ventesPourcent ?? l.fabrique.map(() => null))
+              .map((x, j) => j === i ? v : x),
+          }
+          : l),
+      })),
       setCanalCell: (id, canalId, i, v) => set(s => ({
         stocks: s.stocks.map(l => l.id === id ? {
           ...l,
@@ -1119,6 +1131,7 @@ export const useStore = create<AppState>()(
             coutUnitaire: modele.coutUnitaire,
             tauxTVA: modele.tauxTVA,
             fabrique: vide(),
+            ventesPourcent: vide(),
             canaux: (modele.canaux ?? []).map(c => ({
               ...c, id: uid(), valeurs: vide(),
             })),
@@ -1143,11 +1156,45 @@ export const useStore = create<AppState>()(
     },
     {
       name: 'bbg-compta-v1',
-      version: 15,
+      version: 17,
+      // Le stockage passe par le coffre : il vérifie qu'un autre onglet n'a pas
+      // pris la main, signale un refus d'écriture au lieu de le taire, et
+      // dépose un instantané horodaté dans IndexedDB après chaque salve de
+      // modifications. Une saisie perdue est bien pire qu'une saisie lente.
+      storage: createJSONStorage(() => stockageSurveille),
       // v2 : ajout de la liste des jeux et rattachement des dépenses de
       // développement au jeu concerné (déduit des mots clés / de la catégorie).
       migrate: (persisted, version) => {
-        const s = persisted as AppState;
+        try {
+          return migrerEtat(persisted, version);
+        } catch (e) {
+          // Une migration qui échoue ne doit pas coûter les données : on rend
+          // l'état tel quel. Mieux vaut un réglage à refaire qu'un exercice
+          // entier à ressaisir.
+          console.error('BBG Compta — migration impossible, données conservées telles quelles', e);
+          return persisted as AppState;
+        }
+      },
+      // Seules les données sont persistées : l'historique repart à zéro
+      // à chaque ouverture, et les actions ne sont jamais sérialisées.
+      partialize: (s) => ({
+        entries: s.entries, finances: s.finances, referentiels: s.referentiels,
+        budgets: s.budgets, previsionnels: s.previsionnels,
+        chronologie: s.chronologie, tresoPrev: s.tresoPrev, tresoManuel: s.tresoManuel,
+        stocks: s.stocks, mouvementsStock: s.mouvementsStock,
+        journalFormats: s.journalFormats, colWidths: s.colWidths,
+        blocCouleurs: s.blocCouleurs,
+      }) as unknown as AppState,
+    },
+  ),
+);
+
+/**
+ * Les migrations, hors de l'appel à persist : on peut les envelopper dans un
+ * try/catch et rendre l'état intact si l'une d'elles échoue.
+ */
+function migrerEtat(persisted: unknown, version: number): AppState {
+  const s = persisted as AppState;
         if (version < 2 && s?.referentiels) {
           const jeux = s.referentiels.jeux ?? JEUX_PAR_DEFAUT;
           s.referentiels = { ...s.referentiels, jeux };
@@ -1313,18 +1360,19 @@ export const useStore = create<AppState>()(
             return { ...reste, canaux };
           });
         }
-        return s;
-      },
-      // Seules les données sont persistées : l'historique repart à zéro
-      // à chaque ouverture, et les actions ne sont jamais sérialisées.
-      partialize: (s) => ({
-        entries: s.entries, finances: s.finances, referentiels: s.referentiels,
-        budgets: s.budgets, previsionnels: s.previsionnels,
-        chronologie: s.chronologie, tresoPrev: s.tresoPrev, tresoManuel: s.tresoManuel,
-        stocks: s.stocks, mouvementsStock: s.mouvementsStock,
-        journalFormats: s.journalFormats, colWidths: s.colWidths,
-        blocCouleurs: s.blocCouleurs,
-      }) as unknown as AppState,
-    },
-  ),
-);
+  // v17 : les ventes se pilotent d'une seule ligne « % de ventes », que chaque
+  // canal se partage au prorata de sa répartition. Les canaux existants
+  // gardent leur mode : rien de ce qui a été saisi ne change de sens.
+  if (version < 17 && s.stocks) {
+    s.stocks = s.stocks.map(l => ({
+      ...l,
+      ventesPourcent: l.ventesPourcent ?? l.fabrique.map(() => null),
+      canaux: (l.canaux ?? []).map(c => ({
+        ...c,
+        repartition: c.repartition
+          ?? CANAUX_DEFAUT.find(x => x.nom === c.nom)?.repartition ?? 0,
+      })),
+    }));
+  }
+  return s;
+}

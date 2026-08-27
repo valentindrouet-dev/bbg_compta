@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Sidebar } from './components/layout/Sidebar';
+import { BandeauCoffre } from './components/layout/BarreCoffre';
 import { UndoBar } from './components/layout/UndoBar';
 import { useStore } from './store';
 import { appliquerLargeurs, installerResize } from './utils/colresize';
@@ -69,11 +70,23 @@ export default function App() {
     reinitialiser: resetColWidths,
   }), [setColWidths, resetColWidths]);
 
-  // Cmd+Z / Ctrl+Z annule, Cmd+Maj+Z / Ctrl+Y rétablit — partout dans l'app.
+  // Cmd+Z / Ctrl+Z annule, Cmd+Maj+Z / Ctrl+Y rétablit — mais JAMAIS pendant
+  // qu'on écrit dans un champ : là, Cmd+Z doit défaire la frappe, pas une
+  // modification de données. Sans cette garde, corriger une faute de frappe
+  // annulait un renommage, un déplacement, un emoji — et en insistant, tout
+  // un après-midi de réglages.
   useEffect(() => {
+    function dansUnChamp(): boolean {
+      const el = document.activeElement as HTMLElement | null;
+      if (!el) return false;
+      if (el.isContentEditable) return true;
+      const t = el.tagName;
+      return t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT';
+    }
     function onKey(ev: KeyboardEvent) {
       const mod = ev.metaKey || ev.ctrlKey;
       if (!mod) return;
+      if (dansUnChamp()) return;
       const k = ev.key.toLowerCase();
       if (k === 'z') {
         ev.preventDefault();
@@ -103,6 +116,7 @@ export default function App() {
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ backgroundColor: '#f6f4fc' }}>
+      <BandeauCoffre />
       <Sidebar page={page} onNavigate={setPage} />
       <main className="flex-1 overflow-auto relative">
         <UndoBar />

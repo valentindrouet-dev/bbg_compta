@@ -257,6 +257,7 @@ export function blobExcel(state: AppState, exercice: string): Blob {
       const parCanal: Record<string, string | number> = {};
       for (const c of s.ligne.canaux ?? []) {
         const t = s.total.parCanal.get(c.id);
+        parCanal[`${c.nom} — part du tirage %`] = c.mode === 'repartition' ? (c.repartition ?? 0) : '';
         parCanal[`${c.nom} — prix HT`] = c.prix;
         parCanal[`${c.nom} — exemplaires`] = t?.quantite ?? 0;
         parCanal[`${c.nom} — ventes HT`] = t?.ca ?? 0;
@@ -268,6 +269,8 @@ export function blobExcel(state: AppState, exercice: string): Blob {
         'TVA %': s.ligne.tauxTVA ?? 20,
         'Stock ouverture': s.total.stockDebut,
         'Fabriqués': s.total.fabrique,
+        'Rythme de ventes cumulé %': r2((s.ligne.ventesPourcent ?? [])
+          .reduce<number>((x, v) => x + (v ?? 0), 0)),
         ...parCanal,
         'Vendus (tous canaux)': s.total.vendue,
         'Stock clôture': s.total.stockFin,
@@ -538,7 +541,8 @@ function documentPDF(state: AppState, exercice: string): jsPDF {
         body: stockPrevu.map(x => [
           x.ligne.jeu, eurosPDF(x.ligne.coutUnitaire),
           (x.ligne.canaux ?? []).filter(c => (x.total.parCanal.get(c.id)?.quantite ?? 0) > 0)
-            .map(c => `${c.nom} ${eurosPDF(c.prix)} × ${x.total.parCanal.get(c.id)!.quantite}`)
+            .map(c => `${c.nom}${c.mode === 'repartition' ? ` ${c.repartition ?? 0} %` : ''}`
+              + ` ${eurosPDF(c.prix)} × ${x.total.parCanal.get(c.id)!.quantite}`)
             .join('\n') || '—',
           String(x.total.fabrique), String(x.total.vendue), String(x.total.stockFin),
           eurosPDF(x.total.coutFabrication), eurosPDF(x.total.ca),

@@ -168,6 +168,12 @@ export interface LigneStock {
   /** Exemplaires fabriqués, une case par mois de l'exercice. */
   fabrique: (number | null)[];
   /**
+   * Le rythme d'écoulement : quel pourcentage du tirage part ce mois-là, tous
+   * canaux confondus. Chaque canal en reçoit sa part, au prorata de sa
+   * répartition. Une case par mois.
+   */
+  ventesPourcent: (number | null)[];
+  /**
    * Les canaux de vente. Un même jeu ne se vend pas au même prix selon qu'il
    * part chez un distributeur, dans une boutique ou chez un éditeur : chacun a
    * donc son prix et sa propre ligne de quantités.
@@ -189,8 +195,19 @@ export interface CanalVente {
   nom: string;
   /** Prix de vente unitaire HT sur ce canal. */
   prix: number;
-  /** Ce que contiennent les cases : des exemplaires ou des pourcentages. */
-  mode: 'nombre' | 'pourcentage';
+  /**
+   * D'où viennent les quantités du canal :
+   * - `repartition` (le cas courant) : sa part du rythme d'écoulement du mois.
+   *   Rien à saisir dans les cases, seulement la répartition et le prix ;
+   * - `pourcentage` : un pourcentage saisi mois par mois, sur l'assiette `base` ;
+   * - `nombre` : des exemplaires tapés à la main.
+   */
+  mode: 'repartition' | 'nombre' | 'pourcentage';
+  /**
+   * La part du tirage qui passe par ce canal, en % — 60 chez le distributeur,
+   * 10 en boutique, 30 chez l'éditeur. Les parts devraient totaliser 100 %.
+   */
+  repartition?: number;
   /**
    * L'assiette du pourcentage :
    * - `tirage` : le tirage de l'exercice (stock d'ouverture + fabriqués) ;

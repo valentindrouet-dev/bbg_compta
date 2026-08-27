@@ -13,7 +13,9 @@ import type { LigneStock } from '../../types';
 import { labelMois } from '../../utils/dates';
 import { euros, euros0, r2 } from '../../utils/money';
 import { couleurJeu, encreSur, voileSur } from '../../utils/jeux';
-import { CANAUX_DEFAUT, stocksExercice, type StockJeu } from '../../utils/stock';
+import {
+  CANAUX_DEFAUT, stocksExercice, totalRepartition, type StockJeu,
+} from '../../utils/stock';
 import { Card, Btn, MoneyInput, StatCard, BandeauJeu, styleBloc } from '../ui';
 import { teinteBloc } from '../../utils/blocs';
 
@@ -100,6 +102,12 @@ export function StockPrev({ exercice, moisList }: { exercice: string; moisList: 
       </Card>
 
       <p className="text-xs" style={{ color: '#9a92b5' }}>
+        Une seule ligne pilote les ventes : le <b>% de ventes</b> du mois, appliqué au tirage.
+        Chaque canal en reçoit sa <b>part</b> — 10 % de ventes sur un tirage de 3 000 exemplaires
+        avec 60 % chez le distributeur font 180 exemplaires pour lui, 30 en boutique à 10 %, 90 chez
+        l'éditeur à 30 %. Chacun applique ensuite <b>son</b> prix. Un canal peut sortir de ce
+        pilotage : <b>#</b> pour taper des exemplaires, <b>%</b> pour un pourcentage qui lui est
+        propre.{' '}
         Le <b>coût de revient unitaire</b> vient du Production Calculator — c'est lui qui tient les
         devis usine ; on le recopie ici une fois par tirage. Ce que tu paies à l'usine est une charge
         du mois où tu la paies ; la <b>variation de stock</b> la neutralise pour les exemplaires
@@ -120,12 +128,18 @@ function TableauJeu({ s, moisList, couleur, lienProd, onPatch, onRemove }: {
   const updateCanal = useStore(st => st.updateCanal);
   const removeCanal = useStore(st => st.removeCanal);
   const setStockFabrique = useStore(st => st.setStockFabrique);
+  const setVentesPourcent = useStore(st => st.setVentesPourcent);
   const couleursBloc = useStore(st => st.blocCouleurs);
   const teinte = teinteBloc('immos', couleursBloc);
   const encre = encreSur(couleur);
   const voile = voileSur(couleur, 0.2);
   const l = s.ligne;
   const nCanaux = (l.canaux ?? []).length;
+  /** Le tirage de l'exercice : c'est lui que les répartitions découpent. */
+  const tirage = s.total.stockDebut + s.total.fabrique;
+  const totalRythme = (l.ventesPourcent ?? []).reduce<number>((x, v) => x + (v ?? 0), 0);
+  const partsTotal = totalRepartition(l);
+  const partsCompletes = !(l.canaux ?? []).some(c => c.mode === 'repartition') || Math.abs(partsTotal - 100) < 0.5;
   const libres = CANAUX_DEFAUT.map(c => c.nom).filter(n => !(l.canaux ?? []).some(c => c.nom === n));
 
   /** Une ligne calculée : libellé, valeur par mois, total, et son ton. */
@@ -229,9 +243,46 @@ function TableauJeu({ s, moisList, couleur, lienProd, onPatch, onRemove }: {
               </td>
             </tr>
 
-            {/* ------ Un canal de vente par ligne : son prix, son écoulement ---- */}
+            {/* Le rythme d'écoulement : un seul pourcentage par mois, que les
+                canaux se partagent au prorata de leur répartition. */}
+            <tr style={{ backgroundColor: voile }}>
+              <td title="Quel pourcentage du tirage part ce mois-là, tous canaux confondus. Chaque canal en reçoit sa part.">
+                <b>% de ventes</b>{' '}
+                <span className="text-[11px] font-normal" style={{ color: '#6f6690' }}>
+                  du tirage de {tirage} ex.
+                </span>
+              </td>
+              {moisList.map((m, i) => {
+                const pct = l.ventesPourcent?.[i] ?? null;
+                const q = pct ? Math.round((pct / 100) * tirage) : 0;
+                return (
+                  <td key={m} className="text-right p-0.5!"
+                    title={q ? `${pct} % → ${q} exemplaire${q > 1 ? 's' : ''} à répartir` : undefined}>
+                    <div className="flex items-center justify-end gap-0.5">
+                      <input
+                        type="number" min={0} step={0.5}
+                        className="w-full min-w-14 text-right px-1 py-0.5 rounded border border-transparent hover:border-[#ddd6ef] bg-transparent tabular-nums font-semibold"
+                        value={pct ?? ''}
+                        onChange={e => setVentesPourcent(l.id, i, e.target.value === '' ? null : Number(e.target.value))}
+                      />
+                      <span className="text-[10px] shrink-0" style={{ color: '#9a92b5' }}>%</span>
+                    </div>
+                    {q > 0 && (
+                      <div className="text-[10px] leading-none pr-1 pb-0.5 tabular-nums"
+                        style={{ color: 'var(--bbg-purple-dark)' }}>{q}</div>
+                    )}
+                  </td>
+                );
+              })}
+              <td className="text-right tabular-nums" style={{ backgroundColor: voile, fontWeight: 700 }}>
+                {totalRythme ? `${r2(totalRythme)} %` : '·'}
+              </td>
+            </tr>
+
+            {/* ------ Un canal de vente par ligne : sa part, son prix ---------- */}
             {(l.canaux ?? []).map(c => {
               const pct = c.mode === 'pourcentage';
+              const reparti = c.mode === 'repartition';
               return (
                 <tr key={c.id} className="group/canal">
                   <td>
@@ -246,21 +297,42 @@ function TableauJeu({ s, moisList, couleur, lienProd, onPatch, onRemove }: {
                         title={CANAUX_DEFAUT.find(x => x.nom === c.nom)?.aide ?? 'Nom du canal de vente'}
                         onChange={e => updateCanal(l.id, c.id, { nom: e.target.value })}
                       />
-                      <MoneyInput value={c.prix || null} className="!w-[70px] shrink-0 text-right"
+                      <span className="inline-flex items-center shrink-0"
+                        title={`Part du tirage qui passe par « ${c.nom} ». Les parts devraient totaliser 100 %.`}>
+                        <input
+                          type="number" min={0} max={100} step={1}
+                          className="w-11 text-right px-1 py-0.5 rounded border bg-white tabular-nums"
+                          style={{
+                            borderColor: partsCompletes ? 'var(--bbg-border)' : '#e2a49f',
+                            color: c.mode === 'repartition' ? '#2f2a3f' : '#c1bad6',
+                          }}
+                          value={c.repartition ?? ''}
+                          disabled={c.mode !== 'repartition'}
+                          onChange={e => updateCanal(l.id, c.id, {
+                            repartition: e.target.value === '' ? 0 : Number(e.target.value),
+                          })}
+                        />
+                        <span className="text-[10px] pl-0.5" style={{ color: '#9a92b5' }}>%</span>
+                      </span>
+                      <MoneyInput value={c.prix || null} className="!w-[66px] shrink-0 text-right"
                         placeholder="prix"
                         onCommit={v => updateCanal(l.id, c.id, { prix: v ?? 0 })} />
                       <span className="flex rounded border overflow-hidden text-[11px] shrink-0"
                         style={{ borderColor: 'var(--bbg-border)' }}>
-                        {([['nombre', '#'], ['pourcentage', '%']] as const).map(([m, lab]) => (
+                        {([
+                          ['repartition', '⇄'], ['nombre', '#'], ['pourcentage', '%'],
+                        ] as const).map(([m, lab]) => (
                           <button
                             key={m}
                             className="px-1.5 py-0.5 font-bold"
                             style={c.mode === m
                               ? { backgroundColor: 'var(--bbg-purple-dark)', color: '#fff' }
                               : { backgroundColor: '#fff', color: '#5c5280' }}
-                            title={m === 'nombre'
-                              ? 'Saisir des exemplaires'
-                              : 'Saisir un pourcentage — la quantité est calculée'}
+                            title={m === 'repartition'
+                              ? 'Sa part du % de ventes du mois — rien à saisir dans les cases'
+                              : m === 'nombre'
+                                ? 'Saisir des exemplaires mois par mois'
+                                : 'Saisir un pourcentage mois par mois'}
                             onClick={() => updateCanal(l.id, c.id, { mode: m })}
                           >{lab}</button>
                         ))}
@@ -288,6 +360,18 @@ function TableauJeu({ s, moisList, couleur, lienProd, onPatch, onRemove }: {
                   </td>
                   {moisList.map((m, i) => {
                     const q = s.mois[i].parCanal.get(c.id)?.quantite ?? 0;
+                    // Canal piloté par la répartition : la case est le résultat
+                    // du calcul, pas une saisie. On l'affiche, on ne l'édite pas.
+                    if (reparti) {
+                      return (
+                        <td key={m} className="text-right tabular-nums"
+                          title={q
+                            ? `${l.ventesPourcent?.[i] ?? 0} % de ventes × ${c.repartition ?? 0} % du tirage = ${q} exemplaire${q > 1 ? 's' : ''}`
+                            : undefined}>
+                          {q || '·'}
+                        </td>
+                      );
+                    }
                     return (
                       <td key={m} className="text-right p-0.5!"
                         title={pct && q ? `${c.valeurs[i]} % → ${q} exemplaire${q > 1 ? 's' : ''}` : undefined}>
@@ -337,6 +421,18 @@ function TableauJeu({ s, moisList, couleur, lienProd, onPatch, onRemove }: {
               </td>
             </tr>
 
+            {!partsCompletes && (
+              <tr>
+                <td colSpan={moisList.length + 2} className="py-1 text-xs"
+                  style={{ backgroundColor: '#fdecea', color: '#b7332e' }}>
+                  <span className="inline-flex items-center gap-1.5">
+                    <AlertTriangle size={12} />
+                    Les parts des canaux totalisent <b>{partsTotal} %</b> au lieu de 100 % :
+                    le rythme d'écoulement ne se répartit pas entièrement.
+                  </span>
+                </td>
+              </tr>
+            )}
             <Ligne label="TOTAL VENDUS (exemplaires)" monnaie={false} fort
               aide="Tous canaux confondus"
               get={i => s.mois[i].vendue} total={s.total.vendue} />

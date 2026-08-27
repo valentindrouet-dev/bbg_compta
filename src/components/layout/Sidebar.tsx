@@ -7,6 +7,7 @@ import {
 import type { Page } from '../../App';
 import { APP_VERSION } from '../../version';
 import { dateDuJourLongue } from '../../utils/dates';
+import { TemoinSauvegarde } from './BarreCoffre';
 
 interface SidebarProps {
   page: Page;
@@ -122,9 +123,12 @@ export function Sidebar({ page, onNavigate }: SidebarProps) {
         ))}
       </nav>
 
-      <div className="p-3 text-[11px] border-t" style={{ color: '#a99ad6', borderColor: '#57458f' }}>
-        Données stockées dans ce navigateur.<br />
-        Pense à faire une sauvegarde (Paramètres).
+      <div className="p-3 text-[11px] border-t space-y-1.5" style={{ color: '#a99ad6', borderColor: '#57458f' }}>
+        <TemoinSauvegarde />
+        <div>
+          Données stockées dans ce navigateur, avec des instantanés automatiques.<br />
+          Une sauvegarde téléchargée reste la seule copie hors de cette machine (Paramètres).
+        </div>
       </div>
     </aside>
   );

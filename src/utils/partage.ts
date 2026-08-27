@@ -306,7 +306,8 @@ export function pageLectureSeule(state: AppState, exercice: string): string {
           <td><span class="pastille" style="background:${ech(couleurJeu(x.ligne.jeu, refs))};color:${ech(encreSur(couleurJeu(x.ligne.jeu, refs)))}">${ech(x.ligne.jeu)}</span></td>
           <td class="n">${ech(euros(x.ligne.coutUnitaire))}</td>
           <td>${(x.ligne.canaux ?? []).filter(c => (x.total.parCanal.get(c.id)?.quantite ?? 0) > 0)
-            .map(c => `${ech(c.nom)} ${ech(euros(c.prix))} × ${x.total.parCanal.get(c.id)!.quantite}`)
+            .map(c => `${ech(c.nom)}${c.mode === 'repartition' ? ` <b>${c.repartition ?? 0} %</b>` : ''}`
+              + ` ${ech(euros(c.prix))} × ${x.total.parCanal.get(c.id)!.quantite}`)
             .join('<br>') || '<span class="vide">·</span>'}</td>
           <td class="n">${x.total.fabrique || '·'}</td><td class="n">${x.total.vendue || '·'}</td>
           <td class="n fort">${x.total.stockFin}</td>

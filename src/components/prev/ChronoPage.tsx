@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Plus, Trash2, GripHorizontal, CalendarDays, FolderPlus, ChevronUp, ChevronDown, X,
-  ZoomIn, ZoomOut, Smile,
+  ZoomIn, ZoomOut, Smile, Lock, LockOpen,
 } from 'lucide-react';
 import { useStore } from '../../store';
 import { useEtatVue } from '../../utils/etatVue';
@@ -277,6 +277,7 @@ export function ChronoPage() {
   }, [glisse, decalerChronos]);
 
   function demarrer(ev: React.MouseEvent, c: ChronoEvent, mode: Glissement['mode']) {
+    if (bloque()) return;
     ev.preventDefault();
     ev.stopPropagation();
     const fin = estDate(c.fin) ? c.fin : c.debut;
@@ -295,6 +296,7 @@ export function ChronoPage() {
 
   /** Monte ou descend un projet entier dans la frise. */
   function bougerProjet(g: string, sens: -1 | 1) {
+    if (bloque()) return;
     const liste = [...groupes];
     const i = liste.indexOf(g);
     const j = i + sens;
@@ -329,20 +331,56 @@ export function ChronoPage() {
     projet: c => c.projet, action: c => c.action, debut: c => c.debut, fin: c => c.fin,
   });
 
-  const ajouter = (projet = 'Nouveau projet') => addChrono({
+  /**
+   * Le verrou. Une frise se manipule à la souris : un clic un peu long, un
+   * glissement involontaire, et une étape calée depuis des semaines a bougé.
+   * Verrouillée, la frise se lit et se zoome, mais rien n'y bouge — c'est
+   * l'état par défaut, on déverrouille pour travailler.
+   */
+  const [verrou, setVerrou] = useEtatVue('chrono.verrou', true);
+  /** Dernière tentative de modification refusée : elle fait clignoter le verrou. */
+  const [refus, setRefus] = useState(0);
+  useEffect(() => {
+    if (!refus) return;
+    const t = setTimeout(() => setRefus(0), 1600);
+    return () => clearTimeout(t);
+  }, [refus]);
+  /** Renvoie vrai — et signale le refus — quand la frise est verrouillée. */
+  const bloque = () => {
+    if (!verrou) return false;
+    setRefus(Date.now());
+    return true;
+  };
+
+  const ajouter = (projet = 'Nouveau projet') => { if (bloque()) return; addChrono({
     projet, action: 'Nouvelle étape',
     debut: aimanter(todayISO(), pas),
     fin: aimanterFin(isoDe(jours(todayISO()) + 30), pas),
     detail: '',
-  });
+  }); };
 
   return (
     <div className="p-4 w-full">
       <PageHeader
         title="Chronologie 2025-30"
-        subtitle="Glisse une barre pour la déplacer, attrape ses bords pour l'allonger ou la raccourcir"
+        subtitle={verrou
+          ? 'Verrouillée : rien ne peut bouger. Déverrouille pour déplacer, renommer ou supprimer.'
+          : "Déverrouillée : glisse une barre pour la déplacer, attrape ses bords pour l'allonger"}
         actions={
           <>
+            <button
+              className="px-3 py-1.5 rounded-md border text-sm font-bold inline-flex items-center gap-1.5"
+              style={verrou
+                ? { backgroundColor: '#e9f3ea', borderColor: '#9cc9a4', color: '#2c5d16' }
+                : { backgroundColor: '#fdecea', borderColor: '#e2a49f', color: '#b7332e' }}
+              title={verrou
+                ? 'La frise est verrouillée : rien ne peut être déplacé, renommé ni supprimé. Clique pour déverrouiller.'
+                : 'La frise est modifiable. Clique pour la verrouiller et figer ce que tu as calé.'}
+              onClick={() => setVerrou(v => !v)}
+            >
+              {verrou ? <Lock size={14} /> : <LockOpen size={14} />}
+              {verrou ? 'Verrouillée' : 'Modifiable'}
+            </button>
             <div className="flex rounded-md border overflow-hidden text-sm" style={{ borderColor: 'var(--bbg-border)' }}>
               {(['timeline', 'liste'] as const).map(v => (
                 <button
@@ -408,6 +446,19 @@ export function ChronoPage() {
           </>
         }
       />
+
+      {refus > 0 && (
+        <div
+          className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full border shadow-lg
+            flex items-center gap-2.5 text-sm"
+          style={{ backgroundColor: '#e9f3ea', borderColor: '#9cc9a4', color: '#2c5d16' }}
+        >
+          <Lock size={15} />
+          <b>La chronologie est verrouillée.</b>
+          <span>Rien ne peut bouger tant qu'elle l'est.</span>
+          <Btn onClick={() => setVerrou(false)}>Déverrouiller</Btn>
+        </div>
+      )}
 
       {vue === 'timeline' && (
         <Card>
@@ -509,7 +560,7 @@ export function ChronoPage() {
                           className="text-xs font-bold cursor-text"
                           style={{ color: 'var(--bbg-purple-darker)' }}
                           title="Double-clic pour renommer tout le projet"
-                          onDoubleClick={() => setRenommeProjet(g)}
+                          onDoubleClick={() => { if (!bloque()) setRenommeProjet(g); }}
                         >
                           {g}
                         </span>
@@ -535,6 +586,7 @@ export function ChronoPage() {
                         <button
                           title="Supprimer le projet et toutes ses étapes" style={{ color: '#d98b86' }}
                           onClick={() => {
+                            if (bloque()) return;
                             if (confirm(`Supprimer « ${g} » et ses ${evts.length} étape(s) ?`)) supprimerProjet(g);
                           }}
                         ><Trash2 size={13} /></button>
@@ -587,7 +639,7 @@ export function ChronoPage() {
                             ) : (
                               <span
                                 className="truncate flex-1 cursor-text"
-                                onDoubleClick={() => setRenomme(c.id)}
+                                onDoubleClick={() => { if (!bloque()) setRenomme(c.id); }}
                                 title="Double-clic pour renommer"
                               >
                                 {c.emoji && <span className="mr-1">{c.emoji}</span>}
@@ -596,22 +648,24 @@ export function ChronoPage() {
                             )}
                             <ChoixEmoji
                               valeur={c.emoji}
+                              verrou={verrou}
+                              onRefus={() => bloque()}
                               onChoisir={emoji => updateChrono(c.id, { emoji })}
                             />
                             <span className="opacity-0 group-hover:opacity-100 flex items-center shrink-0">
                               <button
                                 title="Monter cette étape" style={{ color: 'var(--bbg-purple-dark)' }}
-                                onClick={() => bougerEtape(brut, -1)}
+                                onClick={() => { if (!bloque()) bougerEtape(brut, -1); }}
                               ><ChevronUp size={12} /></button>
                               <button
                                 title="Descendre cette étape" style={{ color: 'var(--bbg-purple-dark)' }}
-                                onClick={() => bougerEtape(brut, 1)}
+                                onClick={() => { if (!bloque()) bougerEtape(brut, 1); }}
                               ><ChevronDown size={12} /></button>
                               <button
                                 data-chrono-suppr={c.id}
                                 style={{ color: '#d98b86' }}
                                 title="Supprimer cette étape"
-                                onClick={() => { if (confirm(`Supprimer « ${c.projet} — ${c.action} » ?`)) removeChrono(c.id); }}
+                                onClick={() => { if (bloque()) return; if (confirm(`Supprimer « ${c.projet} — ${c.action} » ?`)) removeChrono(c.id); }}
                               >
                                 <Trash2 size={12} />
                               </button>
@@ -719,14 +773,17 @@ export function ChronoPage() {
               </tr>
             </thead>
             <tbody>
-              {rows.map(c => <RowC key={c.id} c={c} onUpdate={updateChrono} onRemove={removeChrono} />)}
+              {rows.map(c => (
+                <RowC key={c.id} c={c} verrou={verrou} onRefus={() => { bloque(); }}
+                  onUpdate={updateChrono} onRemove={removeChrono} />
+              ))}
             </tbody>
           </table>
         </Card>
       )}
 
       {/* Sélection : ce qu'on peut faire du lot, sans quitter la frise. */}
-      {selection.size > 0 && !glisse && (
+      {selection.size > 0 && !glisse && !verrou && (
         <div
           className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full border shadow-lg
             flex items-center gap-3 text-sm"
@@ -811,8 +868,10 @@ const EMOJIS = [
   '📸', '🧪', '🧩', '📝', '⏰', '⚠️', '✅', '🔥', '🌍', '🎁',
 ];
 
-function ChoixEmoji({ valeur, onChoisir }: {
+function ChoixEmoji({ valeur, onChoisir, verrou, onRefus }: {
   valeur?: string; onChoisir: (e: string | undefined) => void;
+  /** Frise verrouillée : l'emoji se lit, il ne se change pas. */
+  verrou?: boolean; onRefus?: () => void;
 }) {
   const [ancre, setAncre] = useState<{ x: number; y: number } | null>(null);
   return (
@@ -822,6 +881,7 @@ function ChoixEmoji({ valeur, onChoisir }: {
         title={valeur ? `Emoji : ${valeur} — cliquer pour changer` : 'Poser un emoji sur cette étape'}
         style={{ color: 'var(--bbg-purple-dark)' }}
         onClick={ev => {
+          if (verrou) { onRefus?.(); return; }
           const r = (ev.currentTarget as HTMLElement).getBoundingClientRect();
           setAncre(a => a ? null : { x: r.left, y: r.bottom + 4 });
         }}
@@ -873,43 +933,50 @@ function ChoixEmoji({ valeur, onChoisir }: {
 }
 
 
-function RowC({ c, onUpdate, onRemove }: {
+function RowC({ c, onUpdate, onRemove, verrou, onRefus }: {
   c: ChronoEvent;
   onUpdate: (id: string, patch: Partial<ChronoEvent>) => void;
   onRemove: (id: string) => void;
+  verrou?: boolean; onRefus?: () => void;
 }) {
+  /** Verrouillée, la liste se lit : les champs restent visibles mais figés. */
+  const fige = { readOnly: !!verrou, disabled: !!verrou } as const;
   const fin = estDate(c.fin) ? c.fin : c.debut;
   return (
     <tr className="group hover:bg-[#f4f1fb]">
       <td className="text-center">
-        <ChoixEmoji valeur={c.emoji} onChoisir={emoji => onUpdate(c.id, { emoji })} />
+        <ChoixEmoji valeur={c.emoji} verrou={verrou} onRefus={onRefus}
+          onChoisir={emoji => onUpdate(c.id, { emoji })} />
       </td>
       <td>
-        <input className="border border-[#ddd6ef] rounded px-1.5 py-1 text-sm w-40"
+        <input {...fige} className="border border-[#ddd6ef] rounded px-1.5 py-1 text-sm w-40"
           defaultValue={c.projet} onBlur={ev => onUpdate(c.id, { projet: ev.target.value })} />
       </td>
       <td>
-        <input className="border border-[#ddd6ef] rounded px-1.5 py-1 text-sm w-52"
+        <input {...fige} className="border border-[#ddd6ef] rounded px-1.5 py-1 text-sm w-52"
           defaultValue={c.action} onBlur={ev => onUpdate(c.id, { action: ev.target.value })} />
       </td>
       <td>
-        <input type="date" className="border border-[#ddd6ef] rounded px-1 py-0.5 text-sm"
+        <input {...fige} type="date" className="border border-[#ddd6ef] rounded px-1 py-0.5 text-sm"
           value={c.debut} onChange={ev => ev.target.value && onUpdate(c.id, { debut: ev.target.value })} />
       </td>
       <td>
-        <input type="date" className="border border-[#ddd6ef] rounded px-1 py-0.5 text-sm"
+        <input {...fige} type="date" className="border border-[#ddd6ef] rounded px-1 py-0.5 text-sm"
           value={c.fin} onChange={ev => ev.target.value && onUpdate(c.id, { fin: ev.target.value })} />
       </td>
       <td className="text-right tabular-nums" style={{ color: '#6f6690' }}>
         {estDate(c.debut) ? libelleDuree(duree(c.debut, fin)) : '—'}
       </td>
       <td>
-        <input className="border border-[#ddd6ef] rounded px-1.5 py-1 text-sm w-52"
+        <input {...fige} className="border border-[#ddd6ef] rounded px-1.5 py-1 text-sm w-52"
           defaultValue={c.detail ?? ''} onBlur={ev => onUpdate(c.id, { detail: ev.target.value })} />
       </td>
       <td>
         <button className="text-[#d98b86] hover:text-[#b7332e] opacity-0 group-hover:opacity-100"
-          onClick={() => { if (confirm(`Supprimer « ${c.projet} — ${c.action} » ?`)) onRemove(c.id); }}>
+          onClick={() => {
+            if (verrou) { onRefus?.(); return; }
+            if (confirm(`Supprimer « ${c.projet} — ${c.action} » ?`)) onRemove(c.id);
+          }}>
           <Trash2 size={14} />
         </button>
       </td>

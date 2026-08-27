@@ -41,17 +41,29 @@ export const CATEGORIE_VARIATION_STOCK = 'Variation de stock';
  * moins et paie plus ; un éditeur partenaire, encore autrement. Les trois se
  * renomment et d'autres s'ajoutent.
  */
-export const CANAUX_DEFAUT: { nom: string; aide: string }[] = [
-  { nom: 'Distributeur', aide: 'Vente en gros à un distributeur — le prix le plus bas, les volumes les plus gros' },
-  { nom: 'Boutique', aide: 'Vente directe aux boutiques — prix intermédiaire, sans intermédiaire' },
-  { nom: 'Éditeur', aide: 'Vente à un éditeur partenaire (co-édition, licence) ou en direct' },
+export const CANAUX_DEFAUT: { nom: string; aide: string; repartition: number }[] = [
+  {
+    nom: 'Distributeur', repartition: 60,
+    aide: 'Vente en gros à un distributeur — le prix le plus bas, les volumes les plus gros',
+  },
+  {
+    nom: 'Boutique', repartition: 10,
+    aide: 'Vente directe aux boutiques — prix intermédiaire, sans intermédiaire',
+  },
+  {
+    nom: 'Éditeur', repartition: 30,
+    aide: 'Vente à un éditeur partenaire (co-édition, licence) ou en direct',
+  },
 ];
 
 let compteurCanal = 0;
-export function canalVide(nom: string, nMois: number, prix = 0): CanalVente {
+export function canalVide(
+  nom: string, nMois: number, prix = 0, repartition?: number,
+): CanalVente {
   return {
     id: `canal-${Date.now().toString(36)}-${++compteurCanal}`,
-    nom, prix, mode: 'nombre', base: 'tirage',
+    nom, prix, mode: 'repartition', base: 'tirage',
+    repartition: repartition ?? CANAUX_DEFAUT.find(c => c.nom === nom)?.repartition ?? 0,
     valeurs: new Array<number | null>(nMois).fill(null),
   };
 }
@@ -141,12 +153,28 @@ export function stockOuverture(lignes: LigneStock[], jeu: string, exercice: stri
  */
 export function quantiteCanal(
   canal: CanalVente, i: number, tirage: number, disponible: number,
+  ventesPourcent = 0,
 ): number {
+  // Le cas courant : le canal reçoit sa part du rythme d'écoulement du mois.
+  // 10 % de ventes sur un tirage de 3 000, avec 60 % chez le distributeur,
+  // font 10 % de ces 1 800 exemplaires, soit 180.
+  if (canal.mode === 'repartition') {
+    if (!ventesPourcent) return 0;
+    const part = ((canal.repartition ?? 0) / 100) * tirage;
+    return Math.round((ventesPourcent / 100) * part);
+  }
   const v = canal.valeurs[i] ?? 0;
   if (!v) return 0;
   if (canal.mode !== 'pourcentage') return v;
   const assiette = canal.base === 'disponible' ? disponible : tirage;
   return Math.round((v / 100) * assiette);
+}
+
+/** Les parts des canaux totalisent-elles bien 100 % ? */
+export function totalRepartition(ligne: LigneStock): number {
+  return r2((ligne.canaux ?? [])
+    .filter(c => c.mode === 'repartition')
+    .reduce((s, c) => s + (c.repartition ?? 0), 0));
 }
 
 /** Déroule un exercice de stock pour un jeu, mois par mois. */
@@ -166,11 +194,12 @@ export function derouleStock(ligne: LigneStock, lignes: LigneStock[]): StockJeu 
     const stockDebut = stock;
     const disponible = stockDebut + fabrique;
 
+    const rythme = ligne.ventesPourcent?.[i] ?? 0;
     const parCanal = new Map<string, MoisCanal>();
     let vendue = 0;
     let ca = 0;
     for (const c of canaux) {
-      const q = quantiteCanal(c, i, tirage, disponible);
+      const q = quantiteCanal(c, i, tirage, disponible, rythme);
       const caCanal = r2(q * (c.prix || 0));
       parCanal.set(c.id, { quantite: q, ca: caCanal });
       vendue += q;
@@ -238,7 +267,8 @@ export function ligneStockVide(
     id, jeu, exercice,
     coutUnitaire: 0, tauxTVA: TVA_JEUX_DEFAUT,
     fabrique: new Array<number | null>(n).fill(null),
-    canaux: CANAUX_DEFAUT.map(c => canalVide(c.nom, n)),
+    ventesPourcent: new Array<number | null>(n).fill(null),
+    canaux: CANAUX_DEFAUT.map(c => canalVide(c.nom, n, 0, c.repartition)),
   };
 }
 

@@ -75,15 +75,20 @@ sont recalculés en direct à partir des écritures.
     montants **ne passent pas au compte de résultat** — seules leurs dotations
     le font ; ils sortent en revanche de la trésorerie en totalité, le mois où
     ils sont engagés
-  - **Stock** — jeu par jeu. Une ligne pour ce qui sort d'usine, puis **une ligne
-    par canal de vente** : un jeu ne part pas au même prix chez un
-    **Distributeur**, en **Boutique** ou chez un **Éditeur**, alors chaque canal
-    a son prix et son écoulement (les trois se renomment, d'autres s'ajoutent).
-    Sur chaque canal, une bascule **`#` / `%`** : en `%`, tu tapes un
-    pourcentage et la quantité se calcule — au choix **du tirage** de l'exercice
-    ou **du stock disponible** ce mois-là ; le nombre d'exemplaires s'affiche
-    sous la case. Tout le reste suit : stock restant, coût des tirages, ventes
-    par canal et au total, **coût des exemplaires vendus**, **variation de
+  - **Stock** — jeu par jeu, et une seule ligne pilote tout :
+    1. **Fabriqués** — ce qui sort d'usine, mois par mois
+    2. **% de ventes** — quelle part du tirage part ce mois-là
+    3. une ligne par canal — **Distributeur**, **Boutique**, **Éditeur** — chacun
+       avec sa **part du tirage** (60 / 10 / 30 par exemple) et **son prix**
+
+    10 % de ventes sur un tirage de 3 000 exemplaires donnent 300 boîtes, que les
+    parts répartissent d'elles-mêmes : 180 chez le distributeur, 30 en boutique,
+    90 chez l'éditeur — chacune à son prix. Un avertissement s'affiche si les
+    parts ne totalisent pas 100 %. Un canal peut sortir de ce pilotage : **`#`**
+    pour taper des exemplaires, **`%`** pour un pourcentage qui lui est propre,
+    calculé sur le tirage ou sur le stock disponible. Les trois canaux se
+    renomment et d'autres s'ajoutent. Tout le reste suit : stock restant, coût
+    des tirages, ventes par canal et au total, **coût des exemplaires vendus**, **variation de
     stock** et **marge**. Le tirage payé à l'usine est une charge du mois où il
     est réglé ; la variation de stock la neutralise pour les exemplaires encore
     en carton, si bien que **seul le coût de ce qui est vendu pèse sur le
@@ -121,7 +126,11 @@ sont recalculés en direct à partir des écritures.
   d'usine** viennent de l'onglet Stock. Capital, compte courant d'associé et
   placements restent des mouvements financiers. La saisie d'origine du tableur
   est conservée en dessous, repliée, pour mémoire
-- **Chronologie** — frise 2025-30 des projets, **modifiable à la souris** :
+- **Chronologie** — frise 2025-30 des projets. Elle s'ouvre **verrouillée** :
+  on la lit, on la zoome, mais rien n'y bouge — ni glissement, ni renommage, ni
+  suppression, ni emoji. Un clic sur `🔒 Verrouillée` la rend modifiable, et le
+  réglage est retrouvé au retour sur la page. Déverrouillée, elle est
+  **modifiable à la souris** :
   glisse une barre pour décaler l'étape, attrape son bord pour l'allonger.
   Les bandes **s'aimantent** au 1er du mois ou au 1er / 16 (réglable, ou au jour
   près). **Clique** une barre pour la sélectionner, **Maj / Cmd** pour en
@@ -276,7 +285,32 @@ sont recalculés en direct à partir des écritures.
 
 Les données des deux tableurs ont été importées le 26/08/2026 (418 écritures,
 budgets 2025-26 → 2029-30, chronologie). Elles vivent dans le `localStorage` du
-navigateur — penser à faire des **sauvegardes régulières** (Paramètres → Sauvegarde).
+navigateur.
+
+### Ce qui protège une saisie
+
+Une modification qu'on croit enregistrée et qui ne l'est pas est le pire des
+défauts : on ne s'en aperçoit qu'au rechargement. Quatre garde-fous :
+
+- **Un témoin permanent** en bas de la barre latérale : « Enregistré à 16:43 ».
+  S'il passe au rouge, c'est que le navigateur refuse d'écrire, et un bandeau
+  l'explique en haut de l'écran.
+- **Des instantanés automatiques** dans IndexedDB, à côté du stockage principal :
+  l'état complet est recopié quelques secondes après chaque salve de
+  modifications, et aussi quand on quitte l'onglet. Les **30 derniers** sont
+  gardés, plus **un par jour sur un mois**. On y revient d'un clic dans
+  Paramètres → *Instantanés automatiques*, et le retour est lui-même annulable
+  puisque l'état courant est mis de côté avant.
+- **Un garde contre les doubles onglets** : si BBG Compta est ouvert deux fois,
+  seul l'onglet qui a écrit en dernier continue d'enregistrer ; l'autre s'arrête
+  et affiche un bandeau, au lieu d'écraser silencieusement le travail du premier.
+- **Cmd+Z n'annule jamais pendant qu'on écrit dans un champ** : là, il défait la
+  frappe, pas une modification de données. Sans cette garde, corriger une faute
+  de frappe annulait un renommage ou un déplacement — et en insistant, tout un
+  après-midi de réglages.
+
+Une **sauvegarde téléchargée** (Paramètres → Sauvegarde) reste la seule copie
+hors de cette machine : c'est elle qu'il faut faire régulièrement.
 
 Lors de l'import, plusieurs anomalies des tableurs ont été détectées et corrigées
 (totaux sur plages incomplètes, `#REF!`, valeur fantôme dans un récap…) :
