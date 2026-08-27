@@ -67,6 +67,9 @@ sont recalculés en direct à partir des écritures.
   tire. La largeur est enregistrée et retrouvée à la prochaine ouverture ;
   un **double-clic** au même endroit rend au tableau ses largeurs automatiques
   (Paramètres → Affichage des tableaux pour tout réinitialiser).
+- **Aller à une ligne signalée** : dans les *contrôles comptables* de la synthèse,
+  clique une écriture listée — le journal s'ouvre sur son mois (ou la page
+  Immobilisations), déroule jusqu'à elle et la fait clignoter.
 - **Sélectionner plusieurs cellules** : dans le prévisionnel, clique-glisse sur
   les cases pour en sélectionner un rectangle, puis **Suppr** pour toutes les
   vider (une seule étape d'annulation). **Échap** annule la sélection.

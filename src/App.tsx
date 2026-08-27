@@ -1,8 +1,9 @@
-import { useEffect, useLayoutEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Sidebar } from './components/layout/Sidebar';
 import { UndoBar } from './components/layout/UndoBar';
 import { useStore } from './store';
 import { appliquerLargeurs, installerResize } from './utils/colresize';
+import type { Cible } from './utils/cible';
 import { Dashboard } from './components/dashboard/Dashboard';
 import { JournalPage } from './components/journal/JournalPage';
 import { SynthesePage } from './components/journal/SynthesePage';
@@ -30,6 +31,17 @@ export type Page =
 
 export default function App() {
   const [page, setPage] = useState<Page>('dashboard');
+  /** Ligne à rejoindre quand on arrive depuis les contrôles comptables. */
+  const [cible, setCible] = useState<{ page: Page } & Cible | null>(null);
+  const compteur = useRef(0);
+
+  /** Ouvre une page en visant une écriture précise. */
+  function allerA(vers: Page, ligne: string) {
+    setCible({ page: vers, ligne, n: ++compteur.current });
+    setPage(vers);
+  }
+  const cibleDe = (p: Page): Cible | undefined =>
+    cible && cible.page === p ? { ligne: cible.ligne, n: cible.n } : undefined;
   const undo = useStore(s => s.undo);
   const redo = useStore(s => s.redo);
   const colWidths = useStore(s => s.colWidths);
@@ -83,9 +95,9 @@ export default function App() {
       <main className="flex-1 overflow-auto relative">
         <UndoBar />
         {page === 'dashboard' && <Dashboard onNavigate={setPage} />}
-        {page === 'journal' && <JournalPage />}
-        {page === 'synthese' && <SynthesePage />}
-        {page === 'immos' && <ImmosPage />}
+        {page === 'journal' && <JournalPage cible={cibleDe('journal')} />}
+        {page === 'synthese' && <SynthesePage onAllerA={allerA} />}
+        {page === 'immos' && <ImmosPage cible={cibleDe('immos')} />}
         {page === 'treso' && <TresoPage />}
         {page === 'tva' && <TVAPage />}
         {page === 'rembours' && <RemboursPage />}

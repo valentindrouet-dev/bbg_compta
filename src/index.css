@@ -114,6 +114,18 @@ input[type="number"]::-webkit-outer-spin-button { opacity: 0.5; }
 .sheet tr.band-yellow > td { background: var(--bbg-yellow-light) !important; color: var(--bbg-yellow-dark); }
 .sheet tr.band-soft   > td { background: #efeafa !important; font-weight: 600; }
 
+/* Ligne atteinte depuis les contrôles comptables : on la voit tout de suite */
+@keyframes cible-pulse {
+  0%, 100% { background: var(--bbg-yellow-light); }
+  50%      { background: var(--bbg-yellow); }
+}
+.sheet tbody tr.ligne-ciblee > td {
+  background: var(--bbg-yellow-light) !important;
+  animation: cible-pulse 0.85s ease-in-out 2;
+  border-color: var(--bbg-yellow-dark);
+}
+.sheet tbody tr.ligne-ciblee > td:first-child { box-shadow: inset 3px 0 0 var(--bbg-yellow-dark); }
+
 /* Cellules sélectionnées à la souris (façon tableur) */
 .sheet td[data-sel] {
   background: rgba(103, 78, 167, 0.16) !important;

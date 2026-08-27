@@ -1,6 +1,7 @@
 import { Fragment, useMemo, useState } from 'react';
 import {
   Eye, EyeOff, Gamepad2, Info, Rows3, List, CheckCircle2, AlertTriangle, AlertCircle, Wrench,
+  ArrowRight,
 } from 'lucide-react';
 import { useStore } from '../../store';
 import { EXERCICES, labelMois, formatDateFR } from '../../utils/dates';
@@ -10,7 +11,10 @@ import {
   compteResultat, ecrituresDeCellule, type BaseMontant, type LigneResultat,
 } from '../../utils/calc';
 import { teinteBloc, type BlocCle } from '../../utils/blocs';
-import { controlesComptables, dateCalee, libelleEcriture } from '../../utils/controles';
+import {
+  controlesComptables, dateCalee, libelleEcriture, type PageControle,
+} from '../../utils/controles';
+import type { Page } from '../../App';
 
 import { PageHeader, Card, Btn, BlocColorMenu, TotalBloc, styleBloc } from '../ui';
 import type { JournalEntry } from '../../types';
@@ -58,7 +62,7 @@ function ApercuCellule({ ecritures, titre, x, y }: {
   );
 }
 
-export function SynthesePage() {
+export function SynthesePage({ onAllerA }: { onAllerA?: (page: Page, ligne: string) => void }) {
   const entries = useStore(s => s.entries);
   const finances = useStore(s => s.finances);
   const refs = useStore(s => s.referentiels);
@@ -393,6 +397,7 @@ export function SynthesePage() {
           onCalerDates={ecritures => {
             for (const e of ecritures) updateEntry(e.id, { date: dateCalee(e) });
           }}
+          onAllerA={onAllerA}
         />
       </div>
 
@@ -918,6 +923,9 @@ function Recapitulatif({ syn, resultat, couleurs, unite, exercice }: {
 
 // ------------------------------------------------ Contrôles comptables ------
 
+/** Nom lisible de la page où se corrige un contrôle. */
+const destination = (p: PageControle) => p === 'immos' ? 'Immobilisations' : 'Journal du mois';
+
 const ICONE_CONTROLE = {
   ok: { Icone: CheckCircle2, couleur: '#38761d' },
   attention: { Icone: AlertTriangle, couleur: '#b45f06' },
@@ -926,10 +934,12 @@ const ICONE_CONTROLE = {
 } as const;
 
 /** La passe d'inspection : ce qu'un comptable vérifierait, fait à chaque affichage. */
-function ControlesCard({ entries, exercice, refs, onCalerDates }: {
+function ControlesCard({ entries, exercice, refs, onCalerDates, onAllerA }: {
   entries: JournalEntry[]; exercice: string;
   refs: Parameters<typeof controlesComptables>[2];
   onCalerDates: (ecritures: JournalEntry[]) => void;
+  /** Ouvre la page où se corrige la ligne, et l'y met en évidence. */
+  onAllerA?: (page: Page, ligne: string) => void;
 }) {
   const [ouvert, setOuvert] = useState<string | null>(null);
   const controles = useMemo(
@@ -982,11 +992,27 @@ function ControlesCard({ entries, exercice, refs, onCalerDates }: {
                     <div className="text-xs mt-0.5" style={{ color: '#9a92b5' }}>{c.explication}</div>
                   )}
                   {deplie && c.ecritures && (
-                    <ul className="mt-1 mb-1 text-xs space-y-0.5 rounded-md p-2"
+                    <ul className="mt-1 mb-1 text-xs rounded-md p-1.5"
                       style={{ backgroundColor: 'var(--bbg-lavender)', color: '#5c5280' }}>
-                      {c.ecritures.slice(0, 25).map(e => <li key={e.id}>{libelleEcriture(e)}</li>)}
+                      {c.ecritures.slice(0, 25).map(e => (
+                        <li key={e.id}>
+                          <button
+                            type="button"
+                            className="w-full text-left px-1.5 py-1 rounded flex items-center gap-1.5 group/ligne
+                              hover:bg-white transition-colors"
+                            title={`Ouvrir cette écriture dans ${destination(c.page)}`}
+                            onClick={() => onAllerA?.(c.page as Page, e.id)}
+                          >
+                            <span className="flex-1">{libelleEcriture(e)}</span>
+                            <span className="opacity-0 group-hover/ligne:opacity-100 shrink-0 inline-flex
+                              items-center gap-1" style={{ color: 'var(--bbg-purple-dark)' }}>
+                              {destination(c.page)} <ArrowRight size={12} />
+                            </span>
+                          </button>
+                        </li>
+                      ))}
                       {c.ecritures.length > 25 && (
-                        <li className="italic">… et {c.ecritures.length - 25} autres</li>
+                        <li className="italic px-1.5 py-1">… et {c.ecritures.length - 25} autres</li>
                       )}
                     </ul>
                   )}
@@ -997,8 +1023,10 @@ function ControlesCard({ entries, exercice, refs, onCalerDates }: {
         })}
       </ul>
       <p className="text-xs mt-3" style={{ color: '#9a92b5' }}>
-        Ces contrôles tournent à chaque affichage, sur l'exercice choisi. Ils ne remplacent pas ton
-        expert-comptable : ils lui évitent de perdre du temps sur ce qui se vérifie tout seul.
+        Ces contrôles tournent à chaque affichage, sur l'exercice choisi. <b>Clique une ligne signalée</b>
+        {' '}pour l'ouvrir directement au bon endroit — le journal se place sur son mois, et la ligne clignote.
+        Ils ne remplacent pas ton expert-comptable : ils lui évitent de perdre du temps sur ce qui se
+        vérifie tout seul.
       </p>
     </Card>
   );

@@ -18,6 +18,7 @@ import { DateCell, MoneyCell, AutoCompleteCell, FactureCell, ColFormatMenu, colS
 import type { ColFormat } from '../../store';
 import { saveFile, deleteFile } from '../../utils/files';
 import { fichiersDeposes, transporteDesFichiers, libelleDepuisNom, fournisseurDepuisNom } from '../../utils/depot';
+import { useCibleLigne, type Cible } from '../../utils/cible';
 
 type SectionKind = 'depenses' | 'jeux' | 'produits';
 
@@ -27,7 +28,7 @@ const COLS_PRODUITS = [2, 8, 11, 15, 12.5, 6, 5.5, 6, 6.5, 7, 9, 5, 4, 2.5];
 /** La section Jeux intercale une colonne « Jeu » après la catégorie. */
 const COLS_JEUX = [2, 7, 8.5, 12, 10, 7, 4.7, 4.7, 4.7, 5.2, 5.5, 7, 8.5, 4.5, 6.7, 2];
 
-export function JournalPage() {
+export function JournalPage({ cible }: { cible?: Cible }) {
   const entries = useStore(s => s.entries);
   const refs = useStore(s => s.referentiels);
   const updateEntries = useStore(s => s.updateEntries);
@@ -58,6 +59,19 @@ export function JournalPage() {
 
   // Changer de mois remet la sélection à zéro (mais garde le presse-papier)
   useEffect(() => { setSelected(new Set()); }, [mois, exercice]);
+
+  // Arrivée depuis les contrôles comptables : on se place sur le bon mois,
+  // on lève le filtre de recherche, puis la ligne visée est mise en évidence.
+  useEffect(() => {
+    if (!cible) return;
+    const e = entries.find(x => x.id === cible.ligne);
+    if (!e) return;
+    setSearch('');
+    const ex = exerciceDuMois(e.mois);
+    if ((EXERCICES as readonly string[]).includes(ex)) setExercice(ex);
+    setMois(e.mois);
+  }, [cible, entries]);
+  useCibleLigne(cible);
 
   const duMois = useMemo(() => {
     const filtre = search.trim().toLowerCase();
@@ -564,6 +578,7 @@ function Row({ e, kind, categories, isSelected, onToggleRow, clip, onCopy, onPas
 
   return (
     <tr
+      data-ligne={e.id}
       className={`group ${isSelected ? 'is-selected' : ''} ${survol ? 'depot-actif' : ''}`}
       onClick={clip ? onPasteHere : undefined}
       title={clip ? 'Cliquer pour coller la ligne copiée ici' : 'Glisse une facture (PDF, image) sur cette ligne pour l\'y attacher'}

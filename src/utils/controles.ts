@@ -14,10 +14,15 @@ import { r2, euros } from './money';
 
 export type NiveauControle = 'ok' | 'attention' | 'erreur' | 'info';
 
+/** Page à ouvrir quand on clique une écriture signalée. */
+export type PageControle = 'journal' | 'immos';
+
 export interface Controle {
   cle: string;
   titre: string;
   niveau: NiveauControle;
+  /** Où se corrige ce point : le journal du mois, ou les immobilisations. */
+  page: PageControle;
   /** Ce que le contrôle a trouvé, en une phrase. */
   constat: string;
   /** Ce que ça veut dire, et quoi en faire. */
@@ -52,6 +57,7 @@ export function controlesComptables(
   out.push({
     cle: 'equilibre',
     titre: 'Cohérence HT + TVA = TTC',
+    page: 'journal',
     niveau: desequilibrees.length ? 'erreur' : 'ok',
     constat: desequilibrees.length
       ? `${desequilibrees.length} écriture(s) où le HT et la TVA ne redonnent pas le TTC.`
@@ -67,6 +73,7 @@ export function controlesComptables(
   out.push({
     cle: 'taux-tva',
     titre: 'Taux de TVA appliqués',
+    page: 'journal',
     niveau: tauxDouteux.length ? 'attention' : 'ok',
     constat: tauxDouteux.length
       ? `${tauxDouteux.length} écriture(s) dont la TVA ne correspond à aucun taux français (20 / 10 / 5,5 / 2,1 / 0 %) à 5 centimes près.`
@@ -82,6 +89,7 @@ export function controlesComptables(
   out.push({
     cle: 'dates',
     titre: 'Rattachement des dates au mois comptable',
+    page: 'journal',
     niveau: horsMois.length ? 'erreur' : 'ok',
     constat: horsMois.length
       ? `${horsMois.length} écriture(s) portent une date en dehors de leur mois comptable.`
@@ -101,6 +109,7 @@ export function controlesComptables(
   out.push({
     cle: 'amortissements',
     titre: 'Plans d\'amortissement bouclés',
+    page: 'immos',
     niveau: ecarts.length ? 'erreur' : 'ok',
     constat: ecarts.length
       ? `${ecarts.length} bien(s) dont le cumul des dotations ne retombe pas sur la valeur d'origine.`
@@ -115,6 +124,7 @@ export function controlesComptables(
     out.push({
       cle: 'petites-immos',
       titre: 'Immobilisations de moins de 500 € HT',
+      page: 'immos',
       niveau: 'info',
       constat: `${petites.length} bien(s) sous 500 € HT, ${euros(somme)} au total, sont immobilisés.`,
       explication: 'L\'administration tolère de passer directement en charges le petit matériel de moins de 500 € HT. '
@@ -133,6 +143,7 @@ export function controlesComptables(
     out.push({
       cle: 'produits-remboursements',
       titre: 'Remboursements comptés en produits',
+      page: 'journal',
       niveau: 'attention',
       constat: `${remboursements.length} écriture(s) de remboursement, ${euros(somme)} HT, figurent dans les produits.`,
       explication: 'Un remboursement de trop-perçu ou une avance rendue n\'est pas du chiffre d\'affaires : '
@@ -151,6 +162,7 @@ export function controlesComptables(
     out.push({
       cle: 'pre-immat',
       titre: 'Biens acquis avant l\'immatriculation',
+      page: 'immos',
       niveau: 'info',
       constat: `${avantImmat.length} bien(s), ${euros(somme)} HT, sont datés d'avant la création de la société.`,
       explication: 'Ces dépenses doivent avoir été reprises par la société après son immatriculation '
@@ -165,6 +177,7 @@ export function controlesComptables(
   out.push({
     cle: 'justificatifs',
     titre: 'Pièces justificatives',
+    page: 'journal',
     niveau: sansPiece.length ? 'attention' : 'ok',
     constat: sansPiece.length
       ? `${sansPiece.length} écriture(s) sur ${duJournal.length} n'ont ni fichier joint ni référence de pièce.`
@@ -182,6 +195,7 @@ export function controlesComptables(
     out.push({
       cle: 'categories',
       titre: 'Catégories hors référentiel',
+      page: 'journal',
       niveau: 'attention',
       constat: `${orphelines.length} écriture(s) portent une catégorie qui n'existe plus.`,
       explication: 'Elles échappent aux blocs de la synthèse. Recatégorise-les, ou recrée la catégorie dans l\'onglet Catégories.',
@@ -195,6 +209,7 @@ export function controlesComptables(
     out.push({
       cle: 'montants',
       titre: 'Montants nuls ou négatifs',
+      page: 'journal',
       niveau: 'attention',
       constat: `${suspects.length} écriture(s) à 0 € ou en négatif.`,
       explication: 'Une ligne vide oubliée, ou un avoir saisi en négatif. Un avoir se saisit plutôt comme un produit, ou en diminution de la charge.',

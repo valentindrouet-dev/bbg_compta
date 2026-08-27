@@ -6,13 +6,14 @@ import { euros, r2, tvaDepuisTTC } from '../../utils/money';
 import { immoInfos, type ImmoInfo } from '../../utils/calc';
 import { PageHeader, Card, StatCard, Btn, useSort, sortBy, ThSort } from '../ui';
 import { DateCell, MoneyCell, AutoCompleteCell, ColFormatMenu, colStyle } from './cells';
+import { useCibleLigne, type Cible } from '../../utils/cible';
 
 /** Colonnes du tableau, en % : tout tient à l'écran. */
 const COLS = [8, 11, 17, 13, 7, 7, 7, 5, 6.5, 6.5, 6.5, 3.5, 2];
 
 const DUREES = [3, 5, 10, 15, 20];
 
-export function ImmosPage() {
+export function ImmosPage({ cible }: { cible?: Cible }) {
   const entries = useStore(s => s.entries);
   const refs = useStore(s => s.referentiels);
   const update = useStore(s => s.updateEntry);
@@ -25,6 +26,8 @@ export function ImmosPage() {
 
   const infos = useMemo(() => immoInfos(entries), [entries]);
   const today = todayISO();
+  // Ligne visée depuis les contrôles comptables de la synthèse.
+  useCibleLigne(cible);
 
   const fournisseurs = useMemo(() => {
     const noms = new Map<string, string>();
@@ -143,7 +146,7 @@ export function ImmosPage() {
                     {list.map(i => {
                       const e = i.entry;
                       return (
-                        <tr key={e.id} className="group">
+                        <tr key={e.id} data-ligne={e.id} className="group">
                           <td><DateCell value={e.date} anneeRef={annee} style={st('date')}
                             onCommit={v => update(e.id, { date: v })} /></td>
                           <td>
