@@ -28,7 +28,13 @@ sont recalculés en direct à partir des écritures.
   bouton bascule entre vue **détaillée** et vue **simplifiée** (totaux seuls).
   Sous chaque total HT, le **même bloc en TTC** — pas le total général : c'est
   bien le pendant taxes comprises de la ligne du dessus. Le total de *toutes*
-  les dépenses TTC, lui, est au récapitulatif, sous « Sorti du compte »
+  les dépenses TTC, lui, est au récapitulatif, sous « Sorti du compte ».
+  Le bouton **Prévisionnel** remplit les **mois pas encore atteints** avec ce qui
+  est budgété — leur en-tête prend un `·p`, les montants s'affichent **en gris et
+  en italique** — et les **ajoute aux calculs** : totaux, TTC, compte de résultat
+  et résultat net tiennent alors compte de la fin d'exercice prévue. La date du
+  jour, affichée sous « BBG Compta », décide de la frontière ; elle se remet à
+  jour toute seule à minuit.
 - **Immobilisations** — durées, dotations, VNC et fin d'amortissement calculées
 - **Trésorerie** — chaque montant rattaché à sa source : **encaissements** et
   **décaissements du journal** (retrouvables ligne à ligne), **mouvements
@@ -77,16 +83,36 @@ sont recalculés en direct à partir des écritures.
   monte, se descend et se supprime depuis son bandeau ; `Nouveau projet` en
   crée un. La **couleur** d'un projet se choisit sur sa pastille et **suit son
   nom**, pas son rang ; quand le projet est un jeu du catalogue, c'est la
-  couleur du jeu qui commande, et la repeindre ici l'écrit dans sa fiche
+  couleur du jeu qui commande, et la repeindre ici l'écrit dans sa fiche.
+  Le **zoom** (`−` / `+`, de 18 à 130 px par mois) agrandit la frise : même une
+  étape de quelques jours devient assez large pour être attrapée, et le niveau
+  choisi est retrouvé au retour sur la page. La fenêtre de la frise est **calée
+  sur des années pleines** : déplacer ou renommer une bande ne fait plus bouger
+  les autres d'un pixel. Un **trait rouge** marque le jour en cours
 
 **Outils**
-- **Exports** — les quatre exports d'un coup dans une archive `.zip`
-  (Excel, PDF, CSV, JSON + un « Lisez-moi », et si tu veux un dossier
-  `Factures/` rangé par mois), ou chacun séparément : classeur Excel complet
-  (`.xlsx`, importable dans Google Sheets), CSV du journal (format français),
-  rapport PDF, sauvegarde JSON intégrale — et une **copie HTML en lecture
-  seule** à envoyer à l'expert-comptable (un seul fichier, rien de modifiable,
-  aucune connexion)
+- **Exports** — les cinq exports d'un coup dans une archive `.zip`
+  (Excel, PDF, CSV, HTML, JSON + un « Lisez-moi », et si tu veux un dossier
+  `Factures/` rangé par mois), ou chacun séparément. **Tout ce qui est à
+  l'écran est dans les exports** :
+  - **Classeur Excel** (`.xlsx`, importable dans Google Sheets) — 17 feuilles :
+    journal (colonne Jeu comprise), synthèse bloc par bloc en HT **et** en TTC,
+    compte de résultat (EBE, REX, IS, résultat net), dépenses par jeu,
+    immobilisations, trésorerie **avec les corrections manuelles et le relevé
+    bancaire**, mouvements financiers (capital, CCA, placements), TVA,
+    prévisionnel de chacun des cinq exercices (jeu, taux de TVA et formule
+    en clair), chronologie dans son ordre et avec ses couleurs, référentiel
+    des catégories (groupe, nature charge/immobilisation, durée), catalogue
+    des jeux et vue d'ensemble sur cinq ans
+  - **Rapport PDF** — compte de résultat, synthèse mensuelle, journal détaillé,
+    immobilisations et dépenses par jeu, TVA, trésorerie, mouvements financiers
+    et prévisionnel de l'exercice
+  - **CSV du journal** (format français), **sauvegarde JSON intégrale**
+    (elle emporte aussi les corrections de trésorerie et les couleurs des blocs)
+  - **Copie HTML en lecture seule** à envoyer à l'expert-comptable — un seul
+    fichier, rien de modifiable, aucune connexion : synthèse, résultat, TVA,
+    journal, immobilisations, trésorerie, dépenses par jeu, chronologie
+    et contrôles comptables
 - **Paramètres** — catégories, moyens de paiement, plan comptable,
   sauvegarde / restauration / réinitialisation
 
@@ -100,7 +126,9 @@ sont recalculés en direct à partir des écritures.
   couleur est reprise **partout** : bandeaux de la synthèse annuelle et de la
   synthèse totale, du prévisionnel, pastille de la colonne « Jeu » du journal,
   barres et bandeaux de la chronologie. Elle suit le jeu quand on le renomme,
-  et « auto » revient à la teinte déduite de son nom.
+  et « auto » revient à la teinte déduite de son nom — **jamais la même que
+  celle d'un autre jeu** : deux jeux dont les noms tombaient sur la même
+  teinte sont départagés automatiquement.
 - **Rien ne se remet en place tout seul** : le tri d'un tableau (colonne et
   sens) est retrouvé en revenant sur la page, comme les onglets et les bascules.
 - **Un poste de jeu se budgète jeu par jeu** : dans le prévisionnel, taper une

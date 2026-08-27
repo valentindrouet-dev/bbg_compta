@@ -6,7 +6,7 @@ import type {
 } from '../types';
 import {
   categoriesImmobilisees, categoriesManquantes, estLigneCalculee, gabaritPrevisionnel,
-  migrerBudgets, sectionDeCategorie, memeJeu,
+  migrerBudgets, sectionDeCategorie, sectionDunPosteDeJeu, memeJeu,
 } from '../utils/previsionnel';
 import {
   CATEGORIES_PERSONNEL_INITIALES, GROUPE_PERSONNEL, POSTES_JEU_IMMOBILISES,
@@ -995,7 +995,7 @@ export const useStore = create<AppState>()(
     },
     {
       name: 'bbg-compta-v1',
-      version: 12,
+      version: 13,
       // v2 : ajout de la liste des jeux et rattachement des dépenses de
       // développement au jeu concerné (déduit des mots clés / de la catégorie).
       migrate: (persisted, version) => {
@@ -1112,6 +1112,16 @@ export const useStore = create<AppState>()(
               montant: -2000,
             }];
           }
+        }
+        // v13 : plus aucune ligne de prévisionnel ne reste dans l'ancien bloc
+        // « Jeux ». Il n'est plus affiché : une ligne oubliée là était invisible
+        // dans le prévisionnel tout en pesant dans la synthèse.
+        if (version < 13 && s.previsionnels) {
+          s.previsionnels = Object.fromEntries(
+            Object.entries(s.previsionnels).map(([ex, lignes]) => [ex, (lignes ?? []).map(l =>
+              (l.section as string) === 'jeux'
+                ? { ...l, section: sectionDunPosteDeJeu(l.categorie) }
+                : l)]));
         }
         return s;
       },

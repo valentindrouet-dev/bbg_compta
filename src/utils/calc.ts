@@ -499,6 +499,28 @@ const somme = (m: Map<string, number>, moisList: string[]) =>
  * Les dépenses de développement des jeux sont ici des charges d'exploitation
  * (elles ne sont pas immobilisées) : elles pèsent donc dans l'EBE.
  */
+/**
+ * Le compte de résultat d'un exercice, assemblé à partir de la synthèse. Un
+ * seul assemblage pour toute l'app — écran, export Excel, rapport PDF et
+ * version partageable lisent la même chose, sinon deux chiffres divergent.
+ */
+export function resultatDeSynthese(
+  syn: SyntheseExercice, entries: JournalEntry[], finances: FinanceEntry[],
+  refs?: Referentiels,
+): LigneResultat[] {
+  return compteResultat({
+    moisList: syn.moisList,
+    produits: syn.totalProduitsParMois,
+    charges: syn.totalChargesParMois,
+    personnel: syn.totalPersonnelParMois,
+    // Les dépenses jeux sont déjà réparties dans les charges et les immos.
+    jeux: new Map<string, number>(),
+    dotations: dotationsParMois(immoInfos(entries, refs), syn.moisList),
+    produitsFinanciers: produitsFinanciersParMois(finances, syn.moisList),
+    chargesFinancieres: syn.chargesFinancieresParMois,
+  });
+}
+
 export function compteResultat(e: EntreesResultat): LigneResultat[] {
   const { moisList } = e;
   const parMois = (calc: (m: string) => number) => {

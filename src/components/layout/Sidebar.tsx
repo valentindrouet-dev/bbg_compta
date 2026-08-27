@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import {
   Coins, LayoutDashboard, NotebookPen, Table2, Building2, Wallet, Percent,
   UserRound, Target, GitCompareArrows, Landmark, CalendarRange, FileDown, Settings, Store, Tags, Gamepad2,
@@ -5,6 +6,7 @@ import {
 } from 'lucide-react';
 import type { Page } from '../../App';
 import { APP_VERSION } from '../../version';
+import { dateDuJourLongue } from '../../utils/dates';
 
 interface SidebarProps {
   page: Page;
@@ -57,6 +59,14 @@ const NAV: { section: string; items: { page: Page; label: string; icon: typeof C
 ];
 
 export function Sidebar({ page, onNavigate }: SidebarProps) {
+  // La date se rafraîchit toute seule : passé minuit, l'app change de jour
+  // sans qu'on ait besoin de la recharger.
+  const [aujourdhui, setAujourdhui] = useState(dateDuJourLongue);
+  useEffect(() => {
+    const t = setInterval(() => setAujourdhui(dateDuJourLongue()), 60_000);
+    return () => clearInterval(t);
+  }, []);
+
   return (
     <aside
       className="w-[264px] text-white flex flex-col h-full shrink-0"
@@ -72,6 +82,11 @@ export function Sidebar({ page, onNavigate }: SidebarProps) {
           >
             v{APP_VERSION}
           </span>
+        </div>
+        {/* La date du jour, remise à l'heure à chaque minute : c'est elle qui
+            décide du mois courant partout dans l'app. */}
+        <div className="text-[11px] mt-0.5 whitespace-nowrap" style={{ color: '#b6acd8' }}>
+          {aujourdhui}
         </div>
       </div>
 

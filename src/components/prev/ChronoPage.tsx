@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Plus, Trash2, GripHorizontal, CalendarDays, FolderPlus, ChevronUp, ChevronDown, X
+import { Plus, Trash2, GripHorizontal, CalendarDays, FolderPlus, ChevronUp, ChevronDown, X, ZoomIn, ZoomOut
 } from 'lucide-react';
 import { useStore } from '../../store';
 import { useEtatVue } from '../../utils/etatVue';
@@ -25,9 +25,9 @@ const SANS_ORDRE: string[] = [];
 const SANS_COULEUR: Record<string, string> = {};
 
 const LARGEUR_LIBELLE = 210;
-/** Largeur d'un mois sur la frise, en pixels — règle aussi la finesse du glissé. */
-const PX_MOIS = 34;
-const PX_JOUR = PX_MOIS / 30.4375;
+/** Niveaux de zoom : largeur d'un mois en pixels. */
+const ZOOMS = [18, 26, 34, 52, 80, 130] as const;
+const ZOOM_DEFAUT = 34;
 const JOUR_MS = 86_400_000;
 
 /** Groupe racine d'un événement : « Jeu 1 - Tirage 2 » -> « Jeu 1 ». */
@@ -153,10 +153,16 @@ export function ChronoPage() {
   /** Étapes sélectionnées : elles se déplacent et se suppriment ensemble. */
   const [selection, setSelection] = useState<Set<string>>(new Set());
   const [pas, setPas] = useEtatVue<Pas>('chrono.pas', 'quinzaine');
+  /** Largeur d'un mois : c'est le zoom de la frise. */
+  const [pxMois, setPxMois] = useEtatVue<number>('chrono.zoom', ZOOM_DEFAUT,
+    v => typeof v === 'number' && v >= ZOOMS[0] && v <= ZOOMS[ZOOMS.length - 1]);
+  const pxJour = pxMois / 30.4375;
   const selRef = useRef<Set<string>>(new Set());
   selRef.current = selection;
   const pasRef = useRef<Pas>(pas);
   pasRef.current = pas;
+  const pxJourRef = useRef(pxJour);
+  pxJourRef.current = pxJour;
   const glisseRef = useRef<Glissement | null>(null);
   glisseRef.current = glisse;
 
@@ -166,20 +172,28 @@ export function ChronoPage() {
   const vu = (c: ChronoEvent): ChronoEvent =>
     apercu && apercu.id === c.id ? { ...c, debut: apercu.debut, fin: apercu.fin } : c;
 
+  /**
+   * La fenêtre de la frise est calée sur des ANNÉES ENTIÈRES.
+   *
+   * Elle se déduisait des dates extrêmes, au mois près : tirer une barre un peu
+   * avant la plus ancienne déplaçait l'origine, et toutes les autres barres
+   * sautaient d'autant. En arrondissant au 1er janvier et au 31 décembre, un
+   * déplacement ordinaire ne bouge plus rien autour.
+   */
   const { origineJour, nMois, moisLabels, groupes } = useMemo(() => {
     const dates = valides.flatMap(c => [c.debut, estDate(c.fin) ? c.fin : c.debut]);
     const min = dates.length ? dates.reduce((a, b) => a < b ? a : b) : '2025-08-01';
     const max = dates.length ? dates.reduce((a, b) => a > b ? a : b) : '2030-09-30';
-    const [y0, m0] = min.split('-').map(Number);
-    const [y1, m1] = max.split('-').map(Number);
-    const nMois = Math.max(12, (y1 - y0) * 12 + (m1 - m0) + 2);
+    const y0 = Number(min.slice(0, 4));
+    const y1 = Math.max(Number(max.slice(0, 4)), y0 + 1);
+    const nMois = (y1 - y0 + 1) * 12;
     const moisLabels: { label: string; annee: string | null; debutMois: number }[] = [];
     const NOMS = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
     for (let i = 0; i < nMois; i++) {
-      const m = (m0 - 1 + i) % 12;
-      const y = y0 + Math.floor((m0 - 1 + i) / 12);
+      const m = i % 12;
+      const y = y0 + Math.floor(i / 12);
       moisLabels.push({
-        label: NOMS[m], annee: m === 0 || i === 0 ? String(y) : null,
+        label: NOMS[m], annee: m === 0 ? String(y) : null,
         debutMois: jours(`${y}-${String(m + 1).padStart(2, '0')}-01`),
       });
     }
@@ -188,14 +202,13 @@ export function ChronoPage() {
       ...ordreProjets.filter(p => vus.includes(p)),
       ...vus.filter(p => !ordreProjets.includes(p)),
     ];
-    return {
-      origineJour: jours(`${y0}-${String(m0).padStart(2, '0')}-01`),
-      nMois, moisLabels, groupes,
-    };
+    return { origineJour: jours(`${y0}-01-01`), nMois, moisLabels, groupes };
   }, [valides, ordreProjets]);
 
-  const largeur = nMois * PX_MOIS;
-  const x = (iso: string) => (jours(iso) - origineJour) * PX_JOUR;
+  const largeur = nMois * pxMois;
+  /** Position du jour en cours sur la frise, recalculée à chaque affichage. */
+  const xAujourdhui = (jours(todayISO()) - origineJour) * pxJour;
+  const x = (iso: string) => (jours(iso) - origineJour) * pxJour;
 
   // Glissé : on suit la souris jusqu'au relâchement, puis on enregistre.
   useEffect(() => {
@@ -204,7 +217,7 @@ export function ChronoPage() {
       const g = glisseRef.current;
       if (!g) return;
       const p = pasRef.current;
-      const dj = Math.round((ev.clientX - g.xDepart) / PX_JOUR);
+      const dj = Math.round((ev.clientX - g.xDepart) / pxJourRef.current);
       if (g.mode === 'deplacer') {
         // On aimante le début, puis on reporte le même décalage sur la fin et
         // sur les étapes emmenées : leurs durées et leurs écarts sont préservés.
@@ -326,6 +339,32 @@ export function ChronoPage() {
                 </button>
               ))}
             </div>
+            {/* Zoom : plus la frise est large, plus les petites étapes
+                s'attrapent facilement. */}
+            <div className="flex items-center rounded-md border overflow-hidden"
+              style={{ borderColor: 'var(--bbg-border)' }}>
+              <button
+                className="px-2 py-1.5 disabled:opacity-40"
+                style={{ backgroundColor: '#fff', color: 'var(--bbg-purple-dark)' }}
+                title="Dézoomer" disabled={pxMois <= ZOOMS[0]}
+                onClick={() => setPxMois(ZOOMS[Math.max(0, ZOOMS.indexOf(pxMois as typeof ZOOMS[number]) - 1)]
+                  ?? ZOOMS[0])}
+              >
+                <ZoomOut size={14} />
+              </button>
+              <span className="px-1.5 text-xs tabular-nums" style={{ color: '#6f6690' }}>
+                {Math.round(pxMois / ZOOM_DEFAUT * 100)} %
+              </span>
+              <button
+                className="px-2 py-1.5 disabled:opacity-40"
+                style={{ backgroundColor: '#fff', color: 'var(--bbg-purple-dark)' }}
+                title="Zoomer" disabled={pxMois >= ZOOMS[ZOOMS.length - 1]}
+                onClick={() => setPxMois(ZOOMS[Math.min(ZOOMS.length - 1,
+                  ZOOMS.indexOf(pxMois as typeof ZOOMS[number]) + 1)] ?? ZOOM_DEFAUT)}
+              >
+                <ZoomIn size={14} />
+              </button>
+            </div>
             <select
               className="border rounded-md px-2 py-1.5 text-sm bg-white font-medium"
               style={{ borderColor: 'var(--bbg-border)', color: 'var(--bbg-purple-darker)' }}
@@ -357,9 +396,18 @@ export function ChronoPage() {
           <div className="overflow-x-auto -mx-4 px-4 pb-2">
             <div style={{ minWidth: largeur + LARGEUR_LIBELLE }}>
               {/* En-tête années / mois */}
-              <div className="flex sticky top-0 z-10 bg-white" style={{ paddingLeft: LARGEUR_LIBELLE }}>
+              <div className="flex sticky top-0 z-10 bg-white relative" style={{ paddingLeft: LARGEUR_LIBELLE }}>
+                {xAujourdhui >= 0 && xAujourdhui <= largeur && (
+                  <div className="absolute top-3 bottom-0 z-[2] flex items-start"
+                    style={{ left: LARGEUR_LIBELLE + xAujourdhui }}>
+                    <span className="text-[9px] px-1 rounded -translate-x-1/2 whitespace-nowrap"
+                      style={{ backgroundColor: '#b7332e', color: '#fff' }}>
+                      {formatDateFR(todayISO())}
+                    </span>
+                  </div>
+                )}
                 {moisLabels.map((m, i) => (
-                  <div key={i} className="text-center shrink-0" style={{ width: PX_MOIS }}>
+                  <div key={i} className="text-center shrink-0" style={{ width: pxMois }}>
                     <div className="text-[10px] font-bold h-4" style={{ color: 'var(--bbg-purple-darker)' }}>{m.annee ?? ''}</div>
                     <div className="text-[10px]" style={{ color: '#9a92b5' }}>{m.label}</div>
                   </div>
@@ -449,7 +497,7 @@ export function ChronoPage() {
                       const fin = estDate(c.fin) ? c.fin : c.debut;
                       const jalon = duree(c.debut, fin) <= 1;
                       const gauche = x(c.debut);
-                      const largeurBarre = Math.max(jalon ? 12 : 22, duree(c.debut, fin) * PX_JOUR);
+                      const largeurBarre = Math.max(jalon ? 12 : 22, duree(c.debut, fin) * pxJour);
                       // Sur une barre courte, on rétrécit les poignées pour garder
                       // de quoi attraper le milieu et déplacer l'étape.
                       const poignee = largeurBarre < 34 ? 6 : 10;
@@ -517,10 +565,15 @@ export function ChronoPage() {
                             </span>
                           </div>
                           <div className="relative h-6" style={{ width: largeur }}>
+                            {/* Aujourd'hui : le trait qui dit où l'on en est */}
+                            {xAujourdhui >= 0 && xAujourdhui <= largeur && (
+                              <div className="absolute top-0 bottom-0 w-px z-[1]"
+                                style={{ left: xAujourdhui, backgroundColor: '#b7332e', opacity: 0.55 }} />
+                            )}
                             {/* Repères de mois */}
                             {moisLabels.map((m, i) => (
                               <div key={i} className="absolute top-0 bottom-0 border-l"
-                                style={{ left: i * PX_MOIS, borderColor: m.annee ? 'var(--bbg-border)' : '#f0edf8' }} />
+                                style={{ left: i * pxMois, borderColor: m.annee ? 'var(--bbg-border)' : '#f0edf8' }} />
                             ))}
                             <div
                               data-chrono-bar={c.id}

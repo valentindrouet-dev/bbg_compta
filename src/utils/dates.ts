@@ -88,3 +88,12 @@ export function addYears(iso: string, years: number): string {
   d.setFullYear(d.getFullYear() + years);
   return d.toISOString().slice(0, 10);
 }
+
+/** « jeudi 27 août 2026 » — la date du jour, telle qu'on la lit. */
+export function dateDuJourLongue(): string {
+  const d = new Date();
+  const s = d.toLocaleDateString('fr-FR', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  });
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}

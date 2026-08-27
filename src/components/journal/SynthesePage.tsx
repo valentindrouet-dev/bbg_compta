@@ -1,11 +1,15 @@
 import { Fragment, useMemo, useState } from 'react';
 import {
   Eye, EyeOff, Gamepad2, Info, Rows3, List, CheckCircle2, AlertTriangle, AlertCircle, Wrench,
-  ArrowRight, GripVertical, } from 'lucide-react';
+  ArrowRight, GripVertical, CheckSquare, Square,
+} from 'lucide-react';
 import { useStore } from '../../store';
 import { useReorganisation } from '../../utils/glisser';
 import { couleurJeu, encreSur } from '../../utils/jeux';
-import { EXERCICES, labelMois, moisExercice, formatDateFR } from '../../utils/dates';
+import { completerAvecPrevisionnel } from '../../utils/previsionnel';
+import {
+  EXERCICES, PRE_IMMAT, compareMois, labelMois, moisCourant, moisExercice, formatDateFR,
+} from '../../utils/dates';
 import { euros, euros0, r2 } from '../../utils/money';
 import {
   syntheseExercice, immoInfos, dotationDuMois, dotationsParMois, produitsFinanciersParMois,
@@ -91,9 +95,26 @@ export function SynthesePage({ onAllerA }: { onAllerA?: (page: Page, ligne: stri
     });
   }
 
+  /** Compléter les mois pas encore atteints avec ce qui est budgété. */
+  const [avecPrev, setAvecPrev] = useEtatVue('synthese.prev', false);
+  const previsionnels = useStore(s => s.previsionnels);
+
+  /**
+   * Les mois de l'exercice qui sont devant nous. Le mois en cours porte déjà
+   * des écritures : on ne le complète pas, on ne remplit que l'inconnu.
+   */
+  const moisFuturs = useMemo(() => {
+    if (!avecPrev) return [] as string[];
+    const courant = moisCourant();
+    return moisExercice(exercice).filter(m => m !== PRE_IMMAT && compareMois(m, courant) > 0);
+  }, [avecPrev, exercice]);
+  const estMoisPrevu = (m: string) => moisFuturs.includes(m);
+
   const syn = useMemo(
-    () => syntheseExercice(entries, exercice, refs, base),
-    [entries, exercice, refs, base],
+    () => completerAvecPrevisionnel(
+      syntheseExercice(entries, exercice, refs, base),
+      previsionnels[exercice] ?? [], refs, base, moisFuturs),
+    [entries, exercice, refs, base, previsionnels, moisFuturs],
   );
   const immos = useMemo(() => immoInfos(entries, refs), [entries, refs]);
 
@@ -192,7 +213,9 @@ export function SynthesePage({ onAllerA }: { onAllerA?: (page: Page, ligne: stri
 
   // ----- Compte de résultat, sur la base HT quoi qu'affiche le bouton -----
   const resultat: LigneResultat[] = useMemo(() => {
-    const ht = base === 'ht' ? syn : syntheseExercice(entries, exercice, refs, 'ht');
+    const ht = base === 'ht' ? syn : completerAvecPrevisionnel(
+      syntheseExercice(entries, exercice, refs, 'ht'),
+      previsionnels[exercice] ?? [], refs, 'ht', moisFuturs);
     return compteResultat({
       moisList: ht.moisList,
       produits: ht.totalProduitsParMois,
@@ -205,7 +228,7 @@ export function SynthesePage({ onAllerA }: { onAllerA?: (page: Page, ligne: stri
       produitsFinanciers: produitsFinanciersParMois(finances, ht.moisList),
       chargesFinancieres: ht.chargesFinancieresParMois,
     });
-  }, [syn, entries, exercice, refs, base, immos, finances]);
+  }, [syn, entries, exercice, refs, base, immos, finances, previsionnels, moisFuturs]);
 
   return (
     <div className="p-4 w-full">
@@ -245,6 +268,16 @@ export function SynthesePage({ onAllerA }: { onAllerA?: (page: Page, ligne: stri
                 </button>
               ))}
             </div>
+            <button
+              className="px-3 py-1.5 rounded-md border text-sm font-semibold inline-flex items-center gap-1.5"
+              style={avecPrev
+                ? { backgroundColor: 'var(--bbg-purple-dark)', color: '#fff', borderColor: 'var(--bbg-purple-dark)' }
+                : { backgroundColor: '#fff', color: '#5c5280', borderColor: 'var(--bbg-border)' }}
+              title="Compléter les mois pas encore atteints avec ce qui est budgété, en grisé"
+              onClick={() => setAvecPrev(!avecPrev)}
+            >
+              {avecPrev ? <CheckSquare size={14} /> : <Square size={14} />} Prévisionnel
+            </button>
             <Btn onClick={basculerApercu} title="Afficher le détail des opérations au survol d'une case">
               <span className="inline-flex items-center gap-1">
                 {apercuActif ? <Eye size={14} /> : <EyeOff size={14} />}
@@ -300,7 +333,11 @@ export function SynthesePage({ onAllerA }: { onAllerA?: (page: Page, ligne: stri
                       <tr>
                         <th className="text-left" style={{ minWidth: 230 }}>Catégorie</th>
                         {syn.moisList.map(m => (
-                          <th key={m} className="num" style={{ minWidth: 74 }}>{labelMois(m)}</th>
+                          <th key={m} className="num" style={{ minWidth: 74 }}
+                            title={estMoisPrevu(m) ? 'Rempli avec le prévisionnel' : undefined}>
+                            {labelMois(m)}
+                            {estMoisPrevu(m) && <span className="font-normal opacity-70"> ·p</span>}
+                          </th>
                         ))}
                         <th className="num" style={{ minWidth: 96 }}>Total</th>
                         <th className="num" style={{ minWidth: 84 }}>/ mois</th>
@@ -352,7 +389,12 @@ export function SynthesePage({ onAllerA }: { onAllerA?: (page: Page, ligne: stri
                                       onMouseLeave={quitte}
                                       // Un montant négatif dans un bloc de dépenses est un
                                       // remboursement : il vient en moins des charges du mois.
-                                      style={v < 0 ? { color: '#38761d' } : undefined}
+                                      // Un mois à venir est du prévu : gris et italique.
+                                      style={v < 0
+                                        ? { color: '#38761d' }
+                                        : estMoisPrevu(m)
+                                          ? { color: '#8d85a6', fontStyle: 'italic' }
+                                          : undefined}
                                       title={v < 0 ? 'En réduction des charges du mois' : undefined}
                                     >
                                       {v ? euros(r2(v)) : '·'}
@@ -446,7 +488,8 @@ export function SynthesePage({ onAllerA }: { onAllerA?: (page: Page, ligne: stri
                       <tr className="total-bloc">
                         <td>TOTAL {bloc.cle === 'produits' ? 'PRODUITS' : bloc.cle === 'personnel' ? 'PERSONNEL' : 'CHARGES'} ({unite})</td>
                         {syn.moisList.map(m => (
-                          <td key={m} className="text-right tabular-nums">
+                          <td key={m} className="text-right tabular-nums"
+                            style={estMoisPrevu(m) ? { fontStyle: 'italic', opacity: 0.75 } : undefined}>
                             {bloc.totaux.get(m) ? euros0(r2(bloc.totaux.get(m)!)) : '·'}
                           </td>
                         ))}

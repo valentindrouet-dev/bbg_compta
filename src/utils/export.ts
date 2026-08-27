@@ -2,14 +2,19 @@ import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { AppState } from '../store';
-import type { JournalEntry } from '../types';
+import type { JournalEntry, PrevLigne, Referentiels } from '../types';
 import { labelMois, formatDateFR, compareMois, moisCourant, moisExercice } from './dates';
 import { r2 } from './money';
-import { syntheseExercice, immoInfos, tableauTVA, tableauTreso, moisTresorerie } from './calc';
+import {
+  syntheseExercice, immoInfos, tableauTVA, tableauTreso, moisTresorerie,
+  resultatDeSynthese, bilanJeux,
+} from './calc';
 import { exporterFichiers, importerFichiers, listFiles, type FichierSerialise } from './files';
 import { creerZip, nomSur, type FichierZip } from './zip';
 import { pageLectureSeule } from './partage';
-import { ordreAffichage, valeursDe } from './previsionnel';
+import { ordreAffichage, valeursDe, SECTIONS } from './previsionnel';
+import { natureCategorie, dureeCategorie } from './blocs';
+import { couleurJeu } from './jeux';
 
 function download(name: string, blob: Blob) {
   const url = URL.createObjectURL(blob);
@@ -33,6 +38,7 @@ function journalRows(entries: JournalEntry[]) {
       'Fournisseur': e.fournisseur,
       'Description': e.description,
       'Catégorie': e.categorie,
+      'Jeu': e.jeu ?? '',
       'TTC': r2(e.ttc),
       'TVA': r2(e.tva),
       'HT': r2(e.ht),
@@ -45,95 +51,230 @@ function journalRows(entries: JournalEntry[]) {
     }));
 }
 
+/** Une ligne « mois -> valeur » pour une feuille : le mois en tête, puis le total. */
+function moisRow(
+  mois: string[], libelle: Record<string, string | number>,
+  valeur: (m: string) => number,
+): Record<string, string | number> {
+  const row = { ...libelle };
+  let total = 0;
+  for (const m of mois) { const v = r2(valeur(m)); row[labelMois(m)] = v; total += v; }
+  row['Total'] = r2(total);
+  return row;
+}
+
+/** Décrit la formule d'une ligne de prévisionnel en clair, pour le tableur. */
+function formuleLisible(l: PrevLigne, lignes: PrevLigne[]): string {
+  if (!l.formule) return '';
+  if (l.formule.type === 'pourcentage-bloc') return `${l.formule.taux} % du bloc au-dessus`;
+  const f = l.formule;
+  const source = lignes.find(x => x.id === f.sourceId)?.categorie ?? '?';
+  const dec = f.decalage ? ` du mois -${f.decalage}` : '';
+  return `${source}${dec} × ${r2(f.tauxHT)} € HT`;
+}
+
 export function blobExcel(state: AppState, exercice: string): Blob {
   const wb = XLSX.utils.book_new();
-  const { entries, referentiels, previsionnels, chronologie, finances } = state;
+  const {
+    entries, referentiels, previsionnels, chronologie, finances, tresoManuel,
+  } = state;
+  const refs: Referentiels = referentiels;
+  const feuille = (nom: string, rows: Record<string, string | number>[]) => {
+    if (rows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), nom);
+  };
 
   // Journal complet
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(journalRows(entries)), 'Journal');
+  feuille('Journal', journalRows(entries));
 
-  // Synthèse charges par mois × catégorie
-  const syn = syntheseExercice(entries, exercice, referentiels);
-  const cats = referentiels.categoriesDepenses.filter(c => syn.charges.has(c));
-  const synRows = syn.moisList.map(m => {
-    const row: Record<string, string | number> = { 'Mois': labelMois(m) };
-    for (const c of cats) row[c] = r2(syn.charges.get(c)?.get(m) ?? 0);
-    row['Total HT'] = r2(syn.totalChargesParMois.get(m) ?? 0);
-    row['Immo HT'] = r2(syn.immoParMois.get(m) ?? 0);
-    row['Total TTC'] = r2(syn.totalTTCParMois.get(m) ?? 0);
+  // Synthèse : un bloc après l'autre, comme à l'écran, HT et TTC.
+  const syn = syntheseExercice(entries, exercice, refs);
+  const mois = syn.moisList;
+  const bloc = (
+    titre: string, data: Map<string, Map<string, number>>, ordre: string[],
+  ) => ordre.filter(c => data.has(c)).concat([...data.keys()].filter(c => !ordre.includes(c)))
+    .map(c => moisRow(mois, { 'Bloc': titre, 'Ligne': c }, m => data.get(c)?.get(m) ?? 0));
+
+  const synRows: Record<string, string | number>[] = [
+    ...bloc('Produits', syn.produits, refs.categoriesProduits),
+    moisRow(mois, { 'Bloc': 'Produits', 'Ligne': 'TOTAL PRODUITS HT' }, m => syn.totalProduitsParMois.get(m) ?? 0),
+    moisRow(mois, { 'Bloc': 'Produits', 'Ligne': 'TOTAL PRODUITS TTC' }, m => syn.totalProduitsTTCParMois.get(m) ?? 0),
+    ...bloc('Charges', syn.charges, refs.categoriesDepenses),
+    moisRow(mois, { 'Bloc': 'Charges', 'Ligne': 'TOTAL CHARGES HT' }, m => syn.totalChargesParMois.get(m) ?? 0),
+    moisRow(mois, { 'Bloc': 'Charges', 'Ligne': 'TOTAL CHARGES TTC' }, m => syn.totalChargesTTCParMois.get(m) ?? 0),
+    moisRow(mois, { 'Bloc': 'Charges', 'Ligne': 'dont charges financières' }, m => syn.chargesFinancieresParMois.get(m) ?? 0),
+    ...bloc('Personnel', syn.personnel, refs.categoriesDepenses),
+    moisRow(mois, { 'Bloc': 'Personnel', 'Ligne': 'TOTAL PERSONNEL HT' }, m => syn.totalPersonnelParMois.get(m) ?? 0),
+    moisRow(mois, { 'Bloc': 'Personnel', 'Ligne': 'TOTAL PERSONNEL TTC' }, m => syn.totalPersonnelTTCParMois.get(m) ?? 0),
+    ...bloc('Immobilisations', syn.immos, []),
+    moisRow(mois, { 'Bloc': 'Immobilisations', 'Ligne': 'TOTAL IMMOBILISATIONS HT' }, m => syn.immoParMois.get(m) ?? 0),
+    moisRow(mois, { 'Bloc': 'Immobilisations', 'Ligne': 'TOTAL IMMOBILISATIONS TTC' }, m => syn.immoTTCParMois.get(m) ?? 0),
+    moisRow(mois, { 'Bloc': 'Total', 'Ligne': 'TOTAL DÉPENSES TTC' }, m => syn.totalTTCParMois.get(m) ?? 0),
+  ];
+  feuille(`Synthèse ${exercice}`, synRows);
+
+  // Compte de résultat — le même calcul qu'à l'écran (EBE, REX, IS, résultat net).
+  feuille(`Résultat ${exercice}`, resultatDeSynthese(syn, entries, finances, refs).map(l => {
+    const row: Record<string, string | number> = { 'Ligne': l.label, 'Niveau': l.niveau };
+    for (const m of mois) row[labelMois(m)] = l.parMois ? r2(l.parMois.get(m) ?? 0) : '';
+    row['Total'] = l.total;
     return row;
-  });
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(synRows), `Synthèse ${exercice}`);
+  }));
 
-  // Produits
-  const prodRows = syn.moisList
-    .filter(m => (syn.totalProduitsParMois.get(m) ?? 0) !== 0)
-    .map(m => {
-      const row: Record<string, string | number> = { 'Mois': labelMois(m) };
-      for (const [cat, byMois] of syn.produits) row[cat] = r2(byMois.get(m) ?? 0);
-      row['Total HT'] = r2(syn.totalProduitsParMois.get(m) ?? 0);
-      row['Total TTC'] = r2(syn.totalProduitsTTCParMois.get(m) ?? 0);
-      return row;
-    });
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(prodRows), 'Produits');
+  // Dépenses ventilées par jeu : la part à l'actif et celle passée en charges.
+  feuille('Par jeu', bilanJeux(entries, refs.categoriesJeux).map(b => ({
+    'Jeu': b.jeu,
+    'Couleur': couleurJeu(b.jeu, refs),
+    'Écritures': b.nb,
+    'Charges HT': b.charges,
+    'Immobilisé HT': b.immo,
+    'Total HT': b.ht,
+    'TVA': b.tva,
+    'TTC': b.ttc,
+    'Première': b.premiere,
+    'Dernière': b.derniere,
+    'Lien Production Calculator': refs.jeuxMeta?.[b.jeu]?.lienProd ?? '',
+    'Note': refs.jeuxMeta?.[b.jeu]?.note ?? '',
+  })));
 
   // Immobilisations
-  const immoRows = immoInfos(entries, referentiels).map(i => ({
+  feuille('Immobilisations', immoInfos(entries, refs).map(i => ({
     'Date': i.entry.date,
     'Fournisseur': i.entry.fournisseur,
     'Description': i.entry.description,
     'Catégorie': i.entry.categorie,
+    'Jeu': i.entry.jeu ?? '',
     'TTC': r2(i.entry.ttc), 'TVA': r2(i.entry.tva), 'HT': r2(i.entry.ht),
     'Durée (ans)': i.duree,
     'Dotation /an': i.dotationAn, 'Dotation /mois': i.dotationMois,
     'VNC à ce jour': i.vnc(today()),
     'Fin amortissement': i.fin,
     'Compta': i.entry.compta ?? '', 'Facture': i.entry.facture ?? '',
-  }));
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(immoRows), 'Immobilisations');
+  })));
 
-  // Trésorerie
+  // Trésorerie — avec les corrections saisies à la main et le relevé bancaire.
   const moisList = moisTresorerie(entries, finances, moisCourant());
-  const tresoRows = tableauTreso(entries, finances, moisList).map(t => ({
+  feuille('Trésorerie', tableauTreso(entries, finances, moisList, tresoManuel ?? {}).map(t => ({
     'Mois': labelMois(t.mois),
     'Solde initial': t.soldeInitial,
-    'Encaissements': t.encaissements,
-    'Décaissements': -t.decaissements,
+    'Encaissements journal': t.encJournal,
+    'Décaissements journal': -t.decJournal,
+    'Mouvements financiers': t.financier,
+    'Correction manuelle': t.ajustement,
     'Solde mensuel': t.soldeMensuel,
     'Solde cumulé': t.soldeCumule,
-  }));
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(tresoRows), 'Trésorerie');
+    'Solde réel (banque)': t.soldeReel ?? '',
+    'Écart': t.ecart ?? '',
+    'Note': tresoManuel?.[t.mois]?.note ?? '',
+  })));
+
+  // Mouvements financiers : capital, compte courant d'associé, placements.
+  feuille('Mouvements financiers', [...finances]
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map(f => ({ 'Date': f.date, 'Libellé': f.label, 'Type': f.type, 'Montant': r2(f.montant) })));
 
   // TVA
-  const tvaRows = tableauTVA(entries, moisExercice(exercice)).map(x => ({
+  feuille('TVA', tableauTVA(entries, moisExercice(exercice)).map(x => ({
     'Mois': labelMois(x.mois),
     'CA TTC': x.caTTC, 'CA HT': x.caHT, 'TVA collectée': x.tvaCollectee,
     'Dépenses TTC': x.depTTC, 'Dépenses HT': x.depHT, 'TVA déductible': x.tvaDeductible,
     'Solde (collectée-déductible)': x.solde, 'Cumul': x.cumul,
-  }));
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(tvaRows), 'TVA');
+  })));
 
-  // Prévisionnel : mêmes catégories et mêmes mois que la synthèse
+  // Prévisionnel : mêmes catégories, mêmes mois et mêmes blocs que la synthèse.
+  const titreBloc = Object.fromEntries(SECTIONS.map(x => [x.cle, x.titre]));
   for (const [ex, brutes] of Object.entries(previsionnels ?? {})) {
-    const mois = moisExercice(ex);
-    const lignes = ordreAffichage(brutes, referentiels);
+    const moisEx = moisExercice(ex);
+    const lignes = ordreAffichage(brutes, refs);
     const rows = lignes.map(l => {
-      const row: Record<string, string | number> = {
-        'Bloc': l.section, 'Ligne': l.categorie, 'Unité': l.unite ?? '€',
-      };
       const vals = valeursDe(l, lignes);
-      mois.forEach((m, i) => { row[labelMois(m)] = vals[i] ?? ''; });
+      const row: Record<string, string | number> = {
+        'Bloc': titreBloc[l.section] ?? l.section,
+        'Ligne': l.categorie,
+        'Jeu': l.jeu ?? '',
+        'Unité': l.unite ?? '€ HT',
+        'TVA %': l.unite ? '' : (l.tauxTVA ?? ''),
+        'Formule': formuleLisible(l, lignes),
+      };
+      moisEx.forEach((m, i) => { row[labelMois(m)] = vals[i] ?? ''; });
       row['Total'] = r2(vals.reduce<number>((s, v) => s + (v ?? 0), 0));
+      row['Note'] = l.note ?? '';
       return row;
     });
-    if (rows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), `Prév ${ex}`);
+    feuille(`Prév ${ex}`, rows);
   }
 
-  // Chronologie
-  const chronoRows = chronologie.map(c => ({
-    'Projet': c.projet, 'Action': c.action, 'Début': c.debut, 'Fin': c.fin, 'Détail': c.detail ?? '',
+  // Chronologie — dans l'ordre des projets choisi à l'écran, avec leur couleur.
+  const ordreProjets = refs.chronoProjets ?? [];
+  const rang = (p: string) => {
+    const i = ordreProjets.indexOf(p);
+    return i < 0 ? ordreProjets.length : i;
+  };
+  feuille('Chronologie', [...chronologie]
+    .sort((a, b) => rang(a.projet) - rang(b.projet) || a.debut.localeCompare(b.debut))
+    .map(c => ({
+      'Projet': c.projet,
+      'Couleur': refs.chronoCouleurs?.[c.projet] ?? couleurJeu(c.projet, refs),
+      'Action': c.action,
+      'Début': c.debut,
+      'Fin': c.fin,
+      'Détail': c.detail ?? '',
+    })));
+
+  // Référentiel des catégories : c'est lui qui décide charge ou immobilisation.
+  const nomsNature: Record<string, string> = {
+    immo: 'Immobilisation', charge: 'Charge', auto: 'Au cas par cas',
+  };
+  feuille('Catégories', [
+    ...refs.categoriesProduits.map(c => ({ c, type: 'Produit' })),
+    ...refs.categoriesDepenses.map(c => ({ c, type: 'Dépense' })),
+    ...refs.categoriesJeux.map(c => ({ c, type: 'Jeux' })),
+  ].map(({ c, type }) => {
+    const nature = natureCategorie(c, refs);
+    return {
+      'Catégorie': c,
+      'Type': type,
+      'Groupe': refs.categoriesMeta?.[c]?.groupe ?? '',
+      'Nature': nomsNature[nature],
+      // La durée ne veut rien dire pour une catégorie qui n'est pas à l'actif.
+      'Durée amortissement (ans)': nature === 'immo' ? dureeCategorie(c, refs) : '',
+      'Couleur': refs.categoriesMeta?.[c]?.couleur ?? '',
+    };
   }));
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(chronoRows), 'Chronologie');
+
+  // Catalogue des jeux, avec la couleur qui les suit dans toute l'app.
+  feuille('Jeux', (refs.jeux ?? []).map(j => ({
+    'Jeu': j,
+    'Couleur': couleurJeu(j, refs),
+    'Lien Production Calculator': refs.jeuxMeta?.[j]?.lienProd ?? '',
+    'Note': refs.jeuxMeta?.[j]?.note ?? '',
+  })));
+
+  // Vue d'ensemble : une ligne par exercice, réel puis prévu.
+  const exercices = Object.keys(previsionnels ?? {}).sort();
+  feuille('Synthèse totale', exercices.map(ex => {
+    const s = syntheseExercice(entries, ex, refs);
+    const r = resultatDeSynthese(s, entries, finances, refs);
+    const val = (cle: string) => r.find(l => l.cle === cle)?.total ?? 0;
+    const ordonnees = ordreAffichage(previsionnels?.[ex] ?? [], refs);
+    const prevu = (section: string) =>
+      r2(ordonnees.filter(l => l.section === section && !l.unite)
+        .reduce((t, l) => t + valeursDe(l, ordonnees)
+          .reduce<number>((x, v) => x + (v ?? 0), 0), 0));
+    return {
+      'Exercice': ex,
+      'Produits réels HT': val('produits'),
+      'Charges réelles HT': val('charges'),
+      'EBE': val('ebe'),
+      'Dotations': val('dotations'),
+      'Résultat courant': val('rc'),
+      'Impôt sociétés': val('is'),
+      'RÉSULTAT NET': val('rn'),
+      'Produits prévus HT': prevu('produits'),
+      'Charges prévues HT': prevu('charges'),
+      'Personnel prévu HT': prevu('personnel'),
+      'Immos prévues HT': prevu('immos'),
+    };
+  }));
 
   const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
   return new Blob([out], {
@@ -172,9 +313,13 @@ const eurosPDF = (v: number) =>
   v.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
 
 function documentPDF(state: AppState, exercice: string): jsPDF {
-  const { entries, referentiels, finances } = state;
+  const { entries, referentiels: refs, finances, tresoManuel, previsionnels } = state;
   const doc = new jsPDF({ orientation: 'landscape' });
-  const syn = syntheseExercice(entries, exercice, referentiels);
+  const syn = syntheseExercice(entries, exercice, refs);
+  const mois = syn.moisList;
+  const finY = () => (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
+  const titre = (t: string) => { doc.setFontSize(14); doc.text(t, 14, 14); };
+  const NOIR: [number, number, number] = [40, 40, 40];
 
   doc.setFontSize(18);
   doc.text(`Big Budi Games — Rapport comptable ${exercice}`, 14, 16);
@@ -183,26 +328,29 @@ function documentPDF(state: AppState, exercice: string): jsPDF {
   doc.text(`Généré le ${formatDateFR(today())} par BBG Compta`, 14, 22);
   doc.setTextColor(0);
 
-  const totCharges = r2([...syn.totalChargesParMois.values()].reduce((s, v) => s + v, 0));
-  const totJeux = r2([...syn.totalJeuxParMois.values()].reduce((s, v) => s + v, 0));
-  const totImmo = r2([...syn.immoParMois.values()].reduce((s, v) => s + v, 0));
-  const totProd = r2([...syn.totalProduitsParMois.values()].reduce((s, v) => s + v, 0));
-
+  // Compte de résultat : le vrai, celui de l'écran — EBE, REX, IS, résultat net.
+  const resultat = resultatDeSynthese(syn, entries, finances, refs);
   autoTable(doc, {
     startY: 28,
-    head: [['Produits HT', 'Charges HT', 'Dépenses Jeux HT', 'Immobilisations HT', 'Résultat simplifié (produits − charges − jeux)']],
-    body: [[eurosPDF(totProd), eurosPDF(totCharges), eurosPDF(totJeux), eurosPDF(totImmo), eurosPDF(r2(totProd - totCharges - totJeux))]],
-    styles: { halign: 'right', fontSize: 10 },
-    headStyles: { fillColor: [40, 40, 40] },
+    head: [['Compte de résultat', 'Montant']],
+    body: resultat.map(l => [l.label, eurosPDF(l.total)]),
+    styles: { fontSize: 9 },
+    headStyles: { fillColor: NOIR },
+    columnStyles: { 1: { halign: 'right', cellWidth: 40 } },
+    didParseCell: (d) => {
+      const l = resultat[d.row.index];
+      if (d.section === 'body' && l && l.niveau !== 'detail') d.cell.styles.fontStyle = 'bold';
+    },
   });
 
-  // Synthèse par mois
-  const cats = referentiels.categoriesDepenses.filter(c => syn.charges.has(c));
+  // Synthèse par mois, bloc par bloc
+  const cats = refs.categoriesDepenses.filter(c => syn.charges.has(c));
   autoTable(doc, {
-    startY: (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8,
-    head: [['Mois', ...cats.map(c => c.length > 18 ? c.slice(0, 17) + '…' : c), 'Total HT', 'TTC']],
-    body: syn.moisList
-      .filter(m => (syn.totalTTCParMois.get(m) ?? 0) !== 0)
+    startY: finY() + 8,
+    head: [['Mois', ...cats.map(c => c.length > 18 ? c.slice(0, 17) + '…' : c),
+      'Charges HT', 'Personnel HT', 'Immos HT', 'Produits HT', 'Total dépenses TTC']],
+    body: mois
+      .filter(m => (syn.totalTTCParMois.get(m) ?? 0) !== 0 || (syn.totalProduitsParMois.get(m) ?? 0) !== 0)
       .map(m => [
         labelMois(m),
         ...cats.map(c => {
@@ -210,37 +358,65 @@ function documentPDF(state: AppState, exercice: string): jsPDF {
           return v ? eurosPDF(r2(v)) : '·';
         }),
         eurosPDF(r2(syn.totalChargesParMois.get(m) ?? 0)),
+        eurosPDF(r2(syn.totalPersonnelParMois.get(m) ?? 0)),
+        eurosPDF(r2(syn.immoParMois.get(m) ?? 0)),
+        eurosPDF(r2(syn.totalProduitsParMois.get(m) ?? 0)),
         eurosPDF(r2(syn.totalTTCParMois.get(m) ?? 0)),
       ]),
     styles: { fontSize: 6.5, halign: 'right' },
-    headStyles: { fillColor: [40, 40, 40], fontSize: 6 },
+    headStyles: { fillColor: NOIR, fontSize: 6 },
     columnStyles: { 0: { halign: 'left' } },
   });
 
   // Journal détaillé
   doc.addPage();
-  doc.setFontSize(14);
-  doc.text(`Journal détaillé — exercice ${exercice}`, 14, 14);
+  titre(`Journal détaillé — exercice ${exercice}`);
   const moisSet = new Set(moisExercice(exercice));
   const duJournal = entries
     .filter(e => moisSet.has(e.mois))
     .sort((a, b) => compareMois(a.mois, b.mois) || a.date.localeCompare(b.date));
   autoTable(doc, {
     startY: 20,
-    head: [['Mois', 'Date', 'Fournisseur', 'Description', 'Catégorie', 'TTC', 'TVA', 'HT', 'Paiement', 'Type']],
+    head: [['Mois', 'Date', 'Fournisseur', 'Description', 'Catégorie', 'Jeu', 'TTC', 'TVA', 'HT', 'Paiement', 'Type']],
     body: duJournal.map(e => [
       labelMois(e.mois), formatDateFR(e.date), e.fournisseur, e.description, e.categorie,
-      eurosPDF(e.ttc), eurosPDF(e.tva), eurosPDF(e.ht), e.paiement, e.type,
+      e.jeu ?? '', eurosPDF(e.ttc), eurosPDF(e.tva), eurosPDF(e.ht), e.paiement, e.type,
     ]),
     styles: { fontSize: 7 },
-    headStyles: { fillColor: [40, 40, 40] },
-    columnStyles: { 5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right' } },
+    headStyles: { fillColor: NOIR },
+    columnStyles: { 6: { halign: 'right' }, 7: { halign: 'right' }, 8: { halign: 'right' } },
+  });
+
+  // Immobilisations et dépenses par jeu
+  doc.addPage();
+  titre('Immobilisations et dépenses par jeu');
+  autoTable(doc, {
+    startY: 20,
+    head: [['Date', 'Description', 'Catégorie', 'Jeu', 'HT', 'Durée', 'Dotation /an', 'VNC ce jour', 'Fin']],
+    body: immoInfos(entries, refs).map(i => [
+      formatDateFR(i.entry.date), i.entry.description, i.entry.categorie, i.entry.jeu ?? '',
+      eurosPDF(i.entry.ht), `${i.duree} ans`, eurosPDF(i.dotationAn),
+      eurosPDF(i.vnc(today())), formatDateFR(i.fin),
+    ]),
+    styles: { fontSize: 7 },
+    headStyles: { fillColor: NOIR },
+    columnStyles: { 4: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right' } },
+  });
+  autoTable(doc, {
+    startY: finY() + 8,
+    head: [['Jeu', 'Écritures', 'Charges HT', 'Immobilisé HT', 'Total HT', 'TVA', 'TTC']],
+    body: bilanJeux(entries, refs.categoriesJeux).map(b => [
+      b.jeu, String(b.nb), eurosPDF(b.charges), eurosPDF(b.immo),
+      eurosPDF(b.ht), eurosPDF(b.tva), eurosPDF(b.ttc),
+    ]),
+    styles: { fontSize: 8, halign: 'right' },
+    headStyles: { fillColor: NOIR },
+    columnStyles: { 0: { halign: 'left' } },
   });
 
   // TVA + Trésorerie
   doc.addPage();
-  doc.setFontSize(14);
-  doc.text('TVA et trésorerie', 14, 14);
+  titre('TVA et trésorerie');
   autoTable(doc, {
     startY: 20,
     head: [['Mois', 'CA TTC', 'TVA collectée', 'Dépenses TTC', 'TVA déductible', 'Solde', 'Cumul']],
@@ -249,20 +425,61 @@ function documentPDF(state: AppState, exercice: string): jsPDF {
       eurosPDF(x.depTTC), eurosPDF(x.tvaDeductible), eurosPDF(x.solde), eurosPDF(x.cumul),
     ]),
     styles: { fontSize: 8, halign: 'right' },
-    headStyles: { fillColor: [40, 40, 40] },
+    headStyles: { fillColor: NOIR },
     columnStyles: { 0: { halign: 'left' } },
   });
   autoTable(doc, {
-    startY: (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8,
-    head: [['Mois', 'Solde initial', 'Encaissements', 'Décaissements', 'Solde mensuel', 'Solde cumulé']],
-    body: tableauTreso(entries, finances, moisTresorerie(entries, finances, moisCourant())).map(t => [
-      labelMois(t.mois), eurosPDF(t.soldeInitial), eurosPDF(t.encaissements),
-      eurosPDF(-t.decaissements), eurosPDF(t.soldeMensuel), eurosPDF(t.soldeCumule),
+    startY: finY() + 8,
+    head: [['Mois', 'Solde initial', 'Encaissements', 'Décaissements', 'Financier',
+      'Correction', 'Solde mensuel', 'Solde cumulé', 'Banque', 'Écart']],
+    body: tableauTreso(entries, finances, moisTresorerie(entries, finances, moisCourant()),
+      tresoManuel ?? {}).map(t => [
+      labelMois(t.mois), eurosPDF(t.soldeInitial), eurosPDF(t.encJournal),
+      eurosPDF(-t.decJournal), eurosPDF(t.financier), eurosPDF(t.ajustement),
+      eurosPDF(t.soldeMensuel), eurosPDF(t.soldeCumule),
+      t.soldeReel == null ? '·' : eurosPDF(t.soldeReel),
+      t.ecart == null ? '·' : eurosPDF(t.ecart),
     ]),
-    styles: { fontSize: 8, halign: 'right' },
-    headStyles: { fillColor: [40, 40, 40] },
+    styles: { fontSize: 7, halign: 'right' },
+    headStyles: { fillColor: NOIR, fontSize: 6.5 },
     columnStyles: { 0: { halign: 'left' } },
   });
+
+  // Mouvements financiers : capital, compte courant d'associé, placements.
+  if (finances.length) {
+    autoTable(doc, {
+      startY: finY() + 8,
+      head: [['Date', 'Mouvement financier', 'Type', 'Montant']],
+      body: [...finances].sort((a, b) => a.date.localeCompare(b.date))
+        .map(f => [formatDateFR(f.date), f.label, f.type, eurosPDF(r2(f.montant))]),
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: NOIR },
+      columnStyles: { 3: { halign: 'right' } },
+    });
+  }
+
+  // Prévisionnel de l'exercice
+  const lignesPrev = ordreAffichage(previsionnels?.[exercice] ?? [], refs);
+  if (lignesPrev.length) {
+    doc.addPage();
+    titre(`Prévisionnel ${exercice}`);
+    const moisEx = moisExercice(exercice);
+    autoTable(doc, {
+      startY: 20,
+      head: [['Bloc', 'Ligne', 'Jeu', ...moisEx.map(m => labelMois(m)), 'Total']],
+      body: lignesPrev.map(l => {
+        const vals = valeursDe(l, lignesPrev);
+        return [
+          l.section, l.categorie, l.jeu ?? '',
+          ...vals.map(v => v == null ? '·' : (l.unite ? String(r2(v)) : eurosPDF(r2(v)))),
+          eurosPDF(r2(vals.reduce<number>((s, v) => s + (v ?? 0), 0))),
+        ];
+      }),
+      styles: { fontSize: 6, halign: 'right' },
+      headStyles: { fillColor: NOIR, fontSize: 5.5 },
+      columnStyles: { 0: { halign: 'left' }, 1: { halign: 'left' }, 2: { halign: 'left' } },
+    });
+  }
 
   return doc;
 }
@@ -283,7 +500,9 @@ export async function blobBackup(state: AppState, avecFichiers = true): Promise<
   const fichiers = avecFichiers ? await exporterFichiers() : [];
   const data = {
     format: 'bbg-compta-backup',
-    version: 2,
+    // v3 : les corrections manuelles de trésorerie et les couleurs des blocs
+    // entrent dans la sauvegarde. Sans elles, une restauration les perdait.
+    version: 3,
     exportedAt: new Date().toISOString(),
     entries: state.entries,
     finances: state.finances,
@@ -292,8 +511,10 @@ export async function blobBackup(state: AppState, avecFichiers = true): Promise<
     previsionnels: state.previsionnels,
     chronologie: state.chronologie,
     tresoPrev: state.tresoPrev,
+    tresoManuel: state.tresoManuel,
     journalFormats: state.journalFormats,
     colWidths: state.colWidths,
+    blocCouleurs: state.blocCouleurs,
     fichiers,
   };
   return new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' });
@@ -362,13 +583,16 @@ export async function exportTout(state: AppState, exercice: string,
 function lisezMoi(exercice: string, jour: string, nbFactures: number): string {
   const pieces: [string, string[]][] = [
     [`BBG_Compta_${exercice}.xlsx`, [
-      'Classeur complet : journal, synthèse, produits, immobilisations,',
-      'trésorerie, TVA, prévisionnel et chronologie.',
+      'Classeur complet : journal, synthèse par bloc (HT et TTC),',
+      'compte de résultat, dépenses par jeu, immobilisations, trésorerie',
+      'et mouvements financiers, TVA, prévisionnel de chaque exercice,',
+      'chronologie, catégories, jeux et vue d\'ensemble sur cinq ans.',
       'S\'importe dans Google Sheets par Fichier > Importer.',
     ]],
     [`BBG_Rapport_${exercice}.pdf`, [
-      'Rapport imprimable : synthèse par catégorie, journal détaillé,',
-      'TVA et trésorerie.',
+      'Rapport imprimable : compte de résultat, synthèse par catégorie,',
+      'journal détaillé, immobilisations et dépenses par jeu, TVA,',
+      'trésorerie, mouvements financiers et prévisionnel.',
     ]],
     ['BBG_Journal.csv', [
       'Toutes les écritures (séparateur « ; », virgule décimale),',
@@ -376,8 +600,9 @@ function lisezMoi(exercice: string, jour: string, nbFactures: number): string {
     ]],
     [`BBG_Compta_${exercice}_lecture_seule.html`, [
       'Copie consultable en lecture seule : synthèse, compte de résultat,',
-      'TVA, journal, immobilisations et contrôles. Un double-clic suffit,',
-      'rien à installer, rien de modifiable.',
+      'TVA, journal, immobilisations, trésorerie, dépenses par jeu,',
+      'chronologie et contrôles. Un double-clic suffit, rien à installer,',
+      'rien de modifiable.',
     ]],
     ['BBG_Compta_sauvegarde.json', [
       'Sauvegarde restaurable dans BBG Compta',
@@ -449,8 +674,11 @@ export async function importBackup(file: File): Promise<{
       previsionnels: data.previsionnels,
       chronologie: data.chronologie ?? [],
       tresoPrev: data.tresoPrev ?? [],
+      // Absents des sauvegardes v2 : on ne remplace alors rien.
+      ...(data.tresoManuel ? { tresoManuel: data.tresoManuel } : {}),
       ...(data.journalFormats ? { journalFormats: data.journalFormats } : {}),
       ...(data.colWidths ? { colWidths: data.colWidths } : {}),
+      ...(data.blocCouleurs ? { blocCouleurs: data.blocCouleurs } : {}),
     },
     nbFichiers,
   };

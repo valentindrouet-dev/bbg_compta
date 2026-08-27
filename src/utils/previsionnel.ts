@@ -1,7 +1,9 @@
 import type {
   BudgetExercice, JournalEntry, PrevLigne, PrevSection, Referentiels,
 } from '../types';
-import { BLOCS, blocDeCategorie, blocDeEcriture, estPosteJeuImmobilise } from './blocs';
+import {
+  BLOCS, blocDeCategorie, blocDeEcriture, estChargeFinanciere, estPosteJeuImmobilise,
+} from './blocs';
 import { moisExercice, PREMIER_EXERCICE } from './dates';
 import { r2 } from './money';
 
@@ -38,6 +40,20 @@ const LIGNES_CALCULEES = [
 export function estLigneCalculee(label: string): boolean {
   const n = normalise(label);
   return LIGNES_CALCULEES.some(l => n === l || n.startsWith(l));
+}
+
+/**
+ * Un poste de coût de développement que le référentiel ne reconnaît pas : le
+ * développement graphique et les illustrations s'inscrivent à l'actif, tout le
+ * reste (prototypage, communication, avances) reste une charge. Il n'y a plus
+ * de bloc « Jeux » où les ranger : une ligne mal classée y deviendrait
+ * invisible dans le prévisionnel tout en pesant dans les calculs.
+ */
+export function sectionDunPosteDeJeu(libelle: string): PrevSection {
+  const n = normalise(libelle);
+  // « Contrat d'Ilustrations » : le tableur d'origine écrit un seul « l ».
+  const immobilise = /il+ustration|developpement graphique|design graphique/.test(n);
+  return immobilise ? 'immos' : 'charges';
 }
 
 /** Cherche la catégorie du référentiel qui correspond à un libellé de budget. */
@@ -116,7 +132,9 @@ export function migrerBudgets(
         id: `prev-${ex}-${++seq}`,
         categorie: libelle,
         ...(jeu ? { jeu } : {}),
-        section: !estMontant ? 'indicateurs' : cat ? sectionDeCategorie(cat, refs) : (l.section === 'couts_dev' ? 'jeux' : 'charges'),
+        section: !estMontant ? 'indicateurs'
+          : cat ? sectionDeCategorie(cat, refs)
+          : sectionDunPosteDeJeu(`${l.groupe ?? ''} ${l.label}`),
         unite: estMontant ? undefined : (l.kind as PrevLigne['unite']),
         valeurs,
       });
@@ -463,4 +481,134 @@ export function memeJeu(a: string, b: string): boolean {
   if (x === y) return true;
   const [court, long] = x.length <= y.length ? [x, y] : [y, x];
   return court.length >= 4 && long.startsWith(court) && long.length - court.length <= 2;
+}
+
+/**
+ * Complète une synthèse avec le prévisionnel, sur les mois pas encore atteints.
+ *
+ * Le réalisé s'arrête au mois en cours ; au-delà, il n'y a rien à afficher tant
+ * que les écritures n'existent pas. Cette fonction y verse ce qui est budgété —
+ * catégories, ventilation par jeu, totaux et charges financières — pour lire
+ * l'exercice en entier. Les mois complétés sont rendus en gris par la page :
+ * ce n'est pas du réalisé, et ça se voit.
+ */
+export function completerAvecPrevisionnel<T extends {
+  moisList: string[];
+  produits: Map<string, Map<string, number>>;
+  charges: Map<string, Map<string, number>>;
+  personnel: Map<string, Map<string, number>>;
+  immos: Map<string, Map<string, number>>;
+  jeuxParJeuEtCategorie: Map<string, Map<string, Map<string, number>>>;
+  immosParJeuEtCategorie: Map<string, Map<string, Map<string, number>>>;
+  totalProduitsParMois: Map<string, number>;
+  totalChargesParMois: Map<string, number>;
+  totalPersonnelParMois: Map<string, number>;
+  totalJeuxParMois: Map<string, number>;
+  immoParMois: Map<string, number>;
+  totalProduitsTTCParMois: Map<string, number>;
+  totalChargesTTCParMois: Map<string, number>;
+  totalPersonnelTTCParMois: Map<string, number>;
+  totalJeuxTTCParMois: Map<string, number>;
+  immoTTCParMois: Map<string, number>;
+  totalTTCParMois: Map<string, number>;
+  chargesFinancieresParMois: Map<string, number>;
+}>(
+  syn: T, lignes: PrevLigne[], refs: Referentiels,
+  base: 'ht' | 'ttc', moisFuturs: string[],
+): T {
+  if (!moisFuturs.length) return syn;
+  const futurs = new Set(moisFuturs);
+  const observes = tauxObserves([]);   // pas d'écritures à observer sur ces mois
+  const ordonnees = ordreAffichage(lignes, refs);
+
+  // Copies profondes des cartes qu'on va enrichir : la synthèse d'origine
+  // reste intacte, ce qui garde le calcul du réalisé vérifiable.
+  const copie2 = (m: Map<string, Map<string, number>>) =>
+    new Map([...m].map(([k, v]) => [k, new Map(v)]));
+  const copie3 = (m: Map<string, Map<string, Map<string, number>>>) =>
+    new Map([...m].map(([k, v]) => [k, copie2(v)]));
+  const out = {
+    ...syn,
+    produits: copie2(syn.produits), charges: copie2(syn.charges),
+    personnel: copie2(syn.personnel), immos: copie2(syn.immos),
+    jeuxParJeuEtCategorie: copie3(syn.jeuxParJeuEtCategorie),
+    immosParJeuEtCategorie: copie3(syn.immosParJeuEtCategorie),
+    totalProduitsParMois: new Map(syn.totalProduitsParMois),
+    totalChargesParMois: new Map(syn.totalChargesParMois),
+    totalPersonnelParMois: new Map(syn.totalPersonnelParMois),
+    totalJeuxParMois: new Map(syn.totalJeuxParMois),
+    immoParMois: new Map(syn.immoParMois),
+    totalProduitsTTCParMois: new Map(syn.totalProduitsTTCParMois),
+    totalChargesTTCParMois: new Map(syn.totalChargesTTCParMois),
+    totalPersonnelTTCParMois: new Map(syn.totalPersonnelTTCParMois),
+    totalJeuxTTCParMois: new Map(syn.totalJeuxTTCParMois),
+    immoTTCParMois: new Map(syn.immoTTCParMois),
+    totalTTCParMois: new Map(syn.totalTTCParMois),
+    chargesFinancieresParMois: new Map(syn.chargesFinancieresParMois),
+  } as T;
+
+  const ajoute = (m: Map<string, number>, k: string, v: number) =>
+    m.set(k, r2((m.get(k) ?? 0) + v));
+  const ajouteCat = (m: Map<string, Map<string, number>>, cat: string, mois: string, v: number) => {
+    if (!m.has(cat)) m.set(cat, new Map());
+    ajoute(m.get(cat)!, mois, v);
+  };
+  const ajouteJeu = (
+    m: Map<string, Map<string, Map<string, number>>>, jeu: string, cat: string, mois: string, v: number,
+  ) => {
+    if (!m.has(jeu)) m.set(jeu, new Map());
+    ajouteCat(m.get(jeu)!, cat, mois, v);
+  };
+
+  for (const l of ordonnees) {
+    if (l.unite) continue;                       // les quantités ne sont pas des euros
+    const valeurs = valeursDe(l, ordonnees);
+    const taux = tauxDeLigne(l, observes);
+    const sec = toutesCategories(refs).includes(l.categorie)
+      ? sectionDeCategorie(l.categorie, refs)
+      : l.section;
+
+    for (const [i, mois] of syn.moisList.entries()) {
+      if (!futurs.has(mois)) continue;
+      const ht = valeurs[i] ?? 0;
+      if (!ht) continue;
+      const v = base === 'ttc' ? r2(ht * (1 + taux / 100)) : ht;
+      const ttc = r2(ht * (1 + taux / 100));
+      const jeu = jeuDeLigne(l, refs.jeux ?? []);
+
+      if (sec === 'produits') {
+        ajouteCat(out.produits, l.categorie, mois, v);
+        ajoute(out.totalProduitsParMois, mois, v);
+        ajoute(out.totalProduitsTTCParMois, mois, ttc);
+      } else if (sec === 'immos') {
+        ajouteCat(out.immos, l.categorie, mois, v);
+        ajoute(out.immoParMois, mois, v);
+        ajoute(out.immoTTCParMois, mois, ttc);
+        ajoute(out.totalTTCParMois, mois, ttc);
+        if (jeu) ajouteJeu(out.immosParJeuEtCategorie, jeu, l.categorie, mois, v);
+      } else if (sec === 'personnel') {
+        ajouteCat(out.personnel, l.categorie, mois, v);
+        ajoute(out.totalPersonnelParMois, mois, v);
+        ajoute(out.totalPersonnelTTCParMois, mois, ttc);
+        ajoute(out.totalTTCParMois, mois, ttc);
+      } else {
+        ajouteCat(out.charges, l.categorie, mois, v);
+        ajoute(out.totalChargesParMois, mois, v);
+        ajoute(out.totalChargesTTCParMois, mois, ttc);
+        ajoute(out.totalTTCParMois, mois, ttc);
+        if (estChargeFinanciere(l.categorie)) ajoute(out.chargesFinancieresParMois, mois, ht);
+        if (jeu) {
+          ajouteJeu(out.jeuxParJeuEtCategorie, jeu, l.categorie, mois, v);
+          ajoute(out.totalJeuxParMois, mois, v);
+          ajoute(out.totalJeuxTTCParMois, mois, ttc);
+        }
+      }
+    }
+  }
+  return out;
+}
+
+/** Toutes les catégories connues, tous blocs confondus. */
+function toutesCategories(refs: Referentiels): string[] {
+  return [...refs.categoriesProduits, ...refs.categoriesDepenses, ...refs.categoriesJeux];
 }
