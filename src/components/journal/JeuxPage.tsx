@@ -7,6 +7,7 @@ import { useStore } from '../../store';
 import { labelMois, formatDateFR, compareMois, EXERCICES } from '../../utils/dates';
 import { euros, euros0, r2, pourcent } from '../../utils/money';
 import { bilanJeux } from '../../utils/calc';
+import { totalDeLigne } from '../../utils/previsionnel';
 
 import { PageHeader, Card, StatCard, Btn, useSort, sortBy, ThSort } from '../ui';
 
@@ -50,9 +51,10 @@ export function JeuxPage() {
   const prevuParJeu = useMemo(() => {
     const m = new Map<string, number>();
     for (const ex of EXERCICES) {
-      for (const l of previsionnels[ex] ?? []) {
+      const lignesEx = previsionnels[ex] ?? [];
+      for (const l of lignesEx) {
         if (l.section !== 'jeux' || l.unite) continue;
-        const somme = l.valeurs.reduce<number>((s, v) => s + (v ?? 0), 0);
+        const somme = totalDeLigne(l, lignesEx);
         if (!somme) continue;
         const hay = l.categorie.toUpperCase();
         for (const j of jeux) {

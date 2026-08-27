@@ -4,7 +4,8 @@ import type { PrevLigne, PrevSection } from '../../types';
 import { EXERCICES, labelMois, moisExercice } from '../../utils/dates';
 import { euros, euros0, r2, pourcent } from '../../utils/money';
 import {
-  reelParCategorie, reelParCategorieEtMois, sectionDeCategorie, SECTIONS, SECTIONS_DEPENSES,
+  reelParCategorie, reelParCategorieEtMois, sectionDeCategorie, totalDeLigne, valeursDe,
+  SECTIONS, SECTIONS_DEPENSES,
 } from '../../utils/previsionnel';
 import { PageHeader, Card, StatCard } from '../ui';
 
@@ -24,7 +25,7 @@ export function ReelVsPrevuPage() {
   /** Prévu mois par mois, pour un ensemble de sections. */
   const prevuMensuel = (sections: PrevSection[]) => moisList.map((_, i) =>
     r2(lignes.filter(l => !l.unite && sections.includes(l.section))
-      .reduce((s, l) => s + (l.valeurs[i] ?? 0), 0)));
+      .reduce((s, l) => s + (valeursDe(l, lignes)[i] ?? 0), 0)));
 
   /** Réel mois par mois, pour les catégories d'un ensemble de sections. */
   const reelMensuel = (garde: (cat: string) => boolean) => moisList.map(m =>
@@ -47,7 +48,7 @@ export function ReelVsPrevuPage() {
     const cats = new Set<string>([...lignes.filter(l => !l.unite).map(l => l.categorie), ...reel.keys()]);
     return [...cats].map(cat => {
       const prevu = r2(lignes.filter(l => l.categorie === cat && !l.unite)
-        .reduce((s, l) => s + l.valeurs.reduce<number>((a, v) => a + (v ?? 0), 0), 0));
+        .reduce((s, l) => s + totalDeLigne(l, lignes), 0));
       const r = reel.get(cat) ?? 0;
       const section = lignes.find(l => l.categorie === cat)?.section
         ?? sectionDeCategorie(cat, refs);

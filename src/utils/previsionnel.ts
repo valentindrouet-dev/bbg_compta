@@ -1,4 +1,6 @@
-import type { BudgetExercice, JournalEntry, PrevLigne, PrevSection, Referentiels } from '../types';
+import type {
+  BudgetExercice, JournalEntry, PrevLigne, PrevSection, Referentiels,
+} from '../types';
 import { BLOCS, blocDeCategorie, blocDeEcriture } from './blocs';
 import { moisExercice, PREMIER_EXERCICE } from './dates';
 import { r2 } from './money';
@@ -204,7 +206,7 @@ export function alarmesPrevisionnel(
   const toutes = new Set([...refs.categoriesDepenses, ...refs.categoriesJeux, ...refs.categoriesProduits]);
 
   for (const l of lignes) {
-    if (l.section === 'indicateurs') continue;
+    if (l.section === 'indicateurs' || l.unite) continue;   // les lignes de quantités ne sont pas des catégories
     if (!toutes.has(l.categorie)) {
       alarmes.push({
         niveau: 'erreur', categorie: l.categorie, action: 'creerCategorie', section: l.section,
@@ -213,16 +215,22 @@ export function alarmesPrevisionnel(
     }
   }
 
+  // Une même catégorie sur deux jeux différents n'est pas un doublon : c'est la
+  // grille « un jeu par ligne » de la synthèse. On compte donc par jeu + catégorie.
   const vues = new Map<string, number>();
+  const doublons = new Map<string, { n: number; label: string }>();
   for (const l of lignes) {
-    if (l.section === 'indicateurs') continue;
+    if (l.section === 'indicateurs' || l.unite) continue;
     vues.set(l.categorie, (vues.get(l.categorie) ?? 0) + 1);
+    const cle = `${l.jeu ?? ''}\u0000${l.categorie}`;
+    const label = l.jeu ? `${l.jeu} — ${l.categorie}` : l.categorie;
+    doublons.set(cle, { n: (doublons.get(cle)?.n ?? 0) + 1, label });
   }
-  for (const [cat, n] of vues) {
+  for (const { n, label } of doublons.values()) {
     if (n > 1) {
       alarmes.push({
-        niveau: 'attention', categorie: cat,
-        message: `« ${cat} » apparaît sur ${n} lignes du prévisionnel : les montants s'additionnent.`,
+        niveau: 'attention', categorie: label,
+        message: `« ${label} » apparaît sur ${n} lignes du prévisionnel : les montants s'additionnent.`,
       });
     }
   }
@@ -238,4 +246,85 @@ export function alarmesPrevisionnel(
   }
 
   return alarmes;
+}
+
+// ----- Lignes calculées ---------------------------------------------------
+
+/**
+ * Les montants d'une ligne : ceux saisis, ou ceux que produit sa formule.
+ *
+ * Une ligne calculée multiplie les quantités d'une autre ligne par un taux, en
+ * décalant du nombre de mois voulu — un workshop donné en octobre et payé en
+ * novembre apparaît bien en novembre.
+ */
+export function valeursDe(l: PrevLigne, lignes: PrevLigne[]): (number | null)[] {
+  const f = l.formule;
+  if (!f) return l.valeurs;
+  const source = lignes.find(x => x.id === f.sourceId);
+  if (!source) return l.valeurs.map(() => null);
+  return l.valeurs.map((_, i) => {
+    const q = source.valeurs[i - f.decalage];
+    return q == null ? null : r2(q * f.tauxHT);
+  });
+}
+
+/** Total annuel d'une ligne, formule comprise. */
+export function totalDeLigne(l: PrevLigne, lignes: PrevLigne[]): number {
+  return r2(valeursDe(l, lignes).reduce<number>((s, v) => s + (v ?? 0), 0));
+}
+
+/** Valeur d'un mois, formule comprise. */
+export function valeurDuMois(l: PrevLigne, lignes: PrevLigne[], i: number): number {
+  return valeursDe(l, lignes)[i] ?? 0;
+}
+
+// ----- Gabarit d'un exercice vierge ---------------------------------------
+
+/** Catégories qui servent d'immobilisations dans le journal. */
+export function categoriesImmobilisees(entries: JournalEntry[]): string[] {
+  return [...new Set(entries.filter(e => e.type === 'immo').map(e => e.categorie))];
+}
+
+/**
+ * Le prévisionnel d'un exercice encore vierge : toutes les lignes de la
+ * synthèse annuelle, dans le même ordre et les mêmes blocs, avec des cellules
+ * vides. Il n'y a plus qu'à remplir.
+ */
+export function gabaritPrevisionnel(
+  refs: Referentiels, exercice: string, categoriesImmos: string[], id: () => string,
+): PrevLigne[] {
+  const nMois = moisExercice(exercice).length;
+  const vide = () => new Array<number | null>(nMois).fill(null);
+  const immos = new Set(categoriesImmos);
+  const personnel = new Set(
+    refs.categoriesDepenses.filter(c => refs.categoriesMeta?.[c]?.groupe === 'Personnel'));
+
+  const lignes: PrevLigne[] = [];
+  const ajouter = (categorie: string, section: PrevSection, extra: Partial<PrevLigne> = {}) => {
+    lignes.push({ id: id(), categorie, section, valeurs: vide(), ...extra });
+  };
+
+  for (const c of refs.categoriesProduits) ajouter(c, 'produits');
+  for (const c of refs.categoriesDepenses) {
+    if (personnel.has(c) || immos.has(c)) continue;
+    ajouter(c, 'charges');
+  }
+  for (const c of refs.categoriesDepenses) if (personnel.has(c)) ajouter(c, 'personnel');
+  // Bloc Jeux : une ligne par jeu et par poste, comme dans la synthèse.
+  for (const jeu of refs.jeux ?? []) {
+    for (const c of refs.categoriesJeux) ajouter(c, 'jeux', { jeu });
+  }
+  for (const c of refs.categoriesDepenses) if (immos.has(c)) ajouter(c, 'immos');
+  return lignes;
+}
+
+/** Les catégories qui manquent au prévisionnel d'un exercice déjà commencé. */
+export function categoriesManquantes(
+  lignes: PrevLigne[], refs: Referentiels, categoriesImmos: string[],
+): { categorie: string; section: PrevSection; jeu?: string }[] {
+  const modele = gabaritPrevisionnel(refs, PREMIER_EXERCICE, categoriesImmos, () => '');
+  const vues = new Set(lignes.map(l => `${l.section}|${l.categorie}|${l.jeu ?? ''}`));
+  return modele
+    .filter(m => !vues.has(`${m.section}|${m.categorie}|${m.jeu ?? ''}`))
+    .map(m => ({ categorie: m.categorie, section: m.section, jeu: m.jeu }));
 }

@@ -35,12 +35,23 @@ sont recalculés en direct à partir des écritures.
 - **Prévisionnel** — mêmes blocs, même ordre, mêmes catégories et mêmes couleurs
   que la synthèse annuelle, avec Prévu / Réel / Écart par ligne, un compte de
   résultat prévisionnel identique, et des alarmes quand une ligne ne correspond
-  à rien dans la synthèse
+  à rien dans la synthèse. Les exercices 2026-27 à 2029-30 ont la **grille
+  complète, cases vides**, prête à remplir (bouton *Compléter la grille* pour
+  rattraper une catégorie ajoutée depuis).
+- **Lignes calculées (heures × taux)** — une ligne porte les **heures faites
+  dans le mois**, la suivante encaisse **taux horaire × heures du mois
+  précédent**. Le taux se règle **en HT ou en TTC** (l'autre suit), et le
+  décalage d'encaissement se choisit (mois même, mois suivant, +2, +3). C'est
+  ainsi que les *workshops* sont calculés : payés au début du mois suivant.
 - **Vue 5 ans** — les cinq exercices côte à côte : prévu, réel, compte de
   résultat et trajectoire
 - **Réel vs Prévu** — le réalisé vient du journal, sans IMPORTRANGE
 - **Trésorerie prévisionnelle vs réalisée** — par exercice
-- **Chronologie** — frise 2025-30 des projets (dev, tirages, sorties, ventes)
+- **Chronologie** — frise 2025-30 des projets (dev, tirages, sorties, ventes),
+  **modifiable à la souris** : glisse une barre pour décaler l'étape, attrape
+  son bord pour l'allonger ou la raccourcir, survole-la pour tout savoir,
+  double-clique son libellé pour le renommer, `+ étape` en ajoute une au projet
+  et la corbeille en retire une
 
 **Outils**
 - **Exports** — les quatre exports d'un coup dans une archive `.zip`
@@ -75,6 +86,10 @@ sont recalculés en direct à partir des écritures.
   vider (une seule étape d'annulation). **Échap** annule la sélection.
 - **Mise en forme d'une colonne** : la palette qui apparaît au survol de
   l'en-tête (gras, italique, alignement, couleur).
+- **Déplacer une étape de la chronologie** : glisse sa barre sur la frise (la
+  durée ne bouge pas), ou attrape son **bord gauche / droit** pour changer la
+  date de début ou de fin. Les dates s'affichent en bas pendant le glissé, et
+  un seul **Cmd+Z** défait le déplacement.
 - **Cmd+Z / Ctrl+Z** annule, **Cmd+Maj+Z / Ctrl+Y** rétablit.
 
 ## Données

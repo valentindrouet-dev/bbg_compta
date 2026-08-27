@@ -12,7 +12,7 @@ import {
   compteResultat, dotationsParMois, immoInfos, produitsFinanciersParMois, syntheseExercice,
   type LigneResultat,
 } from '../../utils/calc';
-import { SECTIONS_DEPENSES } from '../../utils/previsionnel';
+import { SECTIONS_DEPENSES, valeursDe } from '../../utils/previsionnel';
 import { estChargeFinanciere, teinteBloc, type BlocCle } from '../../utils/blocs';
 import { PageHeader, Card, StatCard, TotalBloc, styleBloc } from '../ui';
 
@@ -58,7 +58,8 @@ export function CinqAnsPage() {
     const carte = (calc: (i: number) => number) =>
       new Map(moisList.map((m, i) => [m, r2(calc(i))]));
     const prevuMois = (sec: PrevSection) => carte(i =>
-      lignes.filter(l => l.section === sec && !l.unite).reduce((s, l) => s + (l.valeurs[i] ?? 0), 0));
+      lignes.filter(l => l.section === sec && !l.unite)
+        .reduce((s, l) => s + (valeursDe(l, lignes)[i] ?? 0), 0));
     const somme = (m: Map<string, number>) => r2([...m.values()].reduce((s, v) => s + v, 0));
 
     const prevu = new Map<PrevSection, number>();
@@ -82,7 +83,7 @@ export function CinqAnsPage() {
     });
     const chargesFinPrevues = carte(i => lignes
       .filter(l => l.section === 'charges' && !l.unite && estChargeFinanciere(l.categorie))
-      .reduce((s, l) => s + (l.valeurs[i] ?? 0), 0));
+      .reduce((s, l) => s + (valeursDe(l, lignes)[i] ?? 0), 0));
 
     const resultatPrevu = compteResultat({
       moisList,

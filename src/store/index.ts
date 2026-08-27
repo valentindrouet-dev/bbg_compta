@@ -2,11 +2,14 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type {
   JournalEntry, FinanceEntry, BudgetExercice, ChronoEvent, TresoPrevLine, Referentiels, CategorieMeta,
-  JeuMeta, PrevLigne, PrevSection,
+  FormulePrev, JeuMeta, PrevLigne, PrevSection,
 } from '../types';
-import { estLigneCalculee, migrerBudgets, sectionDeCategorie } from '../utils/previsionnel';
+import {
+  categoriesImmobilisees, categoriesManquantes, estLigneCalculee, gabaritPrevisionnel,
+  migrerBudgets, sectionDeCategorie,
+} from '../utils/previsionnel';
 import { CATEGORIES_PERSONNEL_INITIALES, GROUPE_PERSONNEL } from '../utils/blocs';
-import { moisExercice, PREMIER_EXERCICE } from '../utils/dates';
+import { EXERCICES, moisExercice, PREMIER_EXERCICE } from '../utils/dates';
 import seedJournal from '../data/journal.json';
 import seedReferentiels from '../data/referentiels.json';
 import seedBudgets from '../data/budgets.json';
@@ -114,6 +117,12 @@ export interface AppState {
   removePrevLigne: (exercice: string, ligneId: string) => void;
   /** Recopie une valeur sur tous les mois restants de l'exercice. */
   etalerPrevLigne: (exercice: string, ligneId: string, montant: number) => void;
+  /** Règle (ou retire) la formule d'une ligne calculée. */
+  setPrevFormule: (exercice: string, ligneId: string, formule: FormulePrev | undefined) => void;
+  /** Crée le couple « quantités » + « montant = quantités × taux, décalé ». */
+  creerCalculHeures: (exercice: string, categorie: string, section: PrevSection) => void;
+  /** Ajoute les lignes de la synthèse qui manquent encore, cellules vides. */
+  completerPrevisionnel: (exercice: string) => void;
 
   addChrono: (c: Omit<ChronoEvent, 'id'>) => void;
   updateChrono: (id: string, patch: Partial<ChronoEvent>) => void;
@@ -153,17 +162,66 @@ function seedState() {
     finances: structuredClone(seedTresorerie.mouvementsFinanciers) as FinanceEntry[],
     referentiels: refs,
     budgets: structuredClone(seedBudgets) as unknown as Record<string, BudgetExercice>,
-    // Seul l'exercice en cours est repris du tableur : les quatre suivants
-    // repartent d'une feuille blanche, à remplir au fil de l'eau.
-    previsionnels: migrerBudgets(
-      { [PREMIER_EXERCICE]: (structuredClone(seedBudgets) as unknown as Record<string, BudgetExercice>)[PREMIER_EXERCICE] },
-      refs),
+    // Seul l'exercice en cours est repris du tableur ; les quatre suivants
+    // reçoivent la même grille de lignes, mais toutes cellules vides.
+    previsionnels: previsionnelsInitiaux(refs, entries),
     chronologie: structuredClone(seedChronologie) as ChronoEvent[],
     tresoPrev: structuredClone(seedTresorerie.previsionnel) as TresoPrevLine[],
     journalFormats: {} as Record<string, ColFormat>,
     colWidths: {} as ColWidths,
     blocCouleurs: {} as Record<string, string>,
   };
+}
+
+/**
+ * Branche les workshops sur les heures de formation : le montant d'un mois est
+ * le produit des heures du mois *précédent* par le taux horaire — Valentin est
+ * payé au début du mois qui suit la prestation.
+ *
+ * Le taux est déduit des montants déjà budgétés (montant ÷ heures), et la ligne
+ * d'heures remonte juste au-dessus des workshops, dans le bloc Produits.
+ */
+function brancherCalculHeures(lignes: PrevLigne[]): PrevLigne[] {
+  const workshops = lignes.find(l =>
+    !l.unite && !l.formule && /workshop/i.test(l.categorie));
+  const heures = lignes.find(l => l.unite === 'heures' && /heure/i.test(l.categorie));
+  if (!workshops || !heures) return lignes;
+
+  // Taux horaire implicite : le premier mois où les deux lignes sont remplies.
+  let taux = 0;
+  for (let i = 0; i < heures.valeurs.length; i++) {
+    const h = heures.valeurs[i], m = workshops.valeurs[i];
+    if (h && m) { taux = m / h; break; }
+  }
+  if (!taux) return lignes;
+
+  const heuresProduits: PrevLigne = { ...heures, section: workshops.section };
+  const calcule: PrevLigne = {
+    ...workshops,
+    formule: { type: 'heures-taux', sourceId: heures.id, tauxHT: taux, tauxTVA: 20, decalage: 1 },
+  };
+  const autres = lignes.filter(l => l.id !== heures.id && l.id !== workshops.id);
+  const idx = lignes.findIndex(l => l.id === workshops.id);
+  const avant = autres.slice(0, Math.max(0, idx));
+  return [...avant, heuresProduits, calcule, ...autres.slice(Math.max(0, idx))];
+}
+
+/**
+ * Prévisionnels de départ : l'exercice en cours vient du tableur, les suivants
+ * sont un gabarit vierge — mêmes lignes que la synthèse, cellules à remplir.
+ */
+function previsionnelsInitiaux(
+  refs: Referentiels, entries: JournalEntry[],
+): Record<string, PrevLigne[]> {
+  const budgets = structuredClone(seedBudgets) as unknown as Record<string, BudgetExercice>;
+  const out = migrerBudgets({ [PREMIER_EXERCICE]: budgets[PREMIER_EXERCICE] }, refs);
+  out[PREMIER_EXERCICE] = brancherCalculHeures(out[PREMIER_EXERCICE] ?? []);
+  const immos = categoriesImmobilisees(entries);
+  for (const ex of EXERCICES) {
+    if (ex === PREMIER_EXERCICE) continue;
+    out[ex] = gabaritPrevisionnel(refs, ex, immos, uid);
+  }
+  return out;
 }
 
 /**
@@ -433,6 +491,51 @@ export const useStore = create<AppState>()(
           [exercice]: (s.previsionnels[exercice] ?? []).filter(l => l.id !== ligneId),
         },
       })),
+      setPrevFormule: (exercice, ligneId, formule) => set(s => ({
+        previsionnels: {
+          ...s.previsionnels,
+          [exercice]: (s.previsionnels[exercice] ?? []).map(l =>
+            l.id === ligneId ? { ...l, formule } : l),
+        },
+      })),
+
+      creerCalculHeures: (exercice, categorie, section) => set(s => {
+        const nMois = moisExercice(exercice).length;
+        const vide = () => new Array<number | null>(nMois).fill(null);
+        const heures: PrevLigne = {
+          id: uid(), categorie: `${categorie} — heures effectuées`, section,
+          unite: 'heures', valeurs: vide(),
+        };
+        const montant: PrevLigne = {
+          id: uid(), categorie, section, valeurs: vide(),
+          formule: { type: 'heures-taux', sourceId: heures.id, tauxHT: 50, tauxTVA: 20, decalage: 1 },
+        };
+        return {
+          previsionnels: {
+            ...s.previsionnels,
+            [exercice]: [...(s.previsionnels[exercice] ?? []), heures, montant],
+          },
+        };
+      }),
+
+      completerPrevisionnel: (exercice) => set(s => {
+        const nMois = moisExercice(exercice).length;
+        const manquantes = categoriesManquantes(
+          s.previsionnels[exercice] ?? [], s.referentiels, categoriesImmobilisees(s.entries));
+        if (!manquantes.length) return s;
+        const nouvelles: PrevLigne[] = manquantes.map(m => ({
+          id: uid(), categorie: m.categorie, section: m.section,
+          ...(m.jeu ? { jeu: m.jeu } : {}),
+          valeurs: new Array<number | null>(nMois).fill(null),
+        }));
+        return {
+          previsionnels: {
+            ...s.previsionnels,
+            [exercice]: [...(s.previsionnels[exercice] ?? []), ...nouvelles],
+          },
+        };
+      }),
+
       etalerPrevLigne: (exercice, ligneId, montant) => set(s => ({
         previsionnels: {
           ...s.previsionnels,
@@ -579,7 +682,7 @@ export const useStore = create<AppState>()(
     },
     {
       name: 'bbg-compta-v1',
-      version: 7,
+      version: 8,
       // v2 : ajout de la liste des jeux et rattachement des dépenses de
       // développement au jeu concerné (déduit des mots clés / de la catégorie).
       migrate: (persisted, version) => {
@@ -610,6 +713,19 @@ export const useStore = create<AppState>()(
         // v7 : on repart d'un prévisionnel vierge pour les exercices à venir.
         if (version < 7 && s.previsionnels) {
           s.previsionnels = { [PREMIER_EXERCICE]: s.previsionnels[PREMIER_EXERCICE] ?? [] };
+        }
+        // v8 : les exercices à venir retrouvent la grille complète de la
+        // synthèse, cellules vides ; et les workshops se calculent.
+        if (version < 8 && s.previsionnels && s.referentiels) {
+          const immos = categoriesImmobilisees(s.entries ?? []);
+          for (const ex of EXERCICES) {
+            if (ex === PREMIER_EXERCICE) continue;
+            if (!(s.previsionnels[ex] ?? []).length) {
+              s.previsionnels[ex] = gabaritPrevisionnel(s.referentiels, ex, immos, uid);
+            }
+          }
+          s.previsionnels[PREMIER_EXERCICE] =
+            brancherCalculHeures(s.previsionnels[PREMIER_EXERCICE] ?? []);
         }
         return s;
       },

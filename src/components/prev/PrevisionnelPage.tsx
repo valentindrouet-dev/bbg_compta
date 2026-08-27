@@ -1,14 +1,15 @@
 import { Fragment, useMemo, useState } from 'react';
 import {
   Plus, Trash2, AlertTriangle, AlertCircle, Info, Wand2, ArrowRightLeft, Gamepad2,
+  Sigma, ListPlus, Clock,
 } from 'lucide-react';
 import { useStore } from '../../store';
-import type { PrevLigne, PrevSection } from '../../types';
+import type { FormulePrev, PrevLigne, PrevSection } from '../../types';
 import { EXERCICES, labelMois, moisExercice } from '../../utils/dates';
-import { euros, euros0, r2, pourcent } from '../../utils/money';
+import { euros, euros0, r2, pourcent, parseMontant } from '../../utils/money';
 import {
   SECTIONS, SECTIONS_DEPENSES, alarmesPrevisionnel, reelParCategorie, reelParCategorieEtMois,
-  reelParJeuEtCategorie, sectionDeCategorie,
+  reelParJeuEtCategorie, sectionDeCategorie, totalDeLigne, valeursDe,
 } from '../../utils/previsionnel';
 import { teinteBloc, estChargeFinanciere, GROUPE_PERSONNEL, type BlocCle } from '../../utils/blocs';
 import {
@@ -34,6 +35,9 @@ export function PrevisionnelPage() {
   const etalerPrevLigne = useStore(s => s.etalerPrevLigne);
   const addCategorie = useStore(s => s.addCategorie);
   const setCategorieMeta = useStore(s => s.setCategorieMeta);
+  const setPrevFormule = useStore(s => s.setPrevFormule);
+  const creerCalculHeures = useStore(s => s.creerCalculHeures);
+  const completerPrevisionnel = useStore(s => s.completerPrevisionnel);
 
   const [exercice, setExercice] = useState('2025-26');
   const [nouvelleCat, setNouvelleCat] = useState('');
@@ -67,13 +71,17 @@ export function PrevisionnelPage() {
     ...refs.categoriesProduits, ...refs.categoriesDepenses, ...refs.categoriesJeux,
   ];
 
-  const totalLigne = (l: PrevLigne) => r2(l.valeurs.reduce<number>((s, v) => s + (v ?? 0), 0));
+  // Chaque colonne de mois occupe 60,5 % / n : on fixe une largeur mini pour que
+  // « 12 345,67 € » tienne dans la case, comme dans la synthèse (74 px par mois).
+  const largeurMini = Math.max(1050, Math.round(74 * moisList.length / 0.605));
+
+  const totalLigne = (l: PrevLigne) => totalDeLigne(l, lignes);
   const lignesDe = (sec: PrevSection) => lignes.filter(l => l.section === sec);
   const totalSection = (sec: PrevSection) =>
     r2(lignesDe(sec).filter(l => !l.unite).reduce((s, l) => s + totalLigne(l), 0));
   /** Prévu d'une section, mois par mois. */
   const prevuMois = (sec: PrevSection, i: number) =>
-    r2(lignesDe(sec).filter(l => !l.unite).reduce((s, l) => s + (l.valeurs[i] ?? 0), 0));
+    r2(lignesDe(sec).filter(l => !l.unite).reduce((s, l) => s + (valeursDe(l, lignes)[i] ?? 0), 0));
 
   const totalPrevu = r2(SECTIONS_DEPENSES.reduce((s, sec) => s + totalSection(sec), 0));
   const totalProduits = totalSection('produits');
@@ -92,7 +100,8 @@ export function PrevisionnelPage() {
     const carte = (calc: (i: number) => number) =>
       new Map(moisList.map((m, i) => [m, r2(calc(i))]));
     const sectionMois = (sec: PrevSection) => carte(i =>
-      lignes.filter(l => l.section === sec && !l.unite).reduce((s, l) => s + (l.valeurs[i] ?? 0), 0));
+      lignes.filter(l => l.section === sec && !l.unite)
+        .reduce((s, l) => s + (valeursDe(l, lignes)[i] ?? 0), 0));
 
     // Dotations : celles des immobilisations déjà au bilan, plus celles que
     // déclencheraient les investissements prévus (linéaire, 5 ans).
@@ -108,7 +117,7 @@ export function PrevisionnelPage() {
 
     const chargesFinancieres = carte(i => lignes
       .filter(l => l.section === 'charges' && !l.unite && estChargeFinanciere(l.categorie))
-      .reduce((s, l) => s + (l.valeurs[i] ?? 0), 0));
+      .reduce((s, l) => s + (valeursDe(l, lignes)[i] ?? 0), 0));
 
     return compteResultat({
       moisList,
@@ -154,6 +163,10 @@ export function PrevisionnelPage() {
                 <Plus size={14} />
               </Btn>
             </div>
+            <Btn onClick={() => completerPrevisionnel(exercice)}
+              title="Ajouter les lignes de la synthèse qui manquent encore, cellules vides">
+              <span className="inline-flex items-center gap-1.5"><ListPlus size={14} /> Compléter la grille</span>
+            </Btn>
             <select
               className="border rounded-md px-2 py-1.5 text-sm bg-white font-medium"
               style={{ borderColor: 'var(--bbg-border)', color: 'var(--bbg-purple-darker)' }}
@@ -299,6 +312,14 @@ export function PrevisionnelPage() {
               title={`${sec.titre}${estIndicateurs ? '' : ' (HT)'} — prévisionnel ${exercice}`}
               actions={
                 <>
+                  {sec.cle === 'produits' && (
+                    <Btn onClick={() => creerCalculHeures(exercice, 'workshops', 'produits')}
+                      title="Ajouter une ligne d'heures et son montant calculé (taux × heures du mois précédent)">
+                      <span className="inline-flex items-center gap-1.5">
+                        <Clock size={13} /> Heures × taux
+                      </span>
+                    </Btn>
+                  )}
                   {!estIndicateurs && <TotalBloc label="Total prévu" valeur={euros(total)} t={t} />}
                   {!estIndicateurs && <BlocColorMenu bloc={sec.cle as BlocCle} />}
                 </>
@@ -314,14 +335,14 @@ export function PrevisionnelPage() {
                   <table
                     data-table={`prev:${sec.cle}:${moisList.length}`} data-bloc={sec.cle}
                     className="sheet text-xs"
-                    style={{ tableLayout: 'fixed', minWidth: 1050, ...styleBloc(t) }}
+                    style={{ tableLayout: 'fixed', minWidth: largeurMini, ...styleBloc(t) }}
                   >
                     <colgroup>
-                      <col style={{ width: '13%' }} />
+                      <col style={{ width: '17%' }} />
                       {moisList.map((_, i) => <col key={i} style={{ width: `${60.5 / moisList.length}%` }} />)}
-                      <col style={{ width: '8%' }} />
-                      <col style={{ width: '8%' }} />
-                      <col style={{ width: '7.5%' }} />
+                      <col style={{ width: '7%' }} />
+                      <col style={{ width: '6.5%' }} />
+                      <col style={{ width: '6%' }} />
                       <col style={{ width: '3%' }} />
                     </colgroup>
                     <thead>
@@ -349,6 +370,7 @@ export function PrevisionnelPage() {
                           )}
                           {parGroupe.get(g)!.map(l => {
                             const idxLigne = lignes.indexOf(l);
+                            const calculees = valeursDe(l, lignes);
                             const prevu = totalLigne(l);
                             const reelCat = reelDeLigne(l);
                             const ecart = r2(reelCat - prevu);
@@ -381,19 +403,41 @@ export function PrevisionnelPage() {
                                       <span className="text-[10px] px-1 rounded shrink-0"
                                         style={{ backgroundColor: '#e6e9f2', color: '#5c5280' }}>{l.unite}</span>
                                     )}
+                                    {l.formule && (
+                                      <span title="Ligne calculée" className="shrink-0">
+                                        <Sigma size={12} style={{ color: 'var(--bbg-purple-dark)' }} />
+                                      </span>
+                                    )}
                                   </div>
+                                  {l.formule && (
+                                    <TauxHoraire
+                                      formule={l.formule}
+                                      onChange={f => setPrevFormule(exercice, l.id, f)}
+                                    />
+                                  )}
                                 </td>
                                 {moisList.map((m, i) => (
-                                  <td
-                                    key={m} className="text-right p-0.5!"
-                                    {...selection.props('prev', idxLigne, i)}
-                                  >
-                                    <MoneyInput
-                                      value={l.valeurs[i] ?? null}
-                                      onCommit={v => setPrevCell(exercice, l.id, i, v)}
-                                      className="w-full min-w-12 border-transparent hover:border-[#ddd6ef] bg-transparent text-xs"
-                                    />
-                                  </td>
+                                  l.formule ? (
+                                    <td key={m} className="text-right tabular-nums"
+                                      title={`Calculé : ${l.formule.tauxHT.toFixed(2).replace('.', ',')} € × les heures de ${
+                                        i - l.formule.decalage >= 0 ? labelMois(moisList[i - l.formule.decalage]) : '—'}`}
+                                      style={{ color: '#5c5280', fontStyle: 'italic' }}>
+                                      <span className="block truncate text-xs">
+                                        {calculees[i] ? euros(calculees[i]!) : '·'}
+                                      </span>
+                                    </td>
+                                  ) : (
+                                    <td
+                                      key={m} className="text-right p-0.5!"
+                                      {...selection.props('prev', idxLigne, i)}
+                                    >
+                                      <MoneyInput
+                                        value={l.valeurs[i] ?? null}
+                                        onCommit={v => setPrevCell(exercice, l.id, i, v)}
+                                        className="w-full min-w-12 border-transparent hover:border-[#ddd6ef] bg-transparent text-xs"
+                                      />
+                                    </td>
+                                  )
                                 ))}
                                 <td className="text-right tabular-nums font-semibold col-total">
                                   {estMontant ? euros(prevu) : r2(prevu).toLocaleString('fr-FR')}
@@ -574,5 +618,64 @@ function ResultatPrev({ lignes, moisList, couleurs }: {
         à partir du mois d'achat.
       </p>
     </Card>
+  );
+}
+
+// ------------------------------------------------- Taux d'une ligne calculée ---
+
+/**
+ * Le taux horaire, en tête de la ligne calculée : saisissable en HT comme en
+ * TTC (l'un se déduit de l'autre), avec le décalage de paiement.
+ */
+function TauxHoraire({ formule, onChange }: {
+  formule: FormulePrev; onChange: (f: FormulePrev) => void;
+}) {
+  const ttc = r2(formule.tauxHT * (1 + formule.tauxTVA / 100));
+  const champ = "w-14 px-1 py-0.5 border rounded text-right text-[11px] tabular-nums bg-white";
+  const commit = (v: number | null, ht: boolean) => {
+    if (v == null) return;
+    const tauxHT = ht ? v : r2(v / (1 + formule.tauxTVA / 100));
+    if (tauxHT !== formule.tauxHT) onChange({ ...formule, tauxHT });
+  };
+
+  return (
+    <div className="mt-1 rounded border px-1.5 py-1 text-[11px] inline-block"
+      style={{ borderColor: 'var(--bbg-border-soft)', backgroundColor: '#fbfaff', color: '#6f6690' }}>
+      <div className="flex items-center gap-1 whitespace-nowrap">
+        <span className="font-semibold">Taux</span>
+        <input
+          className={champ} style={{ borderColor: 'var(--bbg-border-soft)' }}
+          defaultValue={String(r2(formule.tauxHT)).replace('.', ',')}
+          title="Taux horaire hors taxes"
+          onBlur={ev => commit(parseMontant(ev.target.value), true)}
+          onKeyDown={ev => { if (ev.key === 'Enter') (ev.target as HTMLInputElement).blur(); }}
+        />
+        <span>HT</span>
+        <input
+          className={champ} style={{ borderColor: 'var(--bbg-border-soft)' }}
+          key={ttc}
+          defaultValue={String(ttc).replace('.', ',')}
+          title="Taux horaire toutes taxes comprises"
+          onBlur={ev => commit(parseMontant(ev.target.value), false)}
+          onKeyDown={ev => { if (ev.key === 'Enter') (ev.target as HTMLInputElement).blur(); }}
+        />
+        <span>TTC</span>
+      </div>
+      <div className="flex items-center gap-1 mt-0.5 whitespace-nowrap">
+        <span>encaissé</span>
+        <select
+          className="border rounded px-1 py-0.5 text-[11px] bg-white flex-1 min-w-0"
+          style={{ borderColor: 'var(--bbg-border-soft)' }}
+          value={formule.decalage}
+          title="Décalage entre les heures effectuées et l'encaissement"
+          onChange={ev => onChange({ ...formule, decalage: Number(ev.target.value) })}
+        >
+          <option value={0}>le mois même</option>
+          <option value={1}>le mois suivant</option>
+          <option value={2}>à +2 mois</option>
+          <option value={3}>à +3 mois</option>
+        </select>
+      </div>
+    </div>
   );
 }

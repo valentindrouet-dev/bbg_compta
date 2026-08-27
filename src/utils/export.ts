@@ -9,6 +9,7 @@ import { syntheseExercice, immoInfos, tableauTVA, tableauTreso, moisTresorerie }
 import { exporterFichiers, importerFichiers, listFiles, type FichierSerialise } from './files';
 import { creerZip, nomSur, type FichierZip } from './zip';
 import { pageLectureSeule } from './partage';
+import { valeursDe } from './previsionnel';
 
 function download(name: string, blob: Blob) {
   const url = URL.createObjectURL(blob);
@@ -119,8 +120,9 @@ export function blobExcel(state: AppState, exercice: string): Blob {
       const row: Record<string, string | number> = {
         'Bloc': l.section, 'Ligne': l.categorie, 'Unité': l.unite ?? '€',
       };
-      mois.forEach((m, i) => { row[labelMois(m)] = l.valeurs[i] ?? ''; });
-      row['Total'] = r2(l.valeurs.reduce<number>((s, v) => s + (v ?? 0), 0));
+      const vals = valeursDe(l, lignes);
+      mois.forEach((m, i) => { row[labelMois(m)] = vals[i] ?? ''; });
+      row['Total'] = r2(vals.reduce<number>((s, v) => s + (v ?? 0), 0));
       return row;
     });
     if (rows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), `Prév ${ex}`);

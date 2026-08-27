@@ -69,6 +69,25 @@ export interface BudgetExercice {
 export type PrevSection = 'produits' | 'charges' | 'personnel' | 'jeux' | 'immos' | 'indicateurs';
 
 /**
+ * Ligne calculée : le montant d'un mois est le produit d'une autre ligne
+ * (des heures, des jours…) par un taux, éventuellement décalé dans le temps.
+ *
+ * Cas des workshops ARTFX : les heures sont effectuées un mois, la facture est
+ * payée au début du mois suivant — d'où le décalage d'un mois.
+ */
+export interface FormulePrev {
+  type: 'heures-taux';
+  /** Ligne qui porte les quantités (heures, jours…). */
+  sourceId: string;
+  /** Taux unitaire hors taxes. */
+  tauxHT: number;
+  /** Taux de TVA appliqué pour afficher l'équivalent TTC. */
+  tauxTVA: number;
+  /** Décalage en mois entre la quantité et l'encaissement (1 = mois suivant). */
+  decalage: number;
+}
+
+/**
  * Ligne du prévisionnel : une catégorie (celles de la synthèse) et ses montants
  * mensuels. Une ligne dont la catégorie n'existe pas déclenche une alarme.
  */
@@ -80,6 +99,8 @@ export interface PrevLigne {
   jeu?: string;
   /** Absent = montant en euros ; sinon indicateur non monétaire. */
   unite?: 'heures' | 'jours' | 'pourcentage' | 'volume';
+  /** Si présent, les montants sont calculés et non saisis. */
+  formule?: FormulePrev;
   /** Une valeur par mois de l'exercice, dans l'ordre de moisExercice(). */
   valeurs: (number | null)[];
   note?: string;
