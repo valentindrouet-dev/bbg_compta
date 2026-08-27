@@ -24,7 +24,7 @@ export function ImmosPage({ cible }: { cible?: Cible }) {
   const resetColFormat = useStore(s => s.resetColFormat);
   const { sort, toggle } = useSort({ key: 'date', dir: 'asc' });
 
-  const infos = useMemo(() => immoInfos(entries), [entries]);
+  const infos = useMemo(() => immoInfos(entries, refs), [entries, refs]);
   const today = todayISO();
   // Ligne visée depuis les contrôles comptables de la synthèse.
   useCibleLigne(cible);

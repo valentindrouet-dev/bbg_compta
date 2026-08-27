@@ -47,7 +47,7 @@ export function CinqAnsPage() {
   const previsionnels = useStore(s => s.previsionnels);
   const couleurs = useStore(s => s.blocCouleurs);
 
-  const immos = useMemo(() => immoInfos(entries), [entries]);
+  const immos = useMemo(() => immoInfos(entries, refs), [entries, refs]);
 
   const colonnes: ColonneExercice[] = useMemo(() => EXERCICES.map(exercice => {
     const moisList = moisExercice(exercice);

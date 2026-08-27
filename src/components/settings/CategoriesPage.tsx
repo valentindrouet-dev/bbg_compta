@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Plus, Trash2, Merge, FolderPlus } from 'lucide-react';
 import { useStore, type CatKind } from '../../store';
+import { natureCategorie } from '../../utils/blocs';
 import { euros, r2 } from '../../utils/money';
 import { PageHeader, Card, Btn, StatCard, useSort, sortBy, ThSort } from '../ui';
 
@@ -22,6 +23,9 @@ interface LigneCat {
   kind: CatKind;
   couleur: string;
   groupe: string;
+  /** À l'actif, en charges, ou décidé ligne par ligne. */
+  nature: 'immo' | 'charge' | 'auto';
+  dureeAns?: number;
   nb: number;
   total: number;
 }
@@ -61,6 +65,8 @@ export function CategoriesPage() {
           nom, kind,
           couleur: meta[nom]?.couleur ?? '',
           groupe: meta[nom]?.groupe ?? '',
+          nature: natureCategorie(nom, refs),
+          dureeAns: meta[nom]?.dureeAns,
           nb: s?.nb ?? 0, total: r2(s?.total ?? 0),
         });
       }
@@ -143,6 +149,24 @@ export function CategoriesPage() {
           <select
             className="border rounded px-1.5 py-1 text-sm bg-white"
             style={{ borderColor: 'var(--bbg-purple)' }}
+            value=""
+            title="Ces dépenses pèsent-elles d'un coup sur le résultat, ou s'amortissent-elles ?"
+            onChange={ev => {
+              if (ev.target.value === 'immo') setCategorieMeta(sel, { immobilisee: true, dureeAns: 5 });
+              if (ev.target.value === 'charge') setCategorieMeta(sel, { immobilisee: false });
+              if (ev.target.value === 'auto') setCategorieMeta(sel, { immobilisee: undefined });
+              ev.target.value = '';
+            }}
+          >
+            <option value="">Nature…</option>
+            <option value="auto">au cas par cas</option>
+            <option value="charge">tout en charges</option>
+            <option value="immo">tout à l'actif (5 ans)</option>
+          </select>
+
+          <select
+            className="border rounded px-1.5 py-1 text-sm bg-white"
+            style={{ borderColor: 'var(--bbg-purple)' }}
             value="" onChange={ev => { if (ev.target.value) moveCategories(sel, ev.target.value as CatKind); ev.target.value = ''; }}
           >
             <option value="">Type…</option>
@@ -189,6 +213,9 @@ export function CategoriesPage() {
                   <ThSort label="Nom" k="nom" sort={sort} onToggle={toggle} />
                   <ThSort label="Type" k="kind" sort={sort} onToggle={toggle} />
                   <ThSort label="Groupe" k="groupe" sort={sort} onToggle={toggle} />
+                  <th title="À l'actif : les écritures de cette catégorie s'amortissent au lieu de peser d'un coup sur le résultat.">
+                    Nature
+                  </th>
                   <ThSort label="Écritures" k="nb" sort={sort} onToggle={toggle} className="num" />
                   <ThSort label="Total TTC" k="total" sort={sort} onToggle={toggle} className="num" />
                 </tr>
@@ -230,6 +257,42 @@ export function CategoriesPage() {
                         <option value="">— aucun —</option>
                         {groupes.map(g => <option key={g} value={g}>{g}</option>)}
                       </select>
+                    </td>
+                    <td>
+                      {l.kind === 'categoriesProduits' ? (
+                        <span className="text-xs" style={{ color: '#9a92b5' }}>produit</span>
+                      ) : (
+                        <div className="flex items-center gap-1">
+                          <select
+                            className={l.nature === 'immo' ? 'pill-blue'
+                              : l.nature === 'charge' ? 'pill-orange' : ''}
+                            value={l.nature}
+                            title={l.nature === 'immo'
+                              ? "À l'actif : toutes ces dépenses s'inscrivent au bilan et s'amortissent."
+                              : l.nature === 'charge'
+                                ? "En charges : toutes ces dépenses pèsent sur le résultat de l'exercice."
+                                : "Au cas par cas : c'est la colonne « Type » du journal qui décide, "
+                                  + 'ligne par ligne.'}
+                            onChange={ev => setCategorieMeta([l.nom], {
+                              immobilisee: ev.target.value === 'auto' ? undefined : ev.target.value === 'immo',
+                              ...(ev.target.value === 'immo' ? { dureeAns: l.dureeAns ?? 5 } : {}),
+                            })}
+                          >
+                            <option value="auto">au cas par cas</option>
+                            <option value="charge">tout en charges</option>
+                            <option value="immo">tout à l'actif</option>
+                          </select>
+                          {l.nature === 'immo' && (
+                            <select
+                              className="pill-blue" title="Durée d'amortissement"
+                              value={l.dureeAns ?? 5}
+                              onChange={ev => setCategorieMeta([l.nom], { dureeAns: Number(ev.target.value) })}
+                            >
+                              {[3, 5, 10].map(d => <option key={d} value={d}>{d} ans</option>)}
+                            </select>
+                          )}
+                        </div>
+                      )}
                     </td>
                     <td className="text-right tabular-nums">{l.nb || '·'}</td>
                     <td className="text-right tabular-nums font-medium">{l.total ? euros(l.total) : '·'}</td>

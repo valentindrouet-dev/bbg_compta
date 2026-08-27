@@ -1,11 +1,14 @@
 import { Fragment, useMemo, useState } from 'react';
 import {
   Plus, Trash2, AlertTriangle, AlertCircle, Info, Wand2, ArrowRightLeft, Gamepad2,
-  Sigma, ListPlus, Clock, List, Rows3, GripVertical
+  Sigma, ListPlus, Clock, List, Rows3, GripVertical, Percent, Calculator
 } from 'lucide-react';
 import { useStore } from '../../store';
+import { BAREME_TNS, cotisationsTNS } from '../../utils/tns';
 import { useReorganisation } from '../../utils/glisser';
-import type { FormulePrev, PrevLigne, PrevSection } from '../../types';
+import type {
+  FormuleHeuresTaux, FormulePourcentage, FormulePrev, PrevLigne, PrevSection,
+} from '../../types';
 import { EXERCICES, labelMois, moisExercice } from '../../utils/dates';
 import { euros, euros0, r2, pourcent, parseMontant } from '../../utils/money';
 import {
@@ -50,6 +53,8 @@ export function PrevisionnelPage() {
   const [base, setBase] = useEtatVue<'ht' | 'ttc'>('prev.base', 'ht');
   /** Vue simplifiée : les totaux seuls, comme dans la synthèse. */
   const [simple, setSimple] = useEtatVue('prev.simple', false);
+  /** Ligne dont le calculateur de rémunération est déplié. */
+  const [calculOuvert, setCalculOuvert] = useState<string | null>(null);
   const [nouvelleCat, setNouvelleCat] = useState('');
   const [alarmesOuvertes, setAlarmesOuvertes] = useState(true);
 
@@ -107,7 +112,7 @@ export function PrevisionnelPage() {
     [entries, exercice, base]);
   const reelJeux = useMemo(() => reelParJeuEtCategorie(entries, exercice, refs), [entries, exercice, refs]);
   const alarmes = useMemo(() => alarmesPrevisionnel(lignes, reel, refs), [lignes, reel, refs]);
-  const immos = useMemo(() => immoInfos(entries), [entries]);
+  const immos = useMemo(() => immoInfos(entries, refs), [entries, refs]);
 
   const toutesCategories = [
     ...refs.categoriesProduits, ...refs.categoriesDepenses, ...refs.categoriesJeux,
@@ -402,6 +407,23 @@ export function PrevisionnelPage() {
                       </span>
                     </Btn>
                   )}
+                  {sec.cle === 'personnel' && (
+                    <Btn
+                      title="Combien coûte une rémunération de dirigeant TNS ?"
+                      onClick={() => {
+                        const cible = lignesSec[0];
+                        if (cible) { setCalculOuvert(cible.id); return; }
+                        // Pas encore de ligne : on en crée une, le calcul suivra.
+                        addPrevLigne(exercice,
+                          refs.categoriesDepenses.find(c => /urssaf/i.test(c)) ?? 'URSSAF',
+                          'personnel');
+                      }}
+                    >
+                      <span className="inline-flex items-center gap-1.5">
+                        <Calculator size={14} /> Calculer une rémunération
+                      </span>
+                    </Btn>
+                  )}
                   {!estIndicateurs && <TotalBloc label="Total prévu" valeur={euros(total)} t={t} />}
                   {!estIndicateurs && <BlocColorMenu bloc={sec.cle as BlocCle} />}
                 </>
@@ -524,18 +546,27 @@ export function PrevisionnelPage() {
                                       </select>
                                     )}
                                   </div>
-                                  {l.formule && (
+                                  {l.formule?.type === 'heures-taux' && (
                                     <TauxHoraire
                                       formule={l.formule}
                                       onChange={f => setPrevFormule(exercice, l.id, f)}
+                                    />
+                                  )}
+                                  {l.formule?.type === 'pourcentage-bloc' && (
+                                    <TauxPourcentage
+                                      formule={l.formule}
+                                      onChange={f => setPrevFormule(exercice, l.id, f)}
+                                      onRetirer={() => setPrevFormule(exercice, l.id, undefined)}
                                     />
                                   )}
                                 </td>
                                 {moisList.map((m, i) => (
                                   l.formule ? (
                                     <td key={m} className="text-right tabular-nums"
-                                      title={`Calculé : ${l.formule.tauxHT.toFixed(2).replace('.', ',')} € × les heures de ${
-                                        i - l.formule.decalage >= 0 ? labelMois(moisList[i - l.formule.decalage]) : '—'}`}
+                                      title={l.formule.type === 'pourcentage-bloc'
+                                        ? `Calculé : ${String(l.formule.taux).replace('.', ',')} % de tout ce qui précède dans ce bloc`
+                                        : `Calculé : ${l.formule.tauxHT.toFixed(2).replace('.', ',')} € × les heures de ${
+                                          i - l.formule.decalage >= 0 ? labelMois(moisList[i - l.formule.decalage]) : '—'}`}
                                       style={{ color: '#5c5280', fontStyle: 'italic' }}>
                                       <span className="block truncate text-xs">
                                         {calculees[i] ? euros(aff(calculees[i], l)!) : '·'}
@@ -579,6 +610,31 @@ export function PrevisionnelPage() {
                                     >
                                       <ArrowRightLeft size={13} />
                                     </button>
+                                    {estMontant && sec.cle === 'personnel' && (
+                                      <button
+                                        title="Calculer une rémunération de dirigeant TNS"
+                                        style={{ color: calculOuvert === l.id
+                                          ? 'var(--bbg-purple-dark)' : '#9a92b5' }}
+                                        onClick={() => setCalculOuvert(v => v === l.id ? null : l.id)}
+                                      >
+                                        <Calculator size={13} />
+                                      </button>
+                                    )}
+                                    {estMontant && (
+                                      <button
+                                        title={l.formule?.type === 'pourcentage-bloc'
+                                          ? 'Repasser en saisie libre'
+                                          : 'Calculer cette ligne en % de tout ce qui la précède dans le bloc'}
+                                        style={{ color: l.formule?.type === 'pourcentage-bloc'
+                                          ? 'var(--bbg-purple-dark)' : '#9a92b5' }}
+                                        onClick={() => setPrevFormule(exercice, l.id,
+                                          l.formule?.type === 'pourcentage-bloc'
+                                            ? undefined
+                                            : { type: 'pourcentage-bloc', taux: 10 })}
+                                      >
+                                        <Percent size={13} />
+                                      </button>
+                                    )}
                                     <button
                                       title="Supprimer la ligne" style={{ color: '#d98b86' }}
                                       onClick={() => { if (confirm(`Supprimer la ligne « ${l.categorie} » ?`)) removePrevLigne(exercice, l.id); }}
@@ -590,6 +646,19 @@ export function PrevisionnelPage() {
                               </tr>
                             );
                           })}
+                          {parGroupe.get(g)!.some(l => l.id === calculOuvert) && (
+                            <tr key={`calc-${g}`}>
+                              <td colSpan={moisList.length + 5} className="p-0!">
+                                <CalculTNS
+                                  onFermer={() => setCalculOuvert(null)}
+                                  onAppliquer={(mensuel) => {
+                                    etalerPrevLigne(exercice, calculOuvert!, mensuel);
+                                    setCalculOuvert(null);
+                                  }}
+                                />
+                              </td>
+                            </tr>
+                          )}
                           {avecGroupes && (simple || parGroupe.get(g)!.length > 1) && (
                             <tr style={simple ? { fontWeight: 600 } : { fontStyle: 'italic' }}>
                               <td style={{ color: '#6f6690' }}>
@@ -766,11 +835,131 @@ function ResultatPrev({ lignes, moisList, couleurs }: {
 // ------------------------------------------------- Taux d'une ligne calculée ---
 
 /**
+ * Combien coûte une rémunération de dirigeant.
+ *
+ * Un gérant TNS n'est pas salarié : il n'y a pas de « brut » ni de charges
+ * patronales. Il touche une rémunération, et l'entreprise paie par-dessus les
+ * cotisations des indépendants. On saisit donc ce qu'on veut toucher, et on lit
+ * ce qu'il faut budgéter.
+ */
+function CalculTNS({ onAppliquer, onFermer }: {
+  onAppliquer: (mensuel: number) => void;
+  onFermer: () => void;
+}) {
+  const [net, setNet] = useState(2000);
+  const c = cotisationsTNS(net * 12);
+  const parMois = (v: number) => euros(r2(v / 12));
+
+  return (
+    <div className="px-3 py-2.5 border-y" style={{
+      backgroundColor: 'var(--bbg-lavender)', borderColor: 'var(--bbg-border-soft)',
+    }}>
+      <div className="flex flex-wrap items-start gap-x-6 gap-y-2 text-xs" style={{ color: '#3f3268' }}>
+        <div>
+          <div className="font-semibold mb-1">Je veux toucher, par mois</div>
+          <div className="flex items-center gap-1">
+            <input
+              type="number" min={0} step={100}
+              className="w-24 px-1.5 py-1 border rounded text-right tabular-nums bg-white"
+              style={{ borderColor: 'var(--bbg-purple)' }}
+              value={net}
+              onChange={ev => setNet(Math.max(0, Number(ev.target.value) || 0))}
+            />
+            <span>€ nets</span>
+          </div>
+          <div className="mt-1" style={{ color: '#6f6690' }}>
+            soit {euros(r2(net * 12))} sur l'année
+          </div>
+        </div>
+
+        <div>
+          <div className="font-semibold mb-1">Cotisations TNS</div>
+          <table className="text-[11px]" style={{ color: '#5c5280' }}>
+            <tbody>
+              {c.postes.filter(p => p.montant).map(p => (
+                <tr key={p.label}>
+                  <td className="pr-3">{p.label}</td>
+                  <td className="text-right tabular-nums">{parMois(p.montant)}</td>
+                </tr>
+              ))}
+              <tr style={{ fontWeight: 700 }}>
+                <td className="pr-3">Total</td>
+                <td className="text-right tabular-nums">{parMois(c.cotisations)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div className="min-w-52">
+          <div className="font-semibold mb-1">À budgéter</div>
+          <div className="text-lg font-extrabold tabular-nums" style={{ color: 'var(--bbg-purple-darker)' }}>
+            {parMois(c.cout)} <span className="text-xs font-semibold opacity-70">par mois</span>
+          </div>
+          <div style={{ color: '#6f6690' }}>
+            {euros(c.cout)} sur l'année · cotisations = {(c.taux * 100).toFixed(1).replace('.', ',')} %
+            de la rémunération
+          </div>
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            <Btn variant="primary" onClick={() => onAppliquer(r2(c.cout / 12))}>
+              Coût total sur tous les mois
+            </Btn>
+            <Btn onClick={() => onAppliquer(r2(c.cotisations / 12))}>Cotisations seules</Btn>
+            <Btn onClick={() => onAppliquer(net)}>Rémunération seule</Btn>
+            <Btn variant="ghost" onClick={onFermer}>Fermer</Btn>
+          </div>
+        </div>
+      </div>
+      <p className="text-[11px] mt-2" style={{ color: '#8d85a6' }}>
+        Barème {BAREME_TNS.pass.toLocaleString('fr-FR')} € de PASS, régime des indépendants.
+        Ordre de grandeur à budgéter — les deux premières années, l'URSSAF appelle des
+        cotisations forfaitaires puis régularise, et l'ACRE peut réduire la note.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * Le pourcentage d'une ligne « imprévus » : il s'applique à tout ce qui la
+ * précède dans le bloc. Déplacer la ligne change donc son assiette — elle est
+ * faite pour rester en bas.
+ */
+function TauxPourcentage({ formule, onChange, onRetirer }: {
+  formule: FormulePourcentage;
+  onChange: (f: FormulePrev) => void;
+  onRetirer: () => void;
+}) {
+  return (
+    <div className="mt-1 rounded border px-1.5 py-1 text-[11px] inline-flex items-center gap-1"
+      style={{ borderColor: 'var(--bbg-border-soft)', backgroundColor: '#fbfaff', color: '#6f6690' }}>
+      <input
+        className="w-12 px-1 py-0.5 border rounded text-right text-[11px] tabular-nums bg-white"
+        style={{ borderColor: 'var(--bbg-border-soft)' }}
+        defaultValue={String(formule.taux).replace('.', ',')}
+        title="Pourcentage appliqué à tout ce qui précède dans le bloc"
+        onBlur={ev => {
+          const v = parseMontant(ev.target.value);
+          if (v != null && v !== formule.taux) onChange({ ...formule, taux: v });
+        }}
+        onKeyDown={ev => { if (ev.key === 'Enter') (ev.target as HTMLInputElement).blur(); }}
+      />
+      <span>% de tout ce qui précède</span>
+      <button
+        className="underline opacity-60 hover:opacity-100"
+        title="Repasser en saisie manuelle"
+        onClick={onRetirer}
+      >
+        libre
+      </button>
+    </div>
+  );
+}
+
+/**
  * Le taux horaire, en tête de la ligne calculée : saisissable en HT comme en
  * TTC (l'un se déduit de l'autre), avec le décalage de paiement.
  */
 function TauxHoraire({ formule, onChange }: {
-  formule: FormulePrev; onChange: (f: FormulePrev) => void;
+  formule: FormuleHeuresTaux; onChange: (f: FormulePrev) => void;
 }) {
   const ttc = r2(formule.tauxHT * (1 + formule.tauxTVA / 100));
   const champ = "w-14 px-1 py-0.5 border rounded text-right text-[11px] tabular-nums bg-white";

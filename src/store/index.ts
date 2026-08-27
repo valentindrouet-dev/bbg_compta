@@ -72,6 +72,15 @@ function remboursementsEnReductionDeCharges(
   };
 }
 
+/**
+ * Le pourcentage d'imprévus déjà inscrit dans le nom de la ligne
+ * (« Imprévus (10%) »), à défaut 10 %.
+ */
+function tauxImprevu(l: { categorie: string }): number {
+  const m = l.categorie.match(/(\d+(?:[.,]\d+)?)\s*%/);
+  return m ? Number(m[1].replace(',', '.')) : 10;
+}
+
 /** Postes de jeu qui restent en charges, listés pour que la grille les propose. */
 const POSTES_JEU_CHARGES = ['Prototypage Jeux', 'Communication Jeux', "Avances Droit d'Auteur"];
 
@@ -95,6 +104,8 @@ function nomGenerique(categorie: string, jeux: string[]): string {
 function rangerPostesDeJeu(
   entries: JournalEntry[], refs: Referentiels,
 ): { entries: JournalEntry[]; referentiels: Referentiels } {
+  // La nature de chaque poste de jeu est portée par sa catégorie : c'est là
+  // qu'elle se règle ensuite, dans l'onglet Catégories.
   const jeux = refs.jeux ?? JEUX_PAR_DEFAUT;
   const aImmobiliser = new Set(POSTES_JEU_IMMOBILISES.map(c => c.toLowerCase()));
 
@@ -118,7 +129,15 @@ function rangerPostesDeJeu(
     ...POSTES_JEU_CHARGES,
   ])];
 
-  return { entries: corrigees, referentiels: { ...refs, categoriesJeux: catsJeux } };
+  const meta = { ...(refs.categoriesMeta ?? {}) };
+  for (const c of catsJeux) {
+    meta[c] = { ...(meta[c] ?? {}), immobilisee: estPosteJeuImmobilise(c) };
+    if (estPosteJeuImmobilise(c)) meta[c].dureeAns = meta[c].dureeAns ?? 5;
+  }
+  return {
+    entries: corrigees,
+    referentiels: { ...refs, categoriesJeux: catsJeux, categoriesMeta: meta },
+  };
 }
 
 /** Mise en forme d'une colonne du journal (gras, italique, couleur, alignement). */
@@ -322,7 +341,16 @@ function previsionnelsInitiaux(
     if (ex === PREMIER_EXERCICE) continue;
     out[ex] = gabaritPrevisionnel(refs, ex, immos, uid);
   }
+  // « Imprévus (10 %) » se calcule sur tout ce qui le précède dans son bloc.
+  for (const ex of Object.keys(out)) out[ex] = brancherImprevus(out[ex]);
   return out;
+}
+
+/** Branche les lignes d'imprévus sur le pourcentage du bloc qui les précède. */
+function brancherImprevus(lignes: PrevLigne[]): PrevLigne[] {
+  return lignes.map(l => !l.formule && /impr[ée]vu/i.test(l.categorie)
+    ? { ...l, formule: { type: 'pourcentage-bloc' as const, taux: tauxImprevu(l) } }
+    : l);
 }
 
 /**
@@ -574,6 +602,10 @@ export const useStore = create<AppState>()(
           categorie,
           section: section ?? sectionDeCategorie(categorie, s.referentiels),
           ...(jeu ? { jeu } : {}),
+          // Une ligne d'imprévus se calcule d'emblée sur ce qui la précède.
+          ...(/impr[ée]vu/i.test(categorie)
+            ? { formule: { type: 'pourcentage-bloc' as const, taux: tauxImprevu({ categorie }) } }
+            : {}),
           valeurs: new Array<number | null>(nMois).fill(null),
         };
         return {
@@ -624,11 +656,11 @@ export const useStore = create<AppState>()(
         const manquantes = categoriesManquantes(
           s.previsionnels[exercice] ?? [], s.referentiels, categoriesImmobilisees(s.entries));
         if (!manquantes.length) return s;
-        const nouvelles: PrevLigne[] = manquantes.map(m => ({
+        const nouvelles: PrevLigne[] = brancherImprevus(manquantes.map(m => ({
           id: uid(), categorie: m.categorie, section: m.section,
           ...(m.jeu ? { jeu: m.jeu } : {}),
           valeurs: new Array<number | null>(nMois).fill(null),
-        }));
+        })));
         return {
           previsionnels: {
             ...s.previsionnels,
@@ -679,7 +711,15 @@ export const useStore = create<AppState>()(
 
       setCategorieMeta: (noms, patch) => set(s => {
         const meta = { ...(s.referentiels.categoriesMeta ?? {}) };
-        for (const n of noms) meta[n] = { ...meta[n], ...patch };
+        for (const n of noms) {
+          const suivant = { ...meta[n], ...patch };
+          // Une clé mise à `undefined` est retirée : c'est ainsi qu'on revient
+          // au comportement automatique (la nature décidée ligne par ligne).
+          for (const [k, v] of Object.entries(patch)) {
+            if (v === undefined) delete (suivant as Record<string, unknown>)[k];
+          }
+          meta[n] = suivant;
+        }
         return { referentiels: { ...s.referentiels, categoriesMeta: meta } };
       }),
 
@@ -819,7 +859,7 @@ export const useStore = create<AppState>()(
     },
     {
       name: 'bbg-compta-v1',
-      version: 10,
+      version: 12,
       // v2 : ajout de la liste des jeux et rattachement des dépenses de
       // développement au jeu concerné (déduit des mots clés / de la catégorie).
       migrate: (persisted, version) => {
@@ -897,6 +937,45 @@ export const useStore = create<AppState>()(
               l.section === 'jeux'
                 ? { ...l, section: estPosteJeuImmobilise(l.categorie) ? 'immos' as const : 'charges' as const }
                 : l)]));
+        }
+        // v11 : la nature « immobilisée » remonte de l'écriture à la CATÉGORIE.
+        // C'est elle qui décide, et elle se règle dans l'onglet Catégories. Les
+        // postes de jeu qui ne sont pas marqués immobilisés redeviennent des
+        // charges, même si une migration précédente les avait mis à l'actif.
+        if (version < 11 && s.referentiels) {
+          const meta = { ...(s.referentiels.categoriesMeta ?? {}) };
+          for (const c of s.referentiels.categoriesJeux ?? []) {
+            meta[c] = { ...(meta[c] ?? {}), immobilisee: estPosteJeuImmobilise(c) };
+            if (estPosteJeuImmobilise(c)) meta[c].dureeAns = meta[c].dureeAns ?? 5;
+          }
+          s.referentiels = { ...s.referentiels, categoriesMeta: meta };
+          const jeux = new Set(s.referentiels.categoriesJeux ?? []);
+          s.entries = (s.entries ?? []).map(e =>
+            jeux.has(e.categorie) && !meta[e.categorie]?.immobilisee && e.type === 'immo'
+              ? { ...e, type: 'charges' as const }
+              : e);
+        }
+        // v11bis : la ligne « Imprévus » se calcule en % du bloc qui la précède.
+        if (version < 11 && s.previsionnels) {
+          s.previsionnels = Object.fromEntries(
+            Object.entries(s.previsionnels).map(([ex, lignes]) => [ex, (lignes ?? []).map(l =>
+              !l.formule && /impr[ée]vu/i.test(l.categorie)
+                ? { ...l, formule: { type: 'pourcentage-bloc' as const, taux: tauxImprevu(l) } }
+                : l)]));
+        }
+        // v12 : le remboursement du compte courant d'associé rejoint les
+        // mouvements financiers — c'est une dette qu'on éteint, pas une charge.
+        if (version < 12) {
+          const fin = s.finances ?? [];
+          if (!fin.some(f => f.type === 'remboursement_cca')) {
+            s.finances = [...fin, {
+              id: uid(),
+              date: '2026-10-01',
+              label: "Remboursement compte courant d'associé (2 % de 100 000 €)",
+              type: 'remboursement_cca' as const,
+              montant: -2000,
+            }];
+          }
         }
         return s;
       },

@@ -91,7 +91,7 @@ export function SynthesePage({ onAllerA }: { onAllerA?: (page: Page, ligne: stri
     () => syntheseExercice(entries, exercice, refs, base),
     [entries, exercice, refs, base],
   );
-  const immos = useMemo(() => immoInfos(entries), [entries]);
+  const immos = useMemo(() => immoInfos(entries, refs), [entries, refs]);
 
   /** Prépare l'aperçu d'une cellule (catégorie ou jeu × mois). */
   function survol(

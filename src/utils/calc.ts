@@ -1,5 +1,5 @@
 import type { JournalEntry, FinanceEntry, Referentiels } from '../types';
-import { estChargeFinanciere, estPersonnel } from './blocs';
+import { dureeCategorie, estChargeFinanciere, estImmobilisation, estPersonnel } from './blocs';
 import { compareMois, moisExercice, addYears, PRE_IMMAT } from './dates';
 import { r2 } from './money';
 
@@ -74,9 +74,11 @@ export interface ImmoInfo {
   vnc: (atISO: string) => number;
 }
 
-export function immoInfos(entries: JournalEntry[]): ImmoInfo[] {
-  return entries.filter(e => e.type === 'immo').map(e => {
-    const duree = e.immoDureeAns && e.immoDureeAns > 0 ? e.immoDureeAns : 5;
+export function immoInfos(entries: JournalEntry[], refs?: Referentiels): ImmoInfo[] {
+  return entries.filter(e => estImmobilisation(e, refs)).map(e => {
+    const duree = e.immoDureeAns && e.immoDureeAns > 0
+      ? e.immoDureeAns
+      : (refs ? dureeCategorie(e.categorie, refs) : 5);
     const dotationAn = e.ht / duree;
     const dotationMois = e.ht / (duree * 12);
     const fin = addYears(e.date, duree);
@@ -333,7 +335,7 @@ export function syntheseExercice(
       bump(totalProduitsTTCParMois, e.mois, e.ttc);
       if (e.tva) bump(baseTVAProduitsParMois, e.mois, e.ht);
       bump(tvaCollecteeParMois, e.mois, e.tva);
-    } else if (e.type === 'immo') {
+    } else if (estImmobilisation(e, refs)) {
       // Une immobilisation n'est pas une charge de l'exercice : elle est
       // suivie à part, et c'est sa dotation annuelle qui pèse sur le résultat.
       // Ce test passe AVANT celui des catégories jeux : un développement de jeu

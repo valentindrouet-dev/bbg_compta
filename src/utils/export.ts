@@ -78,7 +78,7 @@ export function blobExcel(state: AppState, exercice: string): Blob {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(prodRows), 'Produits');
 
   // Immobilisations
-  const immoRows = immoInfos(entries).map(i => ({
+  const immoRows = immoInfos(entries, referentiels).map(i => ({
     'Date': i.entry.date,
     'Fournisseur': i.entry.fournisseur,
     'Description': i.entry.description,

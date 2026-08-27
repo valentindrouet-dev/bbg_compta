@@ -272,6 +272,21 @@ export function alarmesPrevisionnel(
 export function valeursDe(l: PrevLigne, lignes: PrevLigne[]): (number | null)[] {
   const f = l.formule;
   if (!f) return l.valeurs;
+
+  if (f.type === 'pourcentage-bloc') {
+    // Assiette : les lignes du même bloc placées au-dessus de celle-ci. On
+    // ignore les autres pourcentages, pour qu'un imprévu ne se calcule jamais
+    // sur un autre imprévu, et les lignes de quantités, qui ne sont pas des euros.
+    const rang = lignes.findIndex(x => x.id === l.id);
+    const assiette = lignes.filter((x, i) =>
+      i < rang && x.section === l.section && !x.unite
+      && x.formule?.type !== 'pourcentage-bloc');
+    return l.valeurs.map((_, i) => {
+      const base = assiette.reduce((s, x) => s + (valeursDe(x, lignes)[i] ?? 0), 0);
+      return base ? r2(base * f.taux / 100) : null;
+    });
+  }
+
   const source = lignes.find(x => x.id === f.sourceId);
   if (!source) return l.valeurs.map(() => null);
   return l.valeurs.map((_, i) => {
@@ -382,8 +397,9 @@ export function ordreAffichage(lignes: PrevLigne[], refs: Referentiels): PrevLig
   // Chaque ligne de quantités remonte juste avant celle qui s'en sert.
   const out = [...trie];
   for (const l of trie) {
-    if (!l.formule) continue;
-    const src = out.findIndex(x => x.id === l.formule!.sourceId);
+    const f = l.formule;
+    if (f?.type !== 'heures-taux') continue;
+    const src = out.findIndex(x => x.id === f.sourceId);
     if (src < 0) continue;
     const [source] = out.splice(src, 1);
     out.splice(out.findIndex(x => x.id === l.id), 0, source);
@@ -421,5 +437,6 @@ export function tauxObserves(entries: JournalEntry[]): Map<string, number> {
 
 /** Le taux à appliquer à une ligne de prévisionnel : le sien, ou l'observé. */
 export function tauxDeLigne(l: PrevLigne, observes: Map<string, number>): number {
-  return l.tauxTVA ?? l.formule?.tauxTVA ?? observes.get(l.categorie) ?? 20;
+  const tauxFormule = l.formule?.type === 'heures-taux' ? l.formule.tauxTVA : undefined;
+  return l.tauxTVA ?? tauxFormule ?? observes.get(l.categorie) ?? 20;
 }

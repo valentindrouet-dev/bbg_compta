@@ -25,7 +25,9 @@ sont recalculés en direct à partir des écritures.
   les dépenses TTC, lui, est au récapitulatif, sous « Sorti du compte »
 - **Immobilisations** — durées, dotations, VNC et fin d'amortissement calculées
 - **Trésorerie** — encaissements/décaissements TTC, mouvements financiers
-  (capital, CCA, placements, intérêts) inclus
+  inclus : capital, apport et **remboursement** de compte courant d'associé,
+  placements, intérêts. Rembourser un compte courant sort de la trésorerie sans
+  être une charge — c'est une dette qu'on éteint, elle ne touche pas le résultat
 - **TVA** — collectée / déductible / solde par mois, calculée écriture par écriture ;
   rouge = dû à l'État, vert = crédit de TVA en ta faveur
 - **Jeux** — bilan comptable par jeu, comparaison au prévisionnel, lien vers la
@@ -99,6 +101,18 @@ sont recalculés en direct à partir des écritures.
   **charges, en négatif** — ils viennent en réduction des charges du mois, et
   leur TVA en moins de la TVA déductible. Le résultat est identique, le CA
   redevient juste.
+- **Nature d'une catégorie** : dans l'onglet **Catégories**, la colonne
+  **Nature** décide si une catégorie part **tout en charges**, **tout à l'actif**
+  (avec sa durée d'amortissement), ou **au cas par cas** — auquel cas c'est la
+  colonne « Type » du journal qui tranche, ligne par ligne. C'est ce réglage qui
+  pilote le bloc où le poste apparaît, partout dans l'app.
+- **Ligne en pourcentage** : l'icône `%` au survol d'une ligne du prévisionnel la
+  fait se calculer sur **tout ce qui la précède dans son bloc** — c'est ainsi que
+  marche « Imprévus (10 %) », et le taux se change dans la ligne.
+- **Coût d'une rémunération** : sur une ligne du bloc Personnel, l'icône
+  calculatrice ouvre le calcul TNS. On saisit ce qu'on veut toucher par mois, on
+  lit les cotisations poste par poste et le total à budgéter, et un bouton étale
+  le montant sur tous les mois.
 - **Postes de jeu** : il n'y a plus de bloc « Dépenses Jeux ». Le
   **développement graphique** et les **illustrations** sont des coûts de
   développement portés à l'actif (amortis sur 5 ans) : ils sont dans les

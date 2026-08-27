@@ -33,7 +33,7 @@ interface Bloc {
 export function pageLectureSeule(state: AppState, exercice: string): string {
   const { entries, referentiels: refs, finances } = state;
   const syn = syntheseExercice(entries, exercice, refs, 'ht');
-  const immos = immoInfos(entries);
+  const immos = immoInfos(entries, refs);
   const mois = syn.moisList;
   const dotations = dotationsParMois(immos, mois);
   const resultat = compteResultat({

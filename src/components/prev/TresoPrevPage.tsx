@@ -36,12 +36,19 @@ export function TresoPrevPage() {
       const placements = r2(fin.filter(f => f.type === 'placement').reduce((s, f) => s + f.montant, 0));
       const capital = r2(fin.filter(f => f.type === 'capital').reduce((s, f) => s + f.montant, 0));
       const cca = r2(fin.filter(f => f.type === 'cca').reduce((s, f) => s + f.montant, 0));
+      // Rembourser un compte courant d'associé sort de la trésorerie sans être
+      // une charge : c'est une dette qu'on éteint, pas une dépense.
+      const remboursementCCA = r2(fin.filter(f => f.type === 'remboursement_cca')
+        .reduce((s, f) => s + f.montant, 0));
       const autres = r2(fin.filter(f => f.type === 'autre').reduce((s, f) => s + f.montant, 0));
       const entreesTotales = r2(ca + pf);
       const depensesTotales = r2(invest + charges + placements + autres);
       const cumule = r2(entreesTotales + depensesTotales);
-      const apports = r2(capital + cca);
-      return { ex, ca, pf, entreesTotales, invest, charges, placements, depensesTotales, cumule, capital, cca, apports };
+      const apports = r2(capital + cca + remboursementCCA);
+      return {
+        ex, ca, pf, entreesTotales, invest, charges, placements, depensesTotales, cumule,
+        capital, cca, remboursementCCA, apports,
+      };
     });
     let treso = 0;
     return perEx.map(x => {
@@ -115,6 +122,7 @@ export function TresoPrevPage() {
               <RowR label="Dépenses totales" get={x => x.depensesTotales} realise={realise} strong />
               <RowR label="Cumulé exploitation (TTC)" get={x => x.cumule} realise={realise} strong />
               <RowR label="Capital social" get={x => x.capital} realise={realise} />
+              <RowR label="Remboursement de compte courant" get={x => x.remboursementCCA} realise={realise} />
               <RowR label="Compte courant d'associé" get={x => x.cca} realise={realise} />
               <RowR label="Trésorerie fin d'exercice (TTC)" get={x => x.treso} realise={realise} strong accent />
             </tbody>
@@ -132,7 +140,7 @@ export function TresoPrevPage() {
 interface RealiseRow {
   ex: string; ca: number; pf: number; entreesTotales: number; invest: number;
   charges: number; placements: number; depensesTotales: number; cumule: number;
-  capital: number; cca: number; apports: number; treso: number;
+  capital: number; cca: number; remboursementCCA: number; apports: number; treso: number;
 }
 
 function RowR({ label, get, realise, strong, accent }: {

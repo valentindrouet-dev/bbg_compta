@@ -62,20 +62,39 @@ export function estChargeFinanciere(categorie: string): boolean {
 /** Bloc d'affichage d'une écriture du journal. */
 export function blocDeEcriture(e: JournalEntry, refs: Referentiels): BlocCle {
   if (e.type === 'produit') return 'produits';
-  // Une immobilisation reste une immobilisation, même sur un jeu : ce qui est
-  // porté à l'actif ne peut pas être en même temps une charge de l'exercice.
-  if (e.type === 'immo') return 'immos';
+  // Ce qui est porté à l'actif ne peut pas être en même temps une charge de
+  // l'exercice — que ce soit la ligne qui le dise ou sa catégorie.
+  if (estImmobilisation(e, refs)) return 'immos';
   if (refs.categoriesJeux.includes(e.categorie)) return 'jeux';
   if (estPersonnel(e.categorie, refs)) return 'personnel';
   return 'charges';
 }
 
+/**
+ * Cette écriture s'inscrit-elle à l'actif ?
+ *
+ * La catégorie tranche en premier : si elle est marquée immobilisée, toutes ses
+ * écritures le sont, et inversement une catégorie de charges ne peut pas porter
+ * d'immobilisation. À défaut de réglage, c'est le type de la ligne qui décide —
+ * ce qui laisse un achat isolé (un ordinateur dans « Informatique ») être une
+ * immobilisation sans que toute la catégorie le devienne.
+ */
+export function estImmobilisation(e: JournalEntry, refs?: Referentiels): boolean {
+  if (e.type === 'produit') return false;
+  // Le réglage explicite de la catégorie tranche, dans les deux sens ; tant
+  // qu'il n'y en a pas, c'est la ligne qui décide (« Informatique » peut porter
+  // un ordinateur à l'actif et une souris en charges).
+  const choix = refs?.categoriesMeta?.[e.categorie]?.immobilisee;
+  if (choix !== undefined) return choix;
+  return e.type === 'immo';
+}
+
 /** Bloc d'affichage d'une catégorie (hors immobilisations, qui tiennent au type). */
 /**
- * Postes de jeu portés à l'actif : le développement graphique et les
+ * Catégories immobilisées d'origine : le développement graphique et les
  * illustrations sont les coûts de développement d'un projet identifié, inscrits
- * au bilan et amortis. Les autres postes d'un jeu — prototypage, communication,
- * avances aux auteurs — restent des charges de l'exercice.
+ * au bilan et amortis. C'est un point de départ — la liste se pilote ensuite
+ * catégorie par catégorie dans l'onglet Catégories.
  */
 export const POSTES_JEU_IMMOBILISES = ['Développement Graphique', 'Illustrations'];
 
@@ -84,13 +103,34 @@ export function estPosteJeuImmobilise(categorie: string): boolean {
   return POSTES_JEU_IMMOBILISES.some(p => p.toLowerCase() === n);
 }
 
+/**
+ * La catégorie est-elle marquée « immobilisée » ? Ce réglage l'emporte sur le
+ * type d'une écriture prise isolément : c'est lui qui décide qu'un poste va au
+ * bilan plutôt qu'aux charges, et il se change dans l'onglet Catégories.
+ */
+export function estCategorieImmobilisee(categorie: string, refs: Referentiels): boolean {
+  return refs.categoriesMeta?.[categorie]?.immobilisee === true;
+}
+
+/** Le réglage de la catégorie : à l'actif, en charges, ou « au cas par cas ». */
+export function natureCategorie(
+  categorie: string, refs: Referentiels,
+): 'immo' | 'charge' | 'auto' {
+  const v = refs.categoriesMeta?.[categorie]?.immobilisee;
+  return v === undefined ? 'auto' : v ? 'immo' : 'charge';
+}
+
+/** Durée d'amortissement par défaut d'une catégorie immobilisée, en années. */
+export function dureeCategorie(categorie: string, refs: Referentiels): number {
+  return refs.categoriesMeta?.[categorie]?.dureeAns ?? 5;
+}
+
 export function blocDeCategorie(categorie: string, refs: Referentiels): BlocCle {
   if (refs.categoriesProduits.includes(categorie)) return 'produits';
-  // Un poste de jeu n'a plus de bloc à lui : il va aux immobilisations ou aux
-  // charges, selon ce qu'il est. Le jeu, lui, reste porté par la colonne « Jeu ».
-  if (refs.categoriesJeux.includes(categorie)) {
-    return estPosteJeuImmobilise(categorie) ? 'immos' : 'charges';
-  }
+  if (estCategorieImmobilisee(categorie, refs)) return 'immos';
+  // Un poste de jeu n'a pas de bloc à lui : il est une charge, sauf si sa
+  // catégorie est marquée immobilisée. Le jeu reste porté par sa colonne.
+  if (refs.categoriesJeux.includes(categorie)) return 'charges';
   if (estPersonnel(categorie, refs)) return 'personnel';
   return 'charges';
 }

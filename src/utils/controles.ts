@@ -49,7 +49,7 @@ export function controlesComptables(
   const moisList = moisExercice(exercice);
   const moisSet = new Set(moisList);
   const duJournal = entries.filter(e => moisSet.has(e.mois));
-  const immos = immoInfos(entries);
+  const immos = immoInfos(entries, refs as Referentiels);
   const out: Controle[] = [];
 
   // 1. HT + TVA = TTC, écriture par écriture

@@ -31,7 +31,8 @@ export interface JournalEntry {
 }
 
 /** Mouvement financier hors exploitation (capital, CCA, placements…). */
-export type FinanceType = 'capital' | 'cca' | 'placement' | 'produit_financier' | 'autre';
+export type FinanceType =
+  | 'capital' | 'cca' | 'remboursement_cca' | 'placement' | 'produit_financier' | 'autre';
 
 export interface FinanceEntry {
   id: string;
@@ -75,7 +76,10 @@ export type PrevSection = 'produits' | 'charges' | 'personnel' | 'jeux' | 'immos
  * Cas des workshops ARTFX : les heures sont effectuées un mois, la facture est
  * payée au début du mois suivant — d'où le décalage d'un mois.
  */
-export interface FormulePrev {
+export type FormulePrev = FormuleHeuresTaux | FormulePourcentage;
+
+/** Une quantité mensuelle multipliée par un taux, éventuellement décalée. */
+export interface FormuleHeuresTaux {
   type: 'heures-taux';
   /** Ligne qui porte les quantités (heures, jours…). */
   sourceId: string;
@@ -85,6 +89,17 @@ export interface FormulePrev {
   tauxTVA: number;
   /** Décalage en mois entre la quantité et l'encaissement (1 = mois suivant). */
   decalage: number;
+}
+
+/**
+ * Un pourcentage de ce qui précède dans le bloc — la ligne « Imprévus (10 %) ».
+ * L'assiette est la somme des lignes du même bloc situées AU-DESSUS, ce qui
+ * évite qu'un imprévu se calcule sur lui-même ou sur un autre pourcentage.
+ */
+export interface FormulePourcentage {
+  type: 'pourcentage-bloc';
+  /** Le pourcentage appliqué, en % (10 = 10 %). */
+  taux: number;
 }
 
 /**
@@ -133,6 +148,15 @@ export interface TresoPrevLine {
 export interface CategorieMeta {
   couleur?: string;
   groupe?: string;
+  /**
+   * Toutes les écritures de cette catégorie sont des immobilisations : elles
+   * s'inscrivent à l'actif et s'amortissent, au lieu de peser d'un coup sur le
+   * résultat. C'est le pilotage principal — il l'emporte sur le type d'une
+   * écriture prise isolément. Se règle dans l'onglet Catégories.
+   */
+  immobilisee?: boolean;
+  /** Durée d'amortissement par défaut de la catégorie, en années. */
+  dureeAns?: number;
 }
 
 /** Fiche d'un jeu : lien vers le Production Calculator et note libre. */
