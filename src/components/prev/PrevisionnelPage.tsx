@@ -13,7 +13,8 @@ import { EXERCICES, labelMois, moisExercice } from '../../utils/dates';
 import { euros, euros0, r2, pourcent, parseMontant } from '../../utils/money';
 import {
   SECTIONS, SECTIONS_DEPENSES, alarmesPrevisionnel, reelParCategorie, reelParCategorieEtMois,
-  jeuDeLigne, ordreAffichage, reelParJeuEtCategorie, sectionDeCategorie, tauxDeLigne, tauxObserves,
+  jeuDeLigne, ordreAffichage, reelParJeuEtCategorie, sectionDeCategorie, sommeDeLigne,
+  tauxDeLigne, tauxObserves,
   totalDeLigne, valeursDe,
 } from '../../utils/previsionnel';
 import { teinteBloc, GROUPE_PERSONNEL, type BlocCle } from '../../utils/blocs';
@@ -136,7 +137,12 @@ export function PrevisionnelPage() {
   /** L'inverse : ce qui est tapé à l'écran, ramené en HT pour le stockage. */
   const enHT = (v: number | null, l: PrevLigne) => v == null ? null : r2(v / coef(l));
 
-  const reel = useMemo(() => reelParCategorie(entries, exercice), [entries, exercice]);
+  // Le réel se lit dans la base affichée, comme le prévu : comparer un réel HT
+  // à un budget TTC ferait mentir la carte « Budget consommé » de tout le poids
+  // de la TVA.
+  const reel = useMemo(
+    () => reelParCategorie(entries, exercice, refs, undefined, base),
+    [entries, exercice, refs, base]);
   // Réel ventilé par bloc : une immobilisation ne doit pas gonfler les charges.
   const reelParSection = useMemo(() => {
     const m = new Map<PrevSection, Map<string, number>>();
@@ -172,6 +178,11 @@ export function PrevisionnelPage() {
   const largeurMini = Math.max(1050, Math.round(74 * moisList.length / 0.605));
 
   const totalLigne = (l: PrevLigne) => totalDeLigne(l, lignes);
+  // Pour additionner : l'exact, arrondi une seule fois à la fin. Arrondir chaque
+  // ligne d'abord ferait dériver le total de quelques centimes, et l'onglet
+  // Total, qui somme dans un autre ordre, n'afficherait plus le même chiffre.
+  const sommeLignes = (ls: PrevLigne[]) =>
+    r2(ls.filter(l => !l.unite).reduce((s, l) => s + sommeDeLigne(l, lignes) * coef(l), 0));
   /**
    * Le bloc d'une ligne suit la NATURE de sa catégorie, réglée dans l'onglet
    * Catégories : passer un poste « à l'actif » déplace aussitôt ses lignes de
@@ -181,8 +192,7 @@ export function PrevisionnelPage() {
     ? sectionDeCategorie(l.categorie, refs)
     : l.section;
   const lignesDe = (sec: PrevSection) => lignes.filter(l => sectionDe(l) === sec);
-  const totalSection = (sec: PrevSection) =>
-    r2(lignesDe(sec).filter(l => !l.unite).reduce((s, l) => s + totalLigne(l) * coef(l), 0));
+  const totalSection = (sec: PrevSection) => sommeLignes(lignesDe(sec));
   /** Prévu d'une section, mois par mois, dans la base affichée. */
   const prevuMois = (sec: PrevSection, i: number) =>
     r2(lignesDe(sec).filter(l => !l.unite)
@@ -254,8 +264,17 @@ export function PrevisionnelPage() {
               title="Ajouter les lignes de la synthèse qui manquent encore, cellules vides">
               <span className="inline-flex items-center gap-1.5"><ListPlus size={14} /> Compléter la grille</span>
             </Btn>
-            <ReglagesVue />
             </>}
+            {/* Les réglages d'affichage ne dépendent pas de la saisie : le Total
+                se lit lui aussi en HT ou en TTC. Chaque onglet n'affiche que les
+                bascules qui font quelque chose chez lui — un bouton sans effet
+                est pire que pas de bouton. Le Stock tient ses montants en HT,
+                ses lignes le disent ; le Total n'a pas de ligne de sous-total à
+                masquer, ses bandeaux de jeu portent toujours leur chiffre. */}
+            <ReglagesVue
+              avecBase={vue !== 'stock'}
+              avecDetail={vue !== 'stock'}
+              avecSousTotaux={vue !== 'total'} />
           </>
         }
         tabs={
@@ -590,8 +609,7 @@ export function PrevisionnelPage() {
                                     );
                                   })}
                                   <td className="text-right tabular-nums col-total">
-                                    {euros(r2(parGroupe.get(g)!.filter(l => !l.unite)
-                                      .reduce((acc, l) => acc + totalLigne(l) * coef(l), 0)))}
+                                    {euros(sommeLignes(parGroupe.get(g)!))}
                                   </td>
                                   <td className="text-right tabular-nums">
                                     {euros0(r2(parGroupe.get(g)!
@@ -847,8 +865,7 @@ export function PrevisionnelPage() {
                                 );
                               })}
                               <td className="text-right tabular-nums col-total" style={{ color: '#5c5280' }}>
-                                {euros(r2(parGroupe.get(g)!.filter(l => !l.unite)
-                                  .reduce((acc, l) => acc + totalLigne(l) * coef(l), 0)))}
+                                {euros(sommeLignes(parGroupe.get(g)!))}
                               </td>
                               <td className="text-right tabular-nums" style={{ color: '#5c5280' }}>
                                 {euros(r2(parGroupe.get(g)!

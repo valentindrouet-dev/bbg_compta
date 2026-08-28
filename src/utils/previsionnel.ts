@@ -315,7 +315,19 @@ export function valeursDe(l: PrevLigne, lignes: PrevLigne[]): (number | null)[] 
 
 /** Total annuel d'une ligne, formule comprise. */
 export function totalDeLigne(l: PrevLigne, lignes: PrevLigne[]): number {
-  return r2(valeursDe(l, lignes).reduce<number>((s, v) => s + (v ?? 0), 0));
+  return r2(sommeDeLigne(l, lignes));
+}
+
+/**
+ * Le même total, sans arrondi — pour additionner plusieurs lignes.
+ *
+ * Arrondir chaque ligne avant de les sommer fait dériver le total de quelques
+ * centimes, et deux écrans qui n'arrondissent pas au même moment finissent par
+ * afficher deux chiffres pour la même chose. Un agrégat somme donc l'exact et
+ * n'arrondit qu'une fois, tout à la fin.
+ */
+export function sommeDeLigne(l: PrevLigne, lignes: PrevLigne[]): number {
+  return valeursDe(l, lignes).reduce<number>((s, v) => s + (v ?? 0), 0);
 }
 
 /** Valeur d'un mois, formule comprise. */

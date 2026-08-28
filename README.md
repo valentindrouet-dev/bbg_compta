@@ -230,12 +230,20 @@ sont recalculés en direct à partir des écritures.
 ## Réglages d'affichage, communs à toutes les pages
 
 Trois bascules en haut des pages de chiffres — synthèse annuelle, synthèse
-totale, prévisionnel. **Elles valent partout** : réglées ici, retrouvées là-bas,
-et retrouvées telles quelles au rechargement.
+totale, prévisionnel (**tous ses onglets**, Stock et Total compris).
+**Elles valent partout** : réglées ici, retrouvées là-bas, et retrouvées telles
+quelles au rechargement. Chaque page n'affiche que les bascules qui font quelque
+chose chez elle — un bouton sans effet est pire que pas de bouton : l'onglet
+Stock tient ses montants en HT et ses lignes le disent, l'onglet Total n'a pas
+de ligne de sous-total à masquer puisque ses bandeaux de jeu portent toujours
+leur chiffre.
 
 - **HT / TTC** — la base du résultat, ou ce qui sort vraiment du compte. Le
   tableau bascule entièrement : en HT il n'affiche plus de ligne TTC en doublon,
-  puisque le bouton est là pour ça.
+  puisque le bouton est là pour ça. **Le réel bascule avec le prévu** : comparer
+  un réel HT à un budget TTC ferait mentir « Budget consommé » de tout le poids
+  de la TVA. Le compte de résultat, lui, reste toujours en HT — la TVA n'y entre
+  pas, et son titre le dit.
 - **Détaillée / Simplifiée** — toutes les lignes, ou les totaux seuls.
 - **Sous-totaux / Sans** — où se lisent les chiffres d'un groupe de catégories
   ou d'un jeu. Avec **Sous-totaux**, le bandeau annonce le groupe et une ligne

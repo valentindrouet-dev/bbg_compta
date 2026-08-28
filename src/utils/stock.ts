@@ -294,6 +294,8 @@ export interface ApportStock {
   margeParMois: Map<string, number>;
   /** Valeur du stock à la fin de chaque mois. */
   valeurParMois: Map<string, number>;
+  /** Taux de TVA de chaque jeu, pour convertir ses montants en TTC. */
+  tauxParJeu: Map<string, number>;
 }
 
 const ajoute = (m: Map<string, number>, cle: string, v: number) =>
@@ -309,8 +311,10 @@ export function apportStock(
     fabricationParJeuEtMois: new Map(),
     variationParMois: new Map(), cogsParMois: new Map(),
     margeParMois: new Map(), valeurParMois: new Map(),
+    tauxParJeu: new Map(),
   };
   for (const s of stocksExercice(lignes, exercice, jeux)) {
+    out.tauxParJeu.set(s.ligne.jeu, s.ligne.tauxTVA ?? TVA_JEUX_DEFAUT);
     const parJeuCA = new Map<string, number>();
     const parJeuFab = new Map<string, number>();
     for (const c of s.ligne.canaux ?? []) {

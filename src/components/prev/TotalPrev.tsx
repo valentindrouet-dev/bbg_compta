@@ -12,12 +12,14 @@ import { labelMois } from '../../utils/dates';
 import { euros, euros0, r2 } from '../../utils/money';
 import { immoInfos } from '../../utils/calc';
 import { couleurJeu } from '../../utils/jeux';
-import { jeuDeLigne, ordreAffichage, valeursDe, SECTIONS } from '../../utils/previsionnel';
+import {
+  jeuDeLigne, ordreAffichage, sommeDeLigne, tauxDeLigne, tauxObserves, valeursDe, SECTIONS,
+} from '../../utils/previsionnel';
 import { apportStock } from '../../utils/stock';
-import { resultatPrevisionnel, montantsSection, sommeMap } from '../../utils/prevCalc';
+import { resultatPrevisionnel, sommeMap } from '../../utils/prevCalc';
 import { teinteBloc, type BlocCle } from '../../utils/blocs';
 import { Card, TotalBloc, styleBloc, BandeauJeu } from '../ui';
-import { useSousTotaux } from '../../utils/reglagesVue';
+import { useBaseMontant, useVueSimplifiee } from '../../utils/reglagesVue';
 
 const AUCUN_JEU: string[] = [];
 
@@ -33,7 +35,8 @@ export function TotalPrev({ exercice, moisList }: { exercice: string; moisList: 
   const refs = useStore(s => s.referentiels);
   const couleurs = useStore(s => s.blocCouleurs);
   const jeux = refs.jeux ?? AUCUN_JEU;
-  const [sousTotaux] = useSousTotaux();
+  const [base] = useBaseMontant();
+  const [simple] = useVueSimplifiee();
 
   const lignes = useMemo(
     () => ordreAffichage(previsionnels[exercice] ?? [], refs), [previsionnels, exercice, refs]);
@@ -44,6 +47,16 @@ export function TotalPrev({ exercice, moisList }: { exercice: string; moisList: 
     [lignes, moisList, immos, finances, stock, refs]);
 
   const rn = resultat.find(l => l.cle === 'rn')!;
+
+  // HT ou TTC, ligne par ligne : chacune garde son taux, comme dans les onglets
+  // de saisie. Les montants restent stockés en HT — c'est l'affichage qui
+  // change, jamais la donnée.
+  const observes = useMemo(() => tauxObserves(entries), [entries]);
+  const coef = (l: PrevLigne) =>
+    base === 'ttc' && !l.unite ? 1 + tauxDeLigne(l, observes) / 100 : 1;
+  // Les montants qui viennent du stock portent le taux de leur jeu.
+  const coefJeu = (jeu: string) =>
+    base === 'ttc' ? 1 + (stock.tauxParJeu.get(jeu) ?? 20) / 100 : 1;
 
   return (
     <div className="space-y-5">
@@ -62,12 +75,19 @@ export function TotalPrev({ exercice, moisList }: { exercice: string; moisList: 
         if (!lignesBloc.length && !duStock.length) return null;
 
         const t = teinteBloc(bloc.cle as BlocCle, couleurs);
-        const parMois = montantsSection(lignes, moisList, bloc.cle);
-        const apport = bloc.cle === 'produits' ? stock.caParMois
-          : bloc.cle === 'charges' ? stock.fabricationParMois : undefined;
-        const totalBloc = r2(sommeMap(parMois) + (apport ? sommeMap(apport) : 0));
-
-        const valeurLigne = (l: PrevLigne, i: number) => valeursDe(l, lignes)[i] ?? 0;
+        const valeurLigne = (l: PrevLigne, i: number) => (valeursDe(l, lignes)[i] ?? 0) * coef(l);
+        const parMois = new Map(moisList.map((m, i) => [m, r2(
+          lignesBloc.reduce((x, l) => x + valeurLigne(l, i), 0))]));
+        const apport = bloc.cle === 'produits'
+          ? (base === 'ttc' ? stock.caTTCParMois : stock.caParMois)
+          : bloc.cle === 'charges'
+            ? (base === 'ttc' ? stock.fabricationTTCParMois : stock.fabricationParMois)
+            : undefined;
+        // L'exact, arrondi une fois : sommer les mois déjà arrondis ferait
+        // dériver le total de quelques centimes par rapport à l'onglet de saisie.
+        const sommeLignes = (ls: PrevLigne[]) =>
+          ls.reduce((s, l) => s + sommeDeLigne(l, lignes) * coef(l), 0);
+        const totalBloc = r2(sommeLignes(lignesBloc) + (apport ? sommeMap(apport) : 0));
         // Les jeux présents dans ce bloc, dans l'ordre du catalogue.
         const jeuxDuBloc = jeux.filter(j =>
           lignesBloc.some(l => jeuDeLigne(l, jeux) === j) || duStock.some(([x]) => x === j));
@@ -87,8 +107,8 @@ export function TotalPrev({ exercice, moisList }: { exercice: string; moisList: 
                 <tbody>
                   {/* D'abord les postes généraux, puis un bandeau par jeu —
                       le même découpage que dans les onglets de saisie. */}
-                  {lignesBloc.filter(l => !jeuDeLigne(l, jeux)).map(l => {
-                    const total = r2(moisList.reduce((s, _m, i) => s + valeurLigne(l, i), 0));
+                  {(simple ? [] : lignesBloc.filter(l => !jeuDeLigne(l, jeux))).map(l => {
+                    const total = r2(sommeDeLigne(l, lignes) * coef(l));
                     if (!total) return null;
                     return (
                       <tr key={l.id}>
@@ -104,18 +124,20 @@ export function TotalPrev({ exercice, moisList }: { exercice: string; moisList: 
                   {jeuxDuBloc.map(jeu => {
                     const siennes = lignesBloc.filter(l => jeuDeLigne(l, jeux) === jeu);
                     const duStockJeu = duStock.filter(([j]) => j === jeu);
-                    const totalJeu = r2(
-                      siennes.reduce((s, l) => s + moisList.reduce((x, _m, i) => x + valeurLigne(l, i), 0), 0)
+                    const totalJeu = r2(sommeLignes(siennes)
                       + duStockJeu.reduce((s, [, , parMois]) =>
-                        s + [...parMois.values()].reduce((x, v) => x + v, 0), 0));
+                        s + [...parMois.values()].reduce((x, v) => x + v, 0) * coefJeu(jeu), 0));
                     if (!totalJeu) return null;
                     return (
                       <Fragment key={`jeu-${jeu}`}>
+                        {/* Le bandeau porte toujours le total du jeu : ici il n'y a
+                            pas de ligne de sous-total à masquer, et le priver de son
+                            chiffre ne laisserait qu'un intertitre. */}
                         <BandeauJeu jeu={jeu} couleur={couleurJeu(jeu, refs)}
                           colSpan={moisList.length + 2}
-                          droite={sousTotaux ? euros(totalJeu) : undefined} />
-                        {siennes.map(l => {
-                          const total = r2(moisList.reduce((s, _m, i) => s + valeurLigne(l, i), 0));
+                          droite={euros(r2(totalJeu))} />
+                        {(simple ? [] : siennes).map(l => {
+                          const total = r2(sommeDeLigne(l, lignes) * coef(l));
                           if (!total) return null;
                           return (
                             <tr key={l.id}>
@@ -128,13 +150,14 @@ export function TotalPrev({ exercice, moisList }: { exercice: string; moisList: 
                             </tr>
                           );
                         })}
-                        {duStockJeu.map(([, libelle, parMoisJeu]) => {
-                          const total = r2([...parMoisJeu.values()].reduce((s, v) => s + v, 0));
+                        {(simple ? [] : duStockJeu).map(([, libelle, parMoisJeu]) => {
+                          const k = coefJeu(jeu);
+                          const total = r2([...parMoisJeu.values()].reduce((s, v) => s + v, 0) * k);
                           return (
                             <tr key={`${jeu}-${libelle}`}>
                               <td style={{ paddingLeft: 22 }}>{libelle}</td>
                               {moisList.map(m => {
-                                const v = parMoisJeu.get(m) ?? 0;
+                                const v = r2((parMoisJeu.get(m) ?? 0) * k);
                                 return <td key={m} className="text-right tabular-nums">{v ? euros0(v) : '·'}</td>;
                               })}
                               <td className="text-right tabular-nums bg-[var(--bloc-total)] font-medium">{euros(total)}</td>
@@ -146,7 +169,7 @@ export function TotalPrev({ exercice, moisList }: { exercice: string; moisList: 
                   })}
                   {bloc.cle === 'charges' && sommeMap(stock.variationParMois) !== 0 && (
                     <tr style={{ fontStyle: 'italic' }}>
-                      <td title="Elle neutralise le coût des exemplaires encore en carton : seul le coût de ce qui est vendu pèse sur le résultat.">
+                      <td title="Elle neutralise le coût des exemplaires encore en carton : seul le coût de ce qui est vendu pèse sur le résultat. Écriture comptable sans TVA : son montant est le même en HT et en TTC.">
                         Variation de stock (en moins des charges)
                       </td>
                       {moisList.map(m => {
