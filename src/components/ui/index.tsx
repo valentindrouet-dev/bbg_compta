@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import {
   ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Palette, RotateCcw, Gamepad2,
+  List, Rows3, Sigma, Minus,
 } from 'lucide-react';
 import { useEtatVue } from '../../utils/etatVue';
+import { useBaseMontant, useSousTotaux, useVueSimplifiee } from '../../utils/reglagesVue';
 import { parseMontant, r2 } from '../../utils/money';
 import { useStore } from '../../store';
 import { BLOC_PAR_CLE, teinteBloc, type BlocCle } from '../../utils/blocs';
@@ -129,6 +131,87 @@ export function BandeauJeu({ jeu, couleur, colSpan, droite }: {
         </span>
       </td>
     </tr>
+  );
+}
+
+/**
+ * Un groupe de boutons exclusifs, façon interrupteur — la forme reprise par les
+ * bascules HT/TTC, détaillée/simplifiée et sous-totaux.
+ */
+export function Bascule<T extends string | boolean>({ valeur, options, onChange }: {
+  valeur: T;
+  options: readonly { v: T; label: string; icone?: ReactNode; aide?: string }[];
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div className="flex rounded-md border overflow-hidden text-sm"
+      style={{ borderColor: 'var(--bbg-border)' }}>
+      {options.map(o => (
+        <button
+          key={String(o.v)}
+          className="px-3 py-1.5 font-semibold transition-colors inline-flex items-center gap-1.5"
+          style={valeur === o.v
+            ? { backgroundColor: 'var(--bbg-purple-dark)', color: '#fff' }
+            : { backgroundColor: '#fff', color: '#5c5280' }}
+          title={o.aide}
+          onClick={() => onChange(o.v)}
+        >
+          {o.icone}{o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * La barre de réglages d'affichage, identique sur toutes les pages de chiffres.
+ * Ce qu'on règle ici vaut partout et se retrouve au rechargement.
+ */
+export function ReglagesVue({ avecBase = true, avecDetail = true, avecSousTotaux = true }: {
+  avecBase?: boolean; avecDetail?: boolean; avecSousTotaux?: boolean;
+}) {
+  const [base, setBase] = useBaseMontant();
+  const [simple, setSimple] = useVueSimplifiee();
+  const [sousTotaux, setSousTotaux] = useSousTotaux();
+  return (
+    <>
+      {avecBase && (
+        <Bascule
+          valeur={base}
+          onChange={setBase}
+          options={[
+            { v: 'ht' as const, label: 'HT', aide: 'Hors taxes — la base du résultat' },
+            { v: 'ttc' as const, label: 'TTC', aide: 'Toutes taxes comprises — ce qui sort vraiment du compte' },
+          ]}
+        />
+      )}
+      {avecDetail && (
+        <Bascule
+          valeur={simple}
+          onChange={setSimple}
+          options={[
+            { v: false, label: 'Détaillée', icone: <List size={14} />, aide: 'Toutes les lignes' },
+            { v: true, label: 'Simplifiée', icone: <Rows3 size={14} />, aide: 'Les totaux et sous-totaux seuls' },
+          ]}
+        />
+      )}
+      {avecSousTotaux && (
+        <Bascule
+          valeur={sousTotaux}
+          onChange={setSousTotaux}
+          options={[
+            {
+              v: true, label: 'Sous-totaux', icone: <Sigma size={14} />,
+              aide: 'Afficher le sous-total de chaque groupe de catégories et de chaque jeu',
+            },
+            {
+              v: false, label: 'Sans', icone: <Minus size={14} />,
+              aide: 'Masquer les sous-totaux de groupe : il ne reste que le total du bloc',
+            },
+          ]}
+        />
+      )}
+    </>
   );
 }
 

@@ -53,7 +53,12 @@ sont recalculés en direct à partir des écritures.
   moyen constaté à celui budgété, et la comparaison au stock prévu. La valeur du
   stock figure **à l'actif** : elle ne pèse au résultat qu'une fois les
   exemplaires vendus
-- **Trésorerie** — chaque montant rattaché à sa source : **encaissements** et
+- **Trésorerie** — le solde affiché est celui de la **fin du mois en cours**, pas
+  celui de la dernière ligne : un remboursement déjà planifié en octobre ne doit
+  pas amputer ce qu'on a en banque aujourd'hui ; ce qu'il en restera après les
+  mois planifiés est donné dessous. Le tableau de bord et cette page lisent le
+  **même calcul**, corrections manuelles comprises — deux écrans ne peuvent plus
+  annoncer deux soldes. Chaque montant est rattaché à sa source : **encaissements** et
   **décaissements du journal** (retrouvables ligne à ligne), **mouvements
   financiers** (capital, apport et remboursement de compte courant d'associé,
   placements, intérêts — qui ne sont dans aucun journal), et un **ajustement**
@@ -199,6 +204,18 @@ sont recalculés en direct à partir des écritures.
     comptables. Elle s'imprime en PDF d'un `Cmd + P`
 - **Paramètres** — catégories, moyens de paiement, plan comptable,
   sauvegarde / restauration / réinitialisation
+
+## Réglages d'affichage, communs à toutes les pages
+
+Trois bascules en haut des pages de chiffres — synthèse annuelle, synthèse
+totale, prévisionnel. **Elles valent partout** : réglées ici, retrouvées là-bas,
+et retrouvées telles quelles au rechargement.
+
+- **HT / TTC** — la base du résultat, ou ce qui sort vraiment du compte.
+- **Détaillée / Simplifiée** — toutes les lignes, ou les totaux seuls.
+- **Sous-totaux / Sans** — afficher ou masquer le sous-total de chaque groupe de
+  catégories et de chaque jeu. Sur un tableau qui compte beaucoup de groupes ils
+  doublent le nombre de lignes ; sans eux, il ne reste que le total du bloc.
 
 ## Gestes utiles
 

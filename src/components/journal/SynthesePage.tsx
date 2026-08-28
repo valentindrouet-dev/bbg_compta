@@ -1,7 +1,6 @@
 import { Fragment, useMemo, useState } from 'react';
 import {
-  Eye, EyeOff, Gamepad2, Info, Rows3, List, CheckCircle2, AlertTriangle, AlertCircle, Wrench,
-  ArrowRight, GripVertical, CheckSquare, Square,
+  Eye, EyeOff, Gamepad2, Info, CheckCircle2, AlertTriangle, AlertCircle, Wrench, ArrowRight, GripVertical, CheckSquare, Square,
 } from 'lucide-react';
 import { useStore } from '../../store';
 import { useReorganisation } from '../../utils/glisser';
@@ -13,7 +12,7 @@ import {
 import { euros, euros0, r2 } from '../../utils/money';
 import {
   syntheseExercice, immoInfos, dotationDuMois, dotationsParMois, produitsFinanciersParMois,
-  compteResultat, ecrituresDeCellule, type BaseMontant, type LigneResultat,
+  compteResultat, ecrituresDeCellule, type LigneResultat,
 } from '../../utils/calc';
 import { teinteBloc, type BlocCle } from '../../utils/blocs';
 import {
@@ -21,9 +20,12 @@ import {
 } from '../../utils/controles';
 import type { Page } from '../../App';
 
-import { PageHeader, ExerciceTabs, Card, Btn, BlocColorMenu, TotalBloc, styleBloc } from '../ui';
+import {
+  PageHeader, ExerciceTabs, Card, Btn, BlocColorMenu, TotalBloc, styleBloc, ReglagesVue,
+} from '../ui';
 import type { JournalEntry } from '../../types';
 import { useEtatVue } from '../../utils/etatVue';
+import { useBaseMontant, useSousTotaux, useVueSimplifiee } from '../../utils/reglagesVue';
 
 /** Référence stable : un `?? []` dans un sélecteur reboucle à l'infini. */
 const AUCUN_JEU: string[] = [];
@@ -79,9 +81,9 @@ export function SynthesePage({ onAllerA }: { onAllerA?: (page: Page, ligne: stri
   const updateEntry = useStore(s => s.updateEntry);
   const [exercice, setExercice] = useEtatVue('synthese.exercice', '2025-26',
     v => (EXERCICES as readonly string[]).includes(v));
-  const [base, setBase] = useEtatVue<BaseMontant>('synthese.base', 'ht');
-  /** Vue simplifiée : on ne garde que les totaux et les sous-totaux. */
-  const [simple, setSimple] = useEtatVue('synthese.simple', false);
+  const [base] = useBaseMontant();
+  const [simple] = useVueSimplifiee();
+  const [sousTotaux] = useSousTotaux();
   const [apercuActif, setApercuActif] = useState(
     () => localStorage.getItem('bbg-apercu-synthese') !== 'off');
   const [apercu, setApercu] = useState<
@@ -237,37 +239,7 @@ export function SynthesePage({ onAllerA }: { onAllerA?: (page: Page, ligne: stri
         subtitle="Produits, charges, personnel, jeux, immobilisations, puis le résultat — recalculé en direct depuis le journal"
         actions={
           <>
-            <div className="flex rounded-md border overflow-hidden text-sm" style={{ borderColor: 'var(--bbg-border)' }}>
-              {(['ht', 'ttc'] as BaseMontant[]).map(b => (
-                <button
-                  key={b}
-                  className="px-3 py-1.5 font-semibold transition-colors"
-                  style={base === b
-                    ? { backgroundColor: 'var(--bbg-purple-dark)', color: '#fff' }
-                    : { backgroundColor: '#fff', color: '#5c5280' }}
-                  onClick={() => setBase(b)}
-                >
-                  {b.toUpperCase()}
-                </button>
-              ))}
-            </div>
-            <div className="flex rounded-md border overflow-hidden text-sm" style={{ borderColor: 'var(--bbg-border)' }}>
-              {([['detail', 'Détaillée', List], ['simple', 'Simplifiée', Rows3]] as const).map(([cle, label, Icone]) => (
-                <button
-                  key={cle}
-                  className="px-3 py-1.5 font-semibold transition-colors inline-flex items-center gap-1.5"
-                  style={(cle === 'simple') === simple
-                    ? { backgroundColor: 'var(--bbg-purple-dark)', color: '#fff' }
-                    : { backgroundColor: '#fff', color: '#5c5280' }}
-                  onClick={() => setSimple(cle === 'simple')}
-                  title={cle === 'simple'
-                    ? 'Ne garder que les lignes de totaux et de sous-totaux'
-                    : 'Afficher chaque catégorie'}
-                >
-                  <Icone size={14} /> {label}
-                </button>
-              ))}
-            </div>
+            <ReglagesVue />
             <button
               className="px-3 py-1.5 rounded-md border text-sm font-semibold inline-flex items-center gap-1.5"
               style={avecPrev
@@ -409,7 +381,7 @@ export function SynthesePage({ onAllerA }: { onAllerA?: (page: Page, ligne: stri
                               </tr>
                             );
                           })}
-                          {avecGroupes && (simple || parGroupe.get(g)!.length > 1) && (
+                          {avecGroupes && sousTotaux && (simple || parGroupe.get(g)!.length > 1) && (
                             <tr style={simple ? { fontWeight: 600 } : { fontStyle: 'italic' }}>
                               <td style={{ color: '#6f6690' }}>Sous-total {g || 'sans groupe'}</td>
                               {syn.moisList.map(m => {
@@ -467,6 +439,7 @@ export function SynthesePage({ onAllerA }: { onAllerA?: (page: Page, ligne: stri
                               </tr>
                             );
                           })}
+                          {sousTotaux && (
                           <tr style={{ fontWeight: 700 }}>
                             <td className="pl-4">Total {jeu}</td>
                             {syn.moisList.map(m => {
@@ -480,6 +453,7 @@ export function SynthesePage({ onAllerA }: { onAllerA?: (page: Page, ligne: stri
                             </td>
                             <td className="col-total"></td>
                           </tr>
+                          )}
                         </Fragment>
                         );
                       })}

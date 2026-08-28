@@ -1,11 +1,13 @@
 import { Fragment, useMemo } from 'react';
-import { CheckSquare, Gamepad2, List, Rows3, Square } from 'lucide-react';
+import {
+  CheckSquare, Gamepad2, Square,
+} from 'lucide-react';
 import { useStore } from '../../store';
 import { EXERCICES, moisExercice } from '../../utils/dates';
 import { euros, euros0, r2 } from '../../utils/money';
 import {
   compteResultat, dotationsParMois, immoInfos, produitsFinanciersParMois, syntheseExercice,
-  type BaseMontant, type LigneResultat,
+  type LigneResultat,
 } from '../../utils/calc';
 import { estChargeFinanciere, teinteBloc, type BlocCle } from '../../utils/blocs';
 import {
@@ -13,8 +15,10 @@ import {
 } from '../../utils/previsionnel';
 import type { PrevSection } from '../../types';
 import { useEtatVue } from '../../utils/etatVue';
+import { useBaseMontant, useSousTotaux, useVueSimplifiee } from '../../utils/reglagesVue';
 import { couleurJeu, encreSur } from '../../utils/jeux';
-import { PageHeader, Card, TotalBloc, BlocColorMenu, styleBloc } from '../ui';
+import { PageHeader, Card, TotalBloc, BlocColorMenu, styleBloc, ReglagesVue,
+} from '../ui';
 
 /** Un bloc de la synthèse, mais avec une colonne par exercice. */
 interface BlocTotal {
@@ -42,8 +46,9 @@ export function SyntheseTotalePage() {
   const refs = useStore(s => s.referentiels);
   const finances = useStore(s => s.finances);
   const couleurs = useStore(s => s.blocCouleurs);
-  const [base, setBase] = useEtatVue<BaseMontant>('totale.base', 'ht');
-  const [simple, setSimple] = useEtatVue('totale.simple', false);
+  const [base] = useBaseMontant();
+  const [simple] = useVueSimplifiee();
+  const [sousTotaux] = useSousTotaux();
   /** Compléter les exercices sans écriture avec ce qui est budgété. */
   const [avecPrev, setAvecPrev] = useEtatVue('totale.prev', false);
   const previsionnels = useStore(s => s.previsionnels);
@@ -256,44 +261,19 @@ export function SyntheseTotalePage() {
         subtitle="La même lecture que la synthèse annuelle, mais une colonne par exercice"
         actions={
           <>
-            <div className="flex rounded-md border overflow-hidden text-sm" style={{ borderColor: 'var(--bbg-border)' }}>
-              {(['ht', 'ttc'] as BaseMontant[]).map(b => (
-                <button
-                  key={b}
-                  className="px-3 py-1.5 font-semibold transition-colors"
-                  style={base === b
-                    ? { backgroundColor: 'var(--bbg-purple-dark)', color: '#fff' }
-                    : { backgroundColor: '#fff', color: '#5c5280' }}
-                  onClick={() => setBase(b)}
-                >
-                  {b.toUpperCase()}
-                </button>
-              ))}
-            </div>
+            <ReglagesVue />
+            {/* Les exercices sans écriture se remplissent avec ce qui est budgété,
+                en gris : la trajectoire complète se lit d'un coup. */}
             <button
               className="px-3 py-1.5 rounded-md border text-sm font-semibold inline-flex items-center gap-1.5"
               style={avecPrev
-                ? { backgroundColor: 'var(--bbg-purple-dark)', color: '#fff', borderColor: 'var(--bbg-purple-dark)' }
-                : { backgroundColor: '#fff', color: '#5c5280', borderColor: 'var(--bbg-border)' }}
-              title="Compléter les exercices sans écriture avec ce qui est budgété, en grisé"
-              onClick={() => setAvecPrev(!avecPrev)}
+                ? { backgroundColor: 'var(--bbg-purple-dark)', borderColor: 'var(--bbg-purple-dark)', color: '#fff' }
+                : { backgroundColor: '#fff', borderColor: 'var(--bbg-border)', color: '#5c5280' }}
+              title="Compléter les exercices sans écriture avec le prévisionnel, en grisé"
+              onClick={() => setAvecPrev(v => !v)}
             >
               {avecPrev ? <CheckSquare size={14} /> : <Square size={14} />} Prévisionnels
             </button>
-            <div className="flex rounded-md border overflow-hidden text-sm" style={{ borderColor: 'var(--bbg-border)' }}>
-              {([['detail', 'Détaillée', List], ['simple', 'Simplifiée', Rows3]] as const).map(([cle, label, Icone]) => (
-                <button
-                  key={cle}
-                  className="px-3 py-1.5 font-semibold transition-colors inline-flex items-center gap-1.5"
-                  style={(cle === 'simple') === simple
-                    ? { backgroundColor: 'var(--bbg-purple-dark)', color: '#fff' }
-                    : { backgroundColor: '#fff', color: '#5c5280' }}
-                  onClick={() => setSimple(cle === 'simple')}
-                >
-                  <Icone size={14} /> {label}
-                </button>
-              ))}
-            </div>
           </>
         }
       />
@@ -377,7 +357,7 @@ export function SyntheseTotalePage() {
                             </td>
                           </tr>
                         ))}
-                        {avecGroupes && (simple || parGroupe.get(g)!.length > 1) && (
+                        {avecGroupes && sousTotaux && (simple || parGroupe.get(g)!.length > 1) && (
                           <tr style={simple ? { fontWeight: 600 } : { fontStyle: 'italic' }}>
                             <td style={{ color: '#6f6690' }}>Sous-total {g || 'sans groupe'}</td>
                             {colonnes.map(ex => {
@@ -429,6 +409,7 @@ export function SyntheseTotalePage() {
                               </td>
                             </tr>
                           ))}
+                          {sousTotaux && (
                           <tr style={{ fontWeight: 700 }}>
                             <td className="pl-4">Total {jeu}</td>
                             {colonnes.map(ex => {
@@ -439,6 +420,7 @@ export function SyntheseTotalePage() {
                               {euros(r2([...postes.values()].reduce((s, m) => s + somme(m), 0)))}
                             </td>
                           </tr>
+                          )}
                         </Fragment>
                       );
                     })}

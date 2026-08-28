@@ -1,8 +1,6 @@
 import { Fragment, useMemo, useState } from 'react';
 import {
-  Plus, Trash2, AlertTriangle, AlertCircle, Info, Wand2, ArrowRightLeft, Gamepad2,
-  Sigma, ListPlus, Clock, List, Rows3, GripVertical, Percent, Calculator,
-  Receipt, TrendingUp, Landmark, Boxes, Table2,
+  Plus, Trash2, AlertTriangle, AlertCircle, Info, Wand2, ArrowRightLeft, Gamepad2, Sigma, ListPlus, Clock, GripVertical, Percent, Calculator, Receipt, TrendingUp, Landmark, Boxes, Table2,
 } from 'lucide-react';
 import { useStore } from '../../store';
 import { BAREME_TNS, cotisationsTNS } from '../../utils/tns';
@@ -28,10 +26,11 @@ import { StockPrev } from './StockPrev';
 import { TotalPrev } from './TotalPrev';
 import {
   PageHeader, Card, Btn, StatCard, MoneyInput, BlocColorMenu, TotalBloc, styleBloc, MonthTabs,
-  VueTabs, BandeauJeu,
+  VueTabs, BandeauJeu, ReglagesVue,
 } from '../ui';
 import { useSelectionCellules } from '../../utils/selection';
 import { useEtatVue } from '../../utils/etatVue';
+import { useBaseMontant, useSousTotaux, useVueSimplifiee } from '../../utils/reglagesVue';
 
 /**
  * Les onglets du prévisionnel. Chacun ne montre que ce qui le regarde ; le
@@ -84,9 +83,9 @@ export function PrevisionnelPage() {
   const [exercice, setExercice] = useEtatVue('prev.exercice', '2025-26',
     v => (EXERCICES as readonly string[]).includes(v));
   /** HT (base du résultat) ou TTC (ce qui sort vraiment du compte). */
-  const [base, setBase] = useEtatVue<'ht' | 'ttc'>('prev.base', 'ht');
-  /** Vue simplifiée : les totaux seuls, comme dans la synthèse. */
-  const [simple, setSimple] = useEtatVue('prev.simple', false);
+  const [base] = useBaseMontant();
+  const [simple] = useVueSimplifiee();
+  const [sousTotaux] = useSousTotaux();
   /** L'onglet regardé : charges, produits, immobilisations, stock ou total. */
   const [vue, setVue] = useEtatVue<VuePrev>('prev.vue', 'charges',
     v => VUES.some(x => x.cle === v));
@@ -255,40 +254,7 @@ export function PrevisionnelPage() {
               title="Ajouter les lignes de la synthèse qui manquent encore, cellules vides">
               <span className="inline-flex items-center gap-1.5"><ListPlus size={14} /> Compléter la grille</span>
             </Btn>
-            <div className="flex rounded-md border overflow-hidden text-sm" style={{ borderColor: 'var(--bbg-border)' }}>
-              {(['ht', 'ttc'] as const).map(b => (
-                <button
-                  key={b}
-                  className="px-3 py-1.5 font-semibold transition-colors"
-                  style={base === b
-                    ? { backgroundColor: 'var(--bbg-purple-dark)', color: '#fff' }
-                    : { backgroundColor: '#fff', color: '#5c5280' }}
-                  title={b === 'ht'
-                    ? 'Hors taxes — la base du résultat'
-                    : 'Toutes taxes comprises — ce qui sort vraiment du compte'}
-                  onClick={() => setBase(b)}
-                >
-                  {b.toUpperCase()}
-                </button>
-              ))}
-            </div>
-            <div className="flex rounded-md border overflow-hidden text-sm" style={{ borderColor: 'var(--bbg-border)' }}>
-              {([['detail', 'Détaillée', List], ['simple', 'Simplifiée', Rows3]] as const).map(([cle, label, Icone]) => (
-                <button
-                  key={cle}
-                  className="px-3 py-1.5 font-semibold transition-colors inline-flex items-center gap-1.5"
-                  style={(cle === 'simple') === simple
-                    ? { backgroundColor: 'var(--bbg-purple-dark)', color: '#fff' }
-                    : { backgroundColor: '#fff', color: '#5c5280' }}
-                  onClick={() => setSimple(cle === 'simple')}
-                  title={cle === 'simple'
-                    ? 'Les totaux et sous-totaux seuls'
-                    : 'Toutes les lignes'}
-                >
-                  <Icone size={14} /> {label}
-                </button>
-              ))}
-            </div>
+            <ReglagesVue />
             </>}
           </>
         }
@@ -440,7 +406,7 @@ export function PrevisionnelPage() {
                           </td>
                         </tr>
                       ))}
-                      {canaux.size > 1 && (
+                      {sousTotaux && canaux.size > 1 && (
                         <tr className="band-bloc">
                           <td>Total {jeu}</td>
                           {moisList.map(m => {
@@ -840,7 +806,7 @@ export function PrevisionnelPage() {
                               </td>
                             </tr>
                           )}
-                          {avecGroupes && (simple || parGroupe.get(g)!.length > 1) && (
+                          {avecGroupes && sousTotaux && (simple || parGroupe.get(g)!.length > 1) && (
                             <tr style={simple ? { fontWeight: 600 } : { fontStyle: 'italic' }}>
                               <td style={{ color: '#6f6690' }}>
                                 Sous-total {g || 'sans groupe'}

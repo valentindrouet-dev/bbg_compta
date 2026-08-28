@@ -17,6 +17,7 @@ import {
   CANAUX_DEFAUT, stocksExercice, totalRepartition, type StockJeu,
 } from '../../utils/stock';
 import { Card, Btn, MoneyInput, StatCard, BandeauJeu, styleBloc } from '../ui';
+import { useSousTotaux } from '../../utils/reglagesVue';
 import { teinteBloc } from '../../utils/blocs';
 
 const AUCUN_JEU: string[] = [];
@@ -128,6 +129,7 @@ function TableauJeu({ s, moisList, couleur, lienProd, onPatch, onRemove }: {
   const updateCanal = useStore(st => st.updateCanal);
   const removeCanal = useStore(st => st.removeCanal);
   const setStockFabrique = useStore(st => st.setStockFabrique);
+  const [sousTotaux] = useSousTotaux();
   const setVentesPourcent = useStore(st => st.setVentesPourcent);
   const couleursBloc = useStore(st => st.blocCouleurs);
   const teinte = teinteBloc('jeux', couleursBloc);
@@ -224,7 +226,9 @@ function TableauJeu({ s, moisList, couleur, lienProd, onPatch, onRemove }: {
           </thead>
           <tbody>
             <BandeauJeu jeu={l.jeu} couleur={couleur} colSpan={moisList.length + 2}
-              droite={`${s.total.stockFin} en stock · ${euros(s.total.marge)} de marge`} />
+              droite={sousTotaux
+                ? `${s.total.stockFin} en stock · ${euros(s.total.marge)} de marge`
+                : undefined} />
             <tr>
               <td title="Exemplaires sortis d'usine ce mois-là">Fabriqués (exemplaires)</td>
               {moisList.map((m, i) => (

@@ -2,7 +2,7 @@ import type {
   JournalEntry, FinanceEntry, Referentiels, TresoManuel,
 } from '../types';
 import { dureeCategorie, estChargeFinanciere, estImmobilisation, estPersonnel } from './blocs';
-import { compareMois, moisExercice, addYears, PRE_IMMAT } from './dates';
+import { compareMois, moisCourant, moisExercice, addYears, PRE_IMMAT } from './dates';
 import { r2 } from './money';
 
 // ----- Sélections de base ------------------------------------------------
@@ -236,6 +236,45 @@ export interface TresoMois {
  * Le calcul suppose qu'une écriture est réglée dans son mois comptable. Quand
  * ce n'est pas le cas, c'est l'ajustement qui remet le solde d'aplomb.
  */
+/**
+ * Le solde de trésorerie, tel qu'il doit s'afficher partout.
+ *
+ * « Ce qu'on a en banque » est le solde à la fin du **mois en cours**, pas celui
+ * de la dernière ligne du tableau : un remboursement déjà planifié en octobre ne
+ * doit pas amputer ce qu'on a aujourd'hui. Les mois planifiés au-delà sont
+ * donnés à part. Un seul calcul, pour que le tableau de bord et la page
+ * Trésorerie ne se contredisent jamais.
+ */
+export interface SoldeTresorerie {
+  /** Le mois dont le solde est retenu — le mois en cours. */
+  mois: string;
+  /** Solde à la fin de ce mois. */
+  solde: number;
+  /** Solde une fois passés les mois déjà planifiés au-delà. */
+  soldeApres: number;
+  /** Combien de mois sont planifiés après le mois en cours. */
+  moisPlanifies: number;
+  lignes: TresoMois[];
+}
+
+export function soldeTresorerie(
+  entries: JournalEntry[], finances: FinanceEntry[],
+  manuel: Record<string, TresoManuel> = {},
+): SoldeTresorerie {
+  const courant = moisCourant();
+  const lignes = tableauTreso(entries, finances, moisTresorerie(entries, finances, courant), manuel);
+  const i = lignes.findIndex(r => r.mois === courant);
+  const retenue = lignes[i >= 0 ? i : lignes.length - 1];
+  const apres = lignes.length ? lignes[lignes.length - 1].soldeCumule : 0;
+  return {
+    mois: retenue?.mois ?? courant,
+    solde: retenue?.soldeCumule ?? 0,
+    soldeApres: apres,
+    moisPlanifies: i >= 0 ? lignes.length - 1 - i : 0,
+    lignes,
+  };
+}
+
 export function tableauTreso(
   entries: JournalEntry[], finances: FinanceEntry[], moisList: string[],
   manuel: Record<string, TresoManuel> = {},

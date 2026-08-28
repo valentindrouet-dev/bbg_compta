@@ -17,6 +17,7 @@ import { apportStock } from '../../utils/stock';
 import { resultatPrevisionnel, montantsSection, sommeMap } from '../../utils/prevCalc';
 import { teinteBloc, type BlocCle } from '../../utils/blocs';
 import { Card, TotalBloc, styleBloc, BandeauJeu } from '../ui';
+import { useSousTotaux } from '../../utils/reglagesVue';
 
 const AUCUN_JEU: string[] = [];
 
@@ -32,6 +33,7 @@ export function TotalPrev({ exercice, moisList }: { exercice: string; moisList: 
   const refs = useStore(s => s.referentiels);
   const couleurs = useStore(s => s.blocCouleurs);
   const jeux = refs.jeux ?? AUCUN_JEU;
+  const [sousTotaux] = useSousTotaux();
 
   const lignes = useMemo(
     () => ordreAffichage(previsionnels[exercice] ?? [], refs), [previsionnels, exercice, refs]);
@@ -110,7 +112,8 @@ export function TotalPrev({ exercice, moisList }: { exercice: string; moisList: 
                     return (
                       <Fragment key={`jeu-${jeu}`}>
                         <BandeauJeu jeu={jeu} couleur={couleurJeu(jeu, refs)}
-                          colSpan={moisList.length + 2} droite={euros(totalJeu)} />
+                          colSpan={moisList.length + 2}
+                          droite={sousTotaux ? euros(totalJeu) : undefined} />
                         {siennes.map(l => {
                           const total = r2(moisList.reduce((s, _m, i) => s + valeurLigne(l, i), 0));
                           if (!total) return null;

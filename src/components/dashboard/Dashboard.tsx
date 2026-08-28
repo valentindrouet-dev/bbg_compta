@@ -7,7 +7,7 @@ import { useStore } from '../../store';
 import type { Page } from '../../App';
 import { EXERCICES, labelMois, moisExercice, moisCourant } from '../../utils/dates';
 import { euros, euros0, r2 } from '../../utils/money';
-import { syntheseExercice, tableauTreso, tableauTVA, moisTresorerie } from '../../utils/calc';
+import { syntheseExercice, soldeTresorerie, tableauTVA } from '../../utils/calc';
 import { PageHeader, ExerciceTabs, Card, StatCard, Btn } from '../ui';
 import { teinte } from '../../utils/couleurs';
 import { useEtatVue } from '../../utils/etatVue';
@@ -28,6 +28,7 @@ const kEuros = (v: number) => Math.abs(v) >= 1000 ? `${(v / 1000).toLocaleString
 export function Dashboard({ onNavigate }: { onNavigate: (p: Page) => void }) {
   const entries = useStore(s => s.entries);
   const finances = useStore(s => s.finances);
+  const tresoManuel = useStore(s => s.tresoManuel);
   const refs = useStore(s => s.referentiels);
   const [exercice, setExercice] = useEtatVue('dashboard.exercice', '2025-26',
     v => (EXERCICES as readonly string[]).includes(v));
@@ -39,7 +40,10 @@ export function Dashboard({ onNavigate }: { onNavigate: (p: Page) => void }) {
       produits: r2(syn.totalProduitsParMois.get(m) ?? 0),
       depenses: r2((syn.totalChargesParMois.get(m) ?? 0) + (syn.totalJeuxParMois.get(m) ?? 0) + (syn.immoParMois.get(m) ?? 0)),
     }));
-    const treso = tableauTreso(entries, finances, moisTresorerie(entries, finances, moisCourant())).map(t => ({
+    // Même calcul que la page Trésorerie, corrections manuelles comprises :
+    // deux écrans ne doivent pas annoncer deux soldes.
+    const bilanTreso = soldeTresorerie(entries, finances, tresoManuel);
+    const treso = bilanTreso.lignes.map(t => ({
       mois: labelMois(t.mois), solde: t.soldeCumule,
     }));
     const tva = tableauTVA(entries, moisExercice(exercice));
@@ -54,10 +58,10 @@ export function Dashboard({ onNavigate }: { onNavigate: (p: Page) => void }) {
     const reste = r2(cats.slice(8).reduce((s, c) => s + c.ht, 0));
     if (reste > 0) top.push({ cat: 'Autres catégories', ht: reste });
     const soldeTVA = r2(tva.reduce((s, x) => s + x.solde, 0));
-    return { parMois, treso, totProd, totCharges, totJeux, totImmo, top, soldeTVA };
-  }, [entries, finances, refs.categoriesJeux, exercice]);
+    return { parMois, treso, bilanTreso, totProd, totCharges, totJeux, totImmo, top, soldeTVA };
+  }, [entries, finances, tresoManuel, refs.categoriesJeux, exercice]);
 
-  const soldeActuel = data.treso.length ? data.treso[data.treso.length - 1].solde : 0;
+  const soldeActuel = data.bilanTreso.solde;
   const resultat = r2(data.totProd - data.totCharges - data.totJeux);
 
   return (
@@ -80,7 +84,13 @@ export function Dashboard({ onNavigate }: { onNavigate: (p: Page) => void }) {
           sub={`dont jeux ${euros0(data.totJeux)}`} />
         <StatCard label="Résultat simplifié" value={euros0(resultat)} tone={resultat >= 0 ? 'good' : 'bad'}
           sub="produits − charges − jeux" />
-        <StatCard label="Trésorerie disponible" value={euros0(soldeActuel)} tone={soldeActuel >= 0 ? 'good' : 'bad'} />
+        <StatCard
+          label={`Trésorerie à fin ${labelMois(data.bilanTreso.mois)}`}
+          value={euros0(soldeActuel)}
+          tone={soldeActuel >= 0 ? 'good' : 'bad'}
+          sub={data.bilanTreso.moisPlanifies
+            ? `${euros0(data.bilanTreso.soldeApres)} après les ${data.bilanTreso.moisPlanifies} mois déjà planifiés`
+            : 'ce qui est en banque aujourd\'hui'} />
         <StatCard label={data.soldeTVA > 0 ? 'TVA à reverser (exercice)' : 'Crédit de TVA (exercice)'}
           value={euros0(Math.abs(data.soldeTVA))} tone={data.soldeTVA > 0 ? 'bad' : 'good'}
           sub={data.soldeTVA > 0 ? 'dû à l\'État' : 'l\'État te le doit'} />

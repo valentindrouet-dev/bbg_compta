@@ -7,7 +7,7 @@
  * données — l'annulation (Cmd+Z) n'a pas à revenir sur un changement de mois,
  * et une restauration de sauvegarde n'a pas à ramener la page d'un autre jour.
  */
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 const CLE = 'bbg-compta-vue';
 
@@ -30,6 +30,17 @@ function ecrire(sac: Sac) {
   }
 }
 
+/**
+ * Les composants abonnés à une clé. Un réglage commun à toutes les pages — la
+ * bascule HT/TTC, l'affichage des sous-totaux — doit changer partout en même
+ * temps, y compris dans deux barres d'outils affichées côte à côte.
+ */
+const abonnes = new Map<string, Set<(v: unknown) => void>>();
+
+function prevenir(cle: string, valeur: unknown) {
+  for (const cb of abonnes.get(cle) ?? []) cb(valeur);
+}
+
 /** Valeur mémorisée pour cette clé, ou `defaut` si on ne l'a jamais vue. */
 export function valeurVue<T>(cle: string, defaut: T): T {
   const v = lire()[cle];
@@ -50,12 +61,23 @@ export function useEtatVue<T>(
     return valide && !valide(v) ? defaut : v;
   });
 
+  // Tous les hooks branchés sur la même clé se suivent : un réglage global
+  // changé dans une barre d'outils se voit dans l'autre sans recharger.
+  useEffect(() => {
+    const set = abonnes.get(cle) ?? new Set();
+    abonnes.set(cle, set);
+    const cb = (v: unknown) => setValeur(v as T);
+    set.add(cb);
+    return () => { set.delete(cb); };
+  }, [cle]);
+
   const changer = useCallback((v: T | ((prec: T) => T)) => {
     setValeur(prec => {
       const suivant = typeof v === 'function' ? (v as (p: T) => T)(prec) : v;
       const sac = lire();
       sac[cle] = suivant;
       ecrire(sac);
+      prevenir(cle, suivant);
       return suivant;
     });
   }, [cle]);
