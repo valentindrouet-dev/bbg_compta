@@ -222,9 +222,15 @@ et retrouvées telles quelles au rechargement.
   tableau bascule entièrement : en HT il n'affiche plus de ligne TTC en doublon,
   puisque le bouton est là pour ça.
 - **Détaillée / Simplifiée** — toutes les lignes, ou les totaux seuls.
-- **Sous-totaux / Sans** — afficher ou masquer le sous-total de chaque groupe de
-  catégories et de chaque jeu. Sur un tableau qui compte beaucoup de groupes ils
-  doublent le nombre de lignes ; sans eux, il ne reste que le total du bloc.
+- **Sous-totaux / Sans** — où se lisent les chiffres d'un groupe de catégories
+  ou d'un jeu. Avec **Sous-totaux**, le bandeau annonce le groupe et une ligne
+  de total le referme — c'est lisible, mais sur un tableau qui compte beaucoup
+  de groupes cela double le nombre de lignes. Avec **Sans**, la ligne de total
+  disparaît et **c'est le bandeau lui-même qui porte les montants**, mois par
+  mois : aucun chiffre n'est perdu, le tableau est simplement deux fois plus
+  court. Combiné à **Simplifiée**, on obtient une page d'une poignée de lignes
+  où chaque groupe et chaque jeu tient sur la sienne, et où la somme des
+  bandeaux fait le total du bloc.
 
 ## Gestes utiles
 

@@ -331,7 +331,28 @@ export function SyntheseTotalePage() {
                       <Fragment key={`grp-${g}`}>
                         {avecGroupes && (
                           <tr className="band-bloc">
-                            <td colSpan={colonnes.length + 2} className="py-1">{g || '— sans groupe —'}</td>
+                            {/* Sans ligne de sous-total, c'est le bandeau du groupe qui
+                                porte les chiffres. */}
+                            <td colSpan={sousTotaux ? colonnes.length + 2 : 1} className="py-1">
+                              {g || '— sans groupe —'}
+                            </td>
+                            {!sousTotaux && (
+                              <>
+                                {colonnes.map(ex => {
+                                  const v = r2(parGroupe.get(g)!
+                                    .reduce((x, c) => x + (bloc.data.get(c)?.get(ex) ?? 0), 0));
+                                  return (
+                                    <td key={ex} className="text-right tabular-nums" style={styleCol(ex)}>
+                                      {v ? euros0(v) : '·'}
+                                    </td>
+                                  );
+                                })}
+                                <td className="text-right tabular-nums col-total">
+                                  {euros(r2(parGroupe.get(g)!
+                                    .reduce((x, c) => x + ligneTotal(c), 0)))}
+                                </td>
+                              </>
+                            )}
                           </tr>
                         )}
                         {(simple ? [] : parGroupe.get(g)!).map(cat => (
@@ -378,22 +399,38 @@ export function SyntheseTotalePage() {
                     ))}
 
                     {/* Un bandeau par jeu, comme dans la synthèse annuelle. */}
-                    {!simple && bloc.parJeu && [...bloc.parJeu.keys()].map(jeu => {
+                    {bloc.parJeu && [...bloc.parJeu.keys()].map(jeu => {
                       const postes = bloc.parJeu!.get(jeu)!;
                       return (
                         <Fragment key={`jeu-${jeu}`}>
-                          <tr>
-                            <td colSpan={colonnes.length + 2} className="py-1 font-bold"
-                              style={{
-                                backgroundColor: couleurJeu(jeu, refs),
-                                color: encreSur(couleurJeu(jeu, refs)),
-                              }}>
+                          <tr className="band-jeu" style={{
+                            backgroundColor: couleurJeu(jeu, refs),
+                            color: encreSur(couleurJeu(jeu, refs)),
+                            fontWeight: 700,
+                          }}>
+                            <td colSpan={sousTotaux ? colonnes.length + 2 : 1} className="py-1">
                               <span className="inline-flex items-center gap-1.5">
                                 <Gamepad2 size={13} /> {jeu}
                               </span>
                             </td>
+                            {!sousTotaux && (
+                              <>
+                                {colonnes.map(ex => {
+                                  const v = r2([...postes.values()]
+                                    .reduce((x, m) => x + (m.get(ex) ?? 0), 0));
+                                  return (
+                                    <td key={ex} className="text-right tabular-nums">
+                                      {v ? euros0(v) : '·'}
+                                    </td>
+                                  );
+                                })}
+                                <td className="text-right tabular-nums col-total">
+                                  {euros(r2([...postes.values()].reduce((x, m) => x + somme(m), 0)))}
+                                </td>
+                              </>
+                            )}
                           </tr>
-                          {[...postes.keys()].map(cat => (
+                          {(simple ? [] : [...postes.keys()]).map(cat => (
                             <tr key={`${jeu}-${cat}`}>
                               <td className="pl-4">{cat}</td>
                               {colonnes.map(ex => {

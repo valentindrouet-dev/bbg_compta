@@ -206,7 +206,7 @@ export function ReglagesVue({ avecBase = true, avecDetail = true, avecSousTotaux
             },
             {
               v: false, label: 'Sans', icone: <Minus size={14} />,
-              aide: 'Masquer les sous-totaux de groupe : il ne reste que le total du bloc',
+              aide: 'Pas de ligne de sous-total : c’est le bandeau du groupe qui porte ses chiffres',
             },
           ]}
         />

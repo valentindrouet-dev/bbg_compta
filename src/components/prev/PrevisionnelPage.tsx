@@ -554,14 +554,17 @@ export function PrevisionnelPage() {
                       {ordre.map(g => (
                         <Fragment key={`${sec.cle}-${g}`}>
                           {avecGroupes && (
-                            <tr className={estJeu(g) ? undefined : 'band-bloc'}
+                            <tr className={estJeu(g) ? 'band-jeu' : 'band-bloc'}
+                              style={estJeu(g) ? {
+                                backgroundColor: couleurJeu(g, refs),
+                                color: encreSur(couleurJeu(g, refs)),
+                                fontWeight: 700,
+                              } : undefined}
                               {...(g ? reorg.ligne(estJeu(g) ? 'jeu' : 'groupe', g) : {})}>
-                              <td colSpan={moisList.length + 5} className="py-1"
-                                style={estJeu(g) ? {
-                                  backgroundColor: couleurJeu(g, refs),
-                                  color: encreSur(couleurJeu(g, refs)),
-                                  fontWeight: 700,
-                                } : undefined}>
+                              {/* Sans ligne de sous-total, c'est le bandeau du groupe
+                                  ou du jeu qui porte les chiffres : autrement il ne
+                                  resterait qu'un intertitre sans montant. */}
+                              <td colSpan={sousTotaux ? moisList.length + 5 : 1} className="py-1">
                                 <span className="inline-flex items-center gap-1.5">
                                   {g && (
                                     <span className="poignee-glisse" {...reorg.poignee()}
@@ -575,6 +578,29 @@ export function PrevisionnelPage() {
                                   {g || '— sans groupe —'}
                                 </span>
                               </td>
+                              {!sousTotaux && (
+                                <>
+                                  {moisList.map((m, i) => {
+                                    const v = r2(parGroupe.get(g)!.filter(l => !l.unite)
+                                      .reduce((acc, l) => acc + (valeursDe(l, lignes)[i] ?? 0) * coef(l), 0));
+                                    return (
+                                      <td key={m} className="text-right tabular-nums">
+                                        {v ? euros0(v) : '·'}
+                                      </td>
+                                    );
+                                  })}
+                                  <td className="text-right tabular-nums col-total">
+                                    {euros(r2(parGroupe.get(g)!.filter(l => !l.unite)
+                                      .reduce((acc, l) => acc + totalLigne(l) * coef(l), 0)))}
+                                  </td>
+                                  <td className="text-right tabular-nums">
+                                    {euros0(r2(parGroupe.get(g)!
+                                      .reduce((acc, l) => acc + (reelSec.get(l.categorie) ?? 0), 0)))}
+                                  </td>
+                                  <td className="col-total"></td>
+                                  <td></td>
+                                </>
+                              )}
                             </tr>
                           )}
                           {(simple ? [] : parGroupe.get(g)!).map(l => {

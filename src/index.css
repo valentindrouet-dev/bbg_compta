@@ -194,6 +194,13 @@ input[type="number"]::-webkit-outer-spin-button { opacity: 0.5; }
 }
 .sheet[data-bloc] td.col-total { background: var(--bloc-clair); }
 
+/* Bandeau d'un jeu : la teinte est portée par la ligne elle-même, il faut
+   donc que ses cellules la laissent passer — sinon le zébrage une ligne sur
+   deux et le survol la recouvrent et la couleur s'arrête au libellé. */
+.sheet tbody tr.band-jeu > td,
+.sheet tbody tr.band-jeu:hover > td { background: transparent !important; }
+.sheet tbody tr.band-jeu > td.col-total { background: rgba(0, 0, 0, 0.06) !important; }
+
 /* GROS TOTAL d'un bloc : la ligne qu'on doit lire sans chercher */
 .sheet tfoot tr.total-bloc > td {
   font-size: 1.02rem;

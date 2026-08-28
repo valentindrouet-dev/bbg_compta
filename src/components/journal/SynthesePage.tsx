@@ -320,7 +320,10 @@ export function SynthesePage({ onAllerA }: { onAllerA?: (page: Page, ligne: stri
                         <Fragment key={`grp-${g}`}>
                           {avecGroupes && (
                             <tr className="band-bloc" {...(g ? reorg.ligne('groupe', g) : {})}>
-                              <td colSpan={syn.moisList.length + 3} className="py-1">
+                              {/* Sans ligne de sous-total, c'est le bandeau du groupe qui
+                                  porte les chiffres : autrement le groupe n'aurait plus
+                                  aucun montant en face de lui. */}
+                              <td colSpan={sousTotaux ? syn.moisList.length + 3 : 1} className="py-1">
                                 <span className="inline-flex items-center gap-1.5">
                                   {g && (
                                     <span className="poignee-glisse" {...reorg.poignee()}
@@ -331,6 +334,29 @@ export function SynthesePage({ onAllerA }: { onAllerA?: (page: Page, ligne: stri
                                   {g || '— sans groupe —'}
                                 </span>
                               </td>
+                              {!sousTotaux && (
+                                <>
+                                  {syn.moisList.map(m => {
+                                    const v = r2(parGroupe.get(g)!
+                                      .reduce((x, c) => x + (bloc.data.get(c)?.get(m) ?? 0), 0));
+                                    return (
+                                      <td key={m} className="text-right tabular-nums"
+                                        style={estMoisPrevu(m)
+                                          ? { fontStyle: 'italic', opacity: 0.75 } : undefined}>
+                                        {v ? euros0(v) : '·'}
+                                      </td>
+                                    );
+                                  })}
+                                  <td className="text-right tabular-nums col-total">
+                                    {euros(r2(parGroupe.get(g)!
+                                      .reduce((x, c) => x + totalLigne(bloc.data, c), 0)))}
+                                  </td>
+                                  <td className="text-right tabular-nums">
+                                    {euros0(r2(parGroupe.get(g)!
+                                      .reduce((x, c) => x + totalLigne(bloc.data, c), 0) / nbMois))}
+                                  </td>
+                                </>
+                              )}
                             </tr>
                           )}
                           {(simple ? [] : parGroupe.get(g)!).map(cat => {
@@ -399,22 +425,42 @@ export function SynthesePage({ onAllerA }: { onAllerA?: (page: Page, ligne: stri
                       {/* Ce qu'un jeu a coûté en charges : mêmes lignes, un
                           bandeau par jeu. Ces montants sont déjà dans le total
                           du bloc — ils n'y sont pas ajoutés une seconde fois. */}
-                      {!simple && bloc.parJeu && ordreJeux([...bloc.parJeu.keys()]).map(jeu => {
+                      {bloc.parJeu && ordreJeux([...bloc.parJeu.keys()]).map(jeu => {
                         const postes = bloc.parJeu!.get(jeu)!;
                         return (
                         <Fragment key={`jeu-${jeu}`}>
-                          <tr>
-                            <td colSpan={syn.moisList.length + 3} className="py-1 font-bold"
-                              style={{
-                                backgroundColor: couleurJeu(jeu, refs),
-                                color: encreSur(couleurJeu(jeu, refs)),
-                              }}>
+                          <tr className="band-jeu" style={{
+                            backgroundColor: couleurJeu(jeu, refs),
+                            color: encreSur(couleurJeu(jeu, refs)),
+                            fontWeight: 700,
+                          }}>
+                            {/* Comme pour les groupes : sans ligne de total, c'est le
+                                bandeau du jeu qui porte ses chiffres. */}
+                            <td colSpan={sousTotaux ? syn.moisList.length + 3 : 1} className="py-1">
                               <span className="inline-flex items-center gap-1.5">
                                 <Gamepad2 size={13} /> {jeu}
                               </span>
                             </td>
+                            {!sousTotaux && (
+                              <>
+                                {syn.moisList.map(m => {
+                                  const v = r2([...postes.values()]
+                                    .reduce((x, parMois) => x + (parMois.get(m) ?? 0), 0));
+                                  return (
+                                    <td key={m} className="text-right tabular-nums">
+                                      {v ? euros0(v) : '·'}
+                                    </td>
+                                  );
+                                })}
+                                <td className="text-right tabular-nums">
+                                  {euros(r2([...postes.values()].reduce(
+                                    (x, parMois) => x + [...parMois.values()].reduce((a, v) => a + v, 0), 0)))}
+                                </td>
+                                <td></td>
+                              </>
+                            )}
                           </tr>
-                          {[...postes.keys()].map(cat => {
+                          {(simple ? [] : [...postes.keys()]).map(cat => {
                             const parMois = postes.get(cat)!;
                             const tot = r2([...parMois.values()].reduce((s, v) => s + v, 0));
                             return (
@@ -524,6 +570,7 @@ function BlocImmos({ syn, couleurs, unite, meta, survol, quitte, immos, simple }
   immos: ReturnType<typeof immoInfos>; simple: boolean;
 }) {
   const t = teinteBloc('immos', couleurs);
+  const [sousTotaux] = useSousTotaux();
   const ordreRef = useStore(s => s.referentiels.categoriesDepenses);
   const deplacerCategorie = useStore(s => s.deplacerCategorie);
   const reorg = useReorganisation((source, cible, apres) => deplacerCategorie(source, cible, apres));
@@ -604,20 +651,34 @@ function BlocImmos({ syn, couleurs, unite, meta, survol, quitte, immos, simple }
             {/* Le développement porté à l'actif, jeu par jeu : ce sont des
                 immobilisations comme les autres, mais on veut savoir ce que
                 chaque jeu a coûté. */}
-            {!simple && jeuxImmo.map(jeu => (
+            {jeuxImmo.map(jeu => (
               <Fragment key={`immojeu-${jeu}`}>
-                <tr>
-                  <td colSpan={syn.moisList.length + 2} className="py-1 font-bold"
-                    style={{
-                      backgroundColor: couleurJeu(jeu, refsJeux),
-                      color: encreSur(couleurJeu(jeu, refsJeux)),
-                    }}>
+                {/* Sans ligne de total, c'est le bandeau du jeu qui porte ses
+                    chiffres : sinon il ne resterait qu'un intertitre sans montant. */}
+                <tr className="band-jeu"
+                  style={{
+                    backgroundColor: couleurJeu(jeu, refsJeux),
+                    color: encreSur(couleurJeu(jeu, refsJeux)),
+                    fontWeight: 700,
+                  }}>
+                  <td colSpan={sousTotaux ? syn.moisList.length + 2 : 1} className="py-1">
                     <span className="inline-flex items-center gap-1.5">
                       <Gamepad2 size={13} /> {jeu} — développement à l'actif
                     </span>
                   </td>
+                  {!sousTotaux && (
+                    <>
+                      {syn.moisList.map(m => {
+                        const v = totalJeuMois(jeu, m);
+                        return <td key={m} className="text-right tabular-nums">{v ? euros0(v) : '·'}</td>;
+                      })}
+                      <td className="text-right tabular-nums col-total">
+                        {euros(r2(syn.moisList.reduce((acc, m) => acc + totalJeuMois(jeu, m), 0)))}
+                      </td>
+                    </>
+                  )}
                 </tr>
-                {[...syn.immosParJeuEtCategorie.get(jeu)!.keys()].map(cat => (
+                {(simple ? [] : [...syn.immosParJeuEtCategorie.get(jeu)!.keys()]).map(cat => (
                   <tr key={`${jeu}-${cat}`}>
                     <td className="pl-4">{cat}</td>
                     {syn.moisList.map(m => {
@@ -638,16 +699,18 @@ function BlocImmos({ syn, couleurs, unite, meta, survol, quitte, immos, simple }
                     </td>
                   </tr>
                 ))}
-                <tr style={{ fontWeight: 700 }}>
-                  <td className="pl-4">Total {jeu} à l'actif</td>
-                  {syn.moisList.map(m => {
-                    const v = totalJeuMois(jeu, m);
-                    return <td key={m} className="text-right tabular-nums">{v ? euros(v) : '·'}</td>;
-                  })}
-                  <td className="text-right tabular-nums col-total">
-                    {euros(r2(syn.moisList.reduce((acc, m) => acc + totalJeuMois(jeu, m), 0)))}
-                  </td>
-                </tr>
+                {sousTotaux && (
+                  <tr style={{ fontWeight: 700 }}>
+                    <td className="pl-4">Total {jeu} à l'actif</td>
+                    {syn.moisList.map(m => {
+                      const v = totalJeuMois(jeu, m);
+                      return <td key={m} className="text-right tabular-nums">{v ? euros(v) : '·'}</td>;
+                    })}
+                    <td className="text-right tabular-nums col-total">
+                      {euros(r2(syn.moisList.reduce((acc, m) => acc + totalJeuMois(jeu, m), 0)))}
+                    </td>
+                  </tr>
+                )}
               </Fragment>
             ))}
             <tr className="band-bloc">
