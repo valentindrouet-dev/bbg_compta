@@ -144,10 +144,18 @@ sont recalculés en direct à partir des écritures.
   **convertie en TTC ligne à ligne** (chacune garde son taux ; cotisations et
   rémunérations n'en portent pas). Les **ventes de jeux** et les **tirages
   d'usine** viennent de l'onglet Stock. Capital, compte courant d'associé et
-  placements restent des mouvements financiers. Un **dépense de jeu portée à
-  l'actif** ne compte qu'une fois, à la ligne des immobilisations : la ligne
-  « Tirages et dépenses jeux » ne reprend que les dépenses jeux restées en
-  charges, plus les tirages budgétés. Entre les deux tableaux, un bloc
+  placements restent des mouvements financiers. Les sorties s'arrêtent sur un
+  sous-total **Sorties d'exploitation** *avant* les placements : placer n'est
+  pas dépenser, l'argent change de compte sans quitter l'entreprise. Les jeux
+  tiennent sur deux lignes distinctes — **Tirages de jeux**, ce qu'on paie à
+  l'usine, et **Dépenses jeux**, ce qu'un jeu coûte à côté (prototypage, avances
+  aux auteurs, communication). Une dépense de jeu **portée à l'actif** n'est ni
+  dans l'une ni dans l'autre : elle compte une seule fois, à la ligne des
+  immobilisations. On peut enfin saisir des **mouvements financiers prévus** —
+  un apport en compte courant attendu, un placement, un remboursement
+  programmé : ils ne pèsent que sur les mois pas encore écoulés, et n'entrent
+  ni dans la page Trésorerie ni dans le tableau Réalisé, qui ne disent que ce
+  qui a eu lieu. Entre les deux tableaux, un bloc
   **« Pourquoi les deux tableaux diffèrent »** pose l'écart : trésorerie au
   journal seul (celle de la page Trésorerie), plus le budget des mois pas encore
   écoulés, égale la trésorerie prévue. Tant que l'exercice court, cet écart est

@@ -5,16 +5,8 @@ import type { FinanceEntry } from '../../types';
 import { labelMois, moisCourant, todayISO } from '../../utils/dates';
 import { euros, r2 } from '../../utils/money';
 import { soldeTresorerie } from '../../utils/calc';
+import { FINANCE_TYPES } from '../../utils/finance';
 import { PageHeader, Card, Btn, MoneyInput, StatCard } from '../ui';
-
-const FINANCE_TYPES: { value: FinanceEntry['type']; label: string }[] = [
-  { value: 'capital', label: 'Capital social' },
-  { value: 'cca', label: "Compte courant d'associé — apport" },
-  { value: 'remboursement_cca', label: "Compte courant d'associé — remboursement" },
-  { value: 'placement', label: 'Placement' },
-  { value: 'produit_financier', label: 'Produit financier' },
-  { value: 'autre', label: 'Autre' },
-];
 
 export function TresoPage() {
   const entries = useStore(s => s.entries);

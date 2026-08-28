@@ -165,13 +165,21 @@ export type CatKind = 'categoriesDepenses' | 'categoriesJeux' | 'categoriesProdu
 export type ColWidths = Record<string, number[]>;
 
 /** Clés dont la modification est enregistrée dans l'historique d'annulation. */
-const DATA_KEYS = ['entries', 'finances', 'referentiels', 'budgets', 'previsionnels', 'stocks', 'mouvementsStock', 'chronologie', 'tresoPrev', 'tresoManuel', 'journalFormats', 'blocCouleurs'] as const;
+const DATA_KEYS = ['entries', 'finances', 'mouvementsPrev', 'referentiels', 'budgets', 'previsionnels', 'stocks', 'mouvementsStock', 'chronologie', 'tresoPrev', 'tresoManuel', 'journalFormats', 'blocCouleurs'] as const;
 type DataKey = typeof DATA_KEYS[number];
 type Snapshot = Pick<AppState, DataKey>;
 
 export interface AppState {
   entries: JournalEntry[];
   finances: FinanceEntry[];
+  /**
+   * Mouvements financiers seulement prévus : une future entrée de compte
+   * courant, un placement à venir, un remboursement programmé. Ils ne sont pas
+   * dans `finances` parce qu'ils ne se sont pas produits — la page Trésorerie,
+   * qui dit ce qui est, ne doit pas les voir ; seule la trésorerie
+   * prévisionnelle les prend, et seulement sur les mois pas encore écoulés.
+   */
+  mouvementsPrev: FinanceEntry[];
   referentiels: Referentiels;
   budgets: Record<string, BudgetExercice>;
   /** Prévisionnel par exercice, aligné sur les catégories de la synthèse. */
@@ -221,6 +229,9 @@ export interface AppState {
   addFinance: (f: Omit<FinanceEntry, 'id'>) => void;
   updateFinance: (id: string, patch: Partial<FinanceEntry>) => void;
   removeFinance: (id: string) => void;
+  addMouvementPrev: (f: Omit<FinanceEntry, 'id'>) => void;
+  updateMouvementPrev: (id: string, patch: Partial<FinanceEntry>) => void;
+  removeMouvementPrev: (id: string) => void;
 
   updateBudgetCell: (exercice: string, ligneId: string, moisIdx: number, value: number | null) => void;
   updateBudgetLine: (exercice: string, ligneId: string, patch: Partial<BudgetExercice['lignes'][number]>) => void;
@@ -322,7 +333,7 @@ export interface AppState {
   updateMouvementStock: (id: string, patch: Partial<MouvementStock>) => void;
   removeMouvementStock: (id: string) => void;
 
-  restoreAll: (data: Partial<Pick<AppState, 'entries' | 'finances' | 'referentiels' | 'budgets' | 'previsionnels' | 'stocks' | 'mouvementsStock' | 'chronologie' | 'tresoPrev' | 'journalFormats' | 'colWidths' | 'blocCouleurs'>>) => void;
+  restoreAll: (data: Partial<Pick<AppState, 'entries' | 'finances' | 'mouvementsPrev' | 'referentiels' | 'budgets' | 'previsionnels' | 'stocks' | 'mouvementsStock' | 'chronologie' | 'tresoPrev' | 'journalFormats' | 'colWidths' | 'blocCouleurs'>>) => void;
   resetToSeed: () => void;
 }
 
@@ -379,6 +390,7 @@ function seedState() {
   return {
     entries,
     finances: structuredClone(seedTresorerie.mouvementsFinanciers) as FinanceEntry[],
+    mouvementsPrev: [],
     referentiels: refs,
     budgets: structuredClone(seedBudgets) as unknown as Record<string, BudgetExercice>,
     // Seul l'exercice en cours est repris du tableur ; les quatre suivants
@@ -483,7 +495,8 @@ let suspendHistory = false;
 
 function snapshot(s: AppState): Snapshot {
   return {
-    entries: s.entries, finances: s.finances, referentiels: s.referentiels,
+    entries: s.entries, finances: s.finances, mouvementsPrev: s.mouvementsPrev,
+    referentiels: s.referentiels,
     budgets: s.budgets, previsionnels: s.previsionnels,
     chronologie: s.chronologie, tresoPrev: s.tresoPrev, tresoManuel: s.tresoManuel,
     stocks: s.stocks, mouvementsStock: s.mouvementsStock,
@@ -625,6 +638,16 @@ export const useStore = create<AppState>()(
         finances: s.finances.map(f => f.id === id ? { ...f, ...patch } : f),
       })),
       removeFinance: (id) => set(s => ({ finances: s.finances.filter(f => f.id !== id) })),
+
+      addMouvementPrev: (f) => set(s => ({
+        mouvementsPrev: [...(s.mouvementsPrev ?? []), { ...f, id: uid() }],
+      })),
+      updateMouvementPrev: (id, patch) => set(s => ({
+        mouvementsPrev: (s.mouvementsPrev ?? []).map(f => f.id === id ? { ...f, ...patch } : f),
+      })),
+      removeMouvementPrev: (id) => set(s => ({
+        mouvementsPrev: (s.mouvementsPrev ?? []).filter(f => f.id !== id),
+      })),
 
       updateBudgetCell: (exercice, ligneId, moisIdx, value) => set(s => {
         const b = s.budgets[exercice];
@@ -1156,7 +1179,7 @@ export const useStore = create<AppState>()(
     },
     {
       name: 'bbg-compta-v1',
-      version: 17,
+      version: 18,
       // Le stockage passe par le coffre : il vérifie qu'un autre onglet n'a pas
       // pris la main, signale un refus d'écriture au lieu de le taire, et
       // dépose un instantané horodaté dans IndexedDB après chaque salve de
@@ -1178,7 +1201,8 @@ export const useStore = create<AppState>()(
       // Seules les données sont persistées : l'historique repart à zéro
       // à chaque ouverture, et les actions ne sont jamais sérialisées.
       partialize: (s) => ({
-        entries: s.entries, finances: s.finances, referentiels: s.referentiels,
+        entries: s.entries, finances: s.finances, mouvementsPrev: s.mouvementsPrev,
+        referentiels: s.referentiels,
         budgets: s.budgets, previsionnels: s.previsionnels,
         chronologie: s.chronologie, tresoPrev: s.tresoPrev, tresoManuel: s.tresoManuel,
         stocks: s.stocks, mouvementsStock: s.mouvementsStock,
@@ -1373,6 +1397,12 @@ function migrerEtat(persisted: unknown, version: number): AppState {
           ?? CANAUX_DEFAUT.find(x => x.nom === c.nom)?.repartition ?? 0,
       })),
     }));
+  }
+  // v18 : la trésorerie prévisionnelle accepte des mouvements financiers à
+  // venir — une entrée de compte courant programmée, un placement prévu. La
+  // liste naît vide : rien de ce qui existe ne change de nature.
+  if (version < 18) {
+    s.mouvementsPrev = s.mouvementsPrev ?? [];
   }
   return s;
 }

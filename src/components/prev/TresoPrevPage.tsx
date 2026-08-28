@@ -8,12 +8,15 @@
  * financiers. Les deux se lisent l'un sous l'autre, avec le même découpage.
  */
 import { useMemo } from 'react';
+import { Plus, Trash2 } from 'lucide-react';
 import { useStore } from '../../store';
-import { EXERCICES, moisExercice } from '../../utils/dates';
+import type { FinanceEntry } from '../../types';
+import { EXERCICES, moisExercice, todayISO } from '../../utils/dates';
+import { FINANCE_TYPES } from '../../utils/finance';
 import { euros, r2 } from '../../utils/money';
 import { ordreAffichage } from '../../utils/previsionnel';
 import { fluxTresorerie, moisEcoules, sommeMap } from '../../utils/prevCalc';
-import { PageHeader, Card, MoneyInput, StatCard } from '../ui';
+import { PageHeader, Card, Btn, MoneyInput, StatCard } from '../ui';
 
 const AUCUNE_LIGNE: never[] = [];
 
@@ -21,6 +24,10 @@ export function TresoPrevPage() {
   const tresoPrev = useStore(s => s.tresoPrev);
   const entries = useStore(s => s.entries);
   const finances = useStore(s => s.finances);
+  const mouvementsPrev = useStore(s => s.mouvementsPrev);
+  const addMouvementPrev = useStore(s => s.addMouvementPrev);
+  const updateMouvementPrev = useStore(s => s.updateMouvementPrev);
+  const removeMouvementPrev = useStore(s => s.removeMouvementPrev);
   const previsionnels = useStore(s => s.previsionnels);
   const stocks = useStore(s => s.stocks);
   const refs = useStore(s => s.referentiels);
@@ -34,10 +41,17 @@ export function TresoPrevPage() {
     // budget n'a plus rien à dire sur ce qui est déjà encaissé et payé.
     const reels = moisEcoules(moisList);
     const f = fluxTresorerie(lignes, moisList, stocks, ex, refs, entries, reels);
-    const mouvements = finances.filter(x => {
-      const m = x.date < '2025-09-01' ? 'pre-immat' : x.date.slice(0, 7);
-      return moisList.includes(m);
-    });
+    const moisDe = (d: string) => (d < '2025-09-01' ? 'pre-immat' : d.slice(0, 7));
+    // Les mouvements enregistrés valent toujours ; ceux qui ne sont que prévus
+    // ne comptent que sur les mois pas encore écoulés — sur un mois passé, le
+    // relevé de banque a déjà tranché.
+    const mouvements = [
+      ...finances.filter(x => moisList.includes(moisDe(x.date))),
+      ...(mouvementsPrev ?? []).filter(x => {
+        const m = moisDe(x.date);
+        return moisList.includes(m) && !reels.includes(m);
+      }),
+    ];
     const part = (t: string) => r2(mouvements.filter(x => x.type === t)
       .reduce((s, x) => s + x.montant, 0));
     const capital = part('capital');
@@ -47,7 +61,11 @@ export function TresoPrevPage() {
     const produitsFinanciers = part('produit_financier');
     const autres = part('autre');
     const entrees = r2(sommeMap(f.encaissements) + produitsFinanciers);
-    const sorties = r2(sommeMap(f.decaissements) - placements - autres);
+    // Un placement n'est pas une dépense : l'argent change de compte, il ne
+    // disparaît pas. On arrête donc les sorties d'exploitation avant lui, puis
+    // on l'ajoute pour retomber sur ce qui a vraiment quitté le compte courant.
+    const sortiesExploitation = sommeMap(f.decaissements);
+    const sorties = r2(sortiesExploitation - placements - autres);
     return {
       ex,
       nReels: reels.length,
@@ -59,14 +77,16 @@ export function TresoPrevPage() {
       charges: r2(-sommeMap(f.charges)),
       personnel: r2(-sommeMap(f.personnel)),
       immos: r2(-sommeMap(f.immos)),
-      fabrication: r2(-sommeMap(f.fabrication)),
+      tirages: r2(-sommeMap(f.tirages)),
+      depensesJeux: r2(-sommeMap(f.depensesJeux)),
+      sortiesExploitation: r2(-sortiesExploitation),
       placements, autres,
       sorties: r2(-sorties),
       exploitation: r2(entrees - sorties),
       capital, cca, remboursementCCA,
       apports: r2(capital + cca + remboursementCCA),
     };
-  }), [previsionnels, stocks, refs, finances, entries]);
+  }), [previsionnels, stocks, refs, finances, mouvementsPrev, entries]);
 
   const prevuCumule = useMemo(() => {
     let t = 0;
@@ -154,9 +174,9 @@ export function TresoPrevPage() {
         <StatCard label="Trésorerie réalisée à ce jour"
           value={euros(realise.find(x => x.ca || x.charges)?.treso ?? 0)} tone="neutral"
           sub="cumul des exercices déjà mouvementés" />
-        <StatCard label="Sorties prévues sur 5 ans"
-          value={euros(r2(prevuCumule.reduce((s, x) => s + x.sorties, 0)))} tone="accent"
-          sub="charges, personnel, investissements et tirages" />
+        <StatCard label="Sorties d'exploitation sur 5 ans"
+          value={euros(r2(prevuCumule.reduce((s, x) => s + x.sortiesExploitation, 0)))} tone="accent"
+          sub="charges, personnel, investissements et jeux — hors placements" />
       </div>
 
       <Card title="Trésorerie de l'exercice (TTC) — réel jusqu'au mois en cours, budget ensuite" className="mb-6">
@@ -189,10 +209,16 @@ export function TresoPrevPage() {
                 get={x => x.charges} lignes={prevuCumule} />
               <RowP label="Personnel et rémunérations" get={x => x.personnel} lignes={prevuCumule} />
               <RowP label="Investissements (immobilisations)" get={x => x.immos} lignes={prevuCumule} />
-              <RowP label="Tirages et dépenses jeux"
-                aide="À venir : exemplaires fabriqués × coût de revient, onglet Stock. Passé : les dépenses jeux du journal restées en charges — celles portées à l'actif sont à la ligne des immobilisations."
-                get={x => x.fabrication} lignes={prevuCumule} />
-              <RowP label="Placements" get={x => x.placements} lignes={prevuCumule} />
+              <RowP label="Tirages de jeux"
+                aide="Ce qu'on paie à l'usine. À venir : exemplaires fabriqués × coût de revient, onglet Stock. Passé : la catégorie « Fabrication des jeux » au journal."
+                get={x => x.tirages} lignes={prevuCumule} />
+              <RowP label="Dépenses jeux"
+                aide="Ce qu'un jeu coûte à côté du tirage : prototypage, avances aux auteurs, communication. Les développements portés à l'actif sont à la ligne des immobilisations, pas ici."
+                get={x => x.depensesJeux} lignes={prevuCumule} />
+              <RowP label="Sorties d'exploitation" get={x => x.sortiesExploitation} lignes={prevuCumule} strong />
+              <RowP label="Placements"
+                aide="Un placement n'est pas une dépense : l'argent va sur un compte à terme, il ne quitte pas l'entreprise. Il est sous le sous-total pour cette raison."
+                get={x => x.placements} lignes={prevuCumule} />
               <RowP label="Sorties totales" get={x => x.sorties} lignes={prevuCumule} strong />
               <RowP label="Cumulé exploitation (TTC)" get={x => x.exploitation} lignes={prevuCumule} strong />
               <RowP label="Capital social" get={x => x.capital} lignes={prevuCumule} />
@@ -209,6 +235,78 @@ export function TresoPrevPage() {
           d'usine et les ventes de jeux à venir viennent de l'onglet <b>Stock</b>. Les apports en
           capital, le compte courant d'associé et les placements restent des
           <b> mouvements financiers</b>, saisis en Trésorerie.
+        </p>
+      </Card>
+
+      <Card
+        title="Mouvements financiers prévus (apports, placements, remboursements à venir)"
+        className="mb-6"
+        actions={
+          <Btn variant="primary"
+            onClick={() => addMouvementPrev({ date: todayISO(), label: '', type: 'cca', montant: 0 })}>
+            <span className="inline-flex items-center gap-1"><Plus size={14} /> Ajouter</span>
+          </Btn>
+        }
+      >
+        {(mouvementsPrev ?? []).length ? (
+          <table data-table="tresoprev:mouvements" className="sheet text-sm border-collapse w-full">
+            <thead>
+              <tr className="text-left text-[#5c5280]">
+                <th>Date</th><th>Libellé</th><th>Type</th>
+                <th className="text-right">Montant (+ entrée / − sortie)</th><th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...(mouvementsPrev ?? [])].sort((a, b) => a.date.localeCompare(b.date)).map(f => (
+                <tr key={f.id} className="group">
+                  <td>
+                    <input type="date" className="border border-[#ddd6ef] rounded px-1 py-0.5 text-sm"
+                      value={f.date}
+                      onChange={ev => ev.target.value && updateMouvementPrev(f.id, { date: ev.target.value })} />
+                  </td>
+                  <td>
+                    <input className="border border-[#ddd6ef] rounded px-1.5 py-1 text-sm w-72"
+                      defaultValue={f.label}
+                      onBlur={ev => updateMouvementPrev(f.id, { label: ev.target.value })} />
+                  </td>
+                  <td>
+                    <select className="border border-[#ddd6ef] rounded px-1 py-1 text-sm bg-white"
+                      value={f.type}
+                      onChange={ev => updateMouvementPrev(f.id, {
+                        type: ev.target.value as FinanceEntry['type'],
+                      })}>
+                      {FINANCE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    </select>
+                  </td>
+                  <td className="text-right">
+                    <MoneyInput value={f.montant}
+                      onCommit={v => updateMouvementPrev(f.id, { montant: v ?? 0 })} className="w-32" />
+                  </td>
+                  <td>
+                    <button className="text-[#d98b86] hover:text-[#b7332e] opacity-0 group-hover:opacity-100"
+                      onClick={() => {
+                        if (confirm(`Supprimer « ${f.label || 'ce mouvement'} » ?`)) removeMouvementPrev(f.id);
+                      }}>
+                      <Trash2 size={14} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <p className="text-sm" style={{ color: '#6f6690' }}>
+            Rien de prévu pour l'instant. Ajoute ici ce que tu attends sans l'avoir encore
+            encaissé ni payé — une entrée de compte courant d'associé, un placement, un
+            remboursement programmé.
+          </p>
+        )}
+        <p className="text-xs text-[#9a92b5] mt-2">
+          Ces mouvements ne comptent que dans le tableau du haut, et seulement sur les
+          <b> mois pas encore écoulés</b> : sur un mois passé, c'est le relevé qui fait foi. Ils
+          n'entrent pas dans la page <b>Trésorerie</b> ni dans le tableau <b>Réalisé</b>, qui ne
+          disent que ce qui a eu lieu. Quand le mouvement se produit vraiment, enregistre-le en
+          Trésorerie et supprime-le d'ici.
         </p>
       </Card>
 
@@ -332,7 +430,8 @@ interface PrevuRow {
   /** Combien de mois de cet exercice viennent du journal, et sur combien. */
   nReels: number; nMois: number;
   ventesJeux: number; autresProduits: number; produitsFinanciers: number;
-  entrees: number; charges: number; personnel: number; immos: number; fabrication: number;
+  entrees: number; charges: number; personnel: number; immos: number;
+  tirages: number; depensesJeux: number; sortiesExploitation: number;
   placements: number; autres: number; sorties: number; exploitation: number;
   capital: number; cca: number; remboursementCCA: number; apports: number; treso: number;
 }

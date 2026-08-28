@@ -173,6 +173,12 @@ export function blobExcel(state: AppState, exercice: string): Blob {
     .sort((a, b) => a.date.localeCompare(b.date))
     .map(f => ({ 'Date': f.date, 'Libellé': f.label, 'Type': f.type, 'Montant': r2(f.montant) })));
 
+  // Les mêmes, mais seulement prévus : ils ne comptent que dans la trésorerie
+  // prévisionnelle, sur les mois pas encore écoulés.
+  feuille('Mouvements financiers prévus', [...(state.mouvementsPrev ?? [])]
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map(f => ({ 'Date': f.date, 'Libellé': f.label, 'Type': f.type, 'Montant': r2(f.montant) })));
+
   // TVA
   feuille('TVA', tableauTVA(entries, moisExercice(exercice)).map(x => ({
     'Mois': labelMois(x.mois),
@@ -597,13 +603,15 @@ export async function blobBackup(state: AppState, avecFichiers = true): Promise<
   const fichiers = avecFichiers ? await exporterFichiers() : [];
   const data = {
     format: 'bbg-compta-backup',
-    // v4 : le stock — prévisionnel et mouvements réels — entre dans la
-    // sauvegarde. v3 y avait fait entrer les corrections manuelles de
-    // trésorerie et les couleurs des blocs, qu'une restauration perdait.
-    version: 4,
+    // v5 : les mouvements financiers seulement prévus rejoignent la sauvegarde.
+    // v4 y avait fait entrer le stock — prévisionnel et mouvements réels — et
+    // v3 les corrections manuelles de trésorerie et les couleurs des blocs,
+    // qu'une restauration perdait.
+    version: 5,
     exportedAt: new Date().toISOString(),
     entries: state.entries,
     finances: state.finances,
+    mouvementsPrev: state.mouvementsPrev,
     referentiels: state.referentiels,
     budgets: state.budgets,
     previsionnels: state.previsionnels,
@@ -775,7 +783,8 @@ export async function importBackup(file: File): Promise<{
       previsionnels: data.previsionnels,
       chronologie: data.chronologie ?? [],
       tresoPrev: data.tresoPrev ?? [],
-      // Absents des sauvegardes v2 : on ne remplace alors rien.
+      // Absents des sauvegardes plus anciennes : on ne remplace alors rien.
+      ...(data.mouvementsPrev ? { mouvementsPrev: data.mouvementsPrev } : {}),
       ...(data.tresoManuel ? { tresoManuel: data.tresoManuel } : {}),
       ...(data.stocks ? { stocks: data.stocks } : {}),
       ...(data.mouvementsStock ? { mouvementsStock: data.mouvementsStock } : {}),

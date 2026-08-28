@@ -15,7 +15,7 @@ import {
 import { compareMois, moisCourant } from './dates';
 import { r2 } from './money';
 import { tauxDeLigne, tauxObserves, valeursDe } from './previsionnel';
-import { apportStock, type ApportStock } from './stock';
+import { apportStock, CATEGORIE_FABRICATION, type ApportStock } from './stock';
 
 /** Durée d'amortissement retenue pour un investissement seulement prévu. */
 export const DUREE_IMMO_PREVUE = 5;
@@ -133,12 +133,15 @@ export interface FluxTreso {
   encaissements: Map<string, number>;
   ventesJeux: Map<string, number>;
   autresProduits: Map<string, number>;
-  /** Charges, personnel, immobilisations et tirages, TTC. */
+  /** Charges, personnel, immobilisations, tirages et dépenses jeux, TTC. */
   decaissements: Map<string, number>;
   charges: Map<string, number>;
   personnel: Map<string, number>;
   immos: Map<string, number>;
-  fabrication: Map<string, number>;
+  /** Ce qu'on paie à l'usine : les exemplaires fabriqués. */
+  tirages: Map<string, number>;
+  /** Ce qu'un jeu coûte à côté du tirage : prototypage, avances, communication. */
+  depensesJeux: Map<string, number>;
   /** Encaissements − décaissements. */
   solde: Map<string, number>;
 }
@@ -156,6 +159,31 @@ function sectionTTC(
   return new Map(moisList.map((m, i) => [m, r2(
     retenues.reduce((s, l) =>
       s + (valeursDe(l, lignes)[i] ?? 0) * (1 + tauxDeLigne(l, observes) / 100), 0))]));
+}
+
+/**
+ * Le bloc Charges du prévisionnel, éclaté en trois paquets : ce qu'on paie à
+ * l'usine, ce qu'un jeu coûte à côté, et tout le reste. En trésorerie ces trois
+ * postes ne se lisent pas de la même façon — un tirage part en stock et
+ * reviendra en ventes, une avance d'auteur non — et les mélanger sur une seule
+ * ligne empêche de voir lequel creuse le compte.
+ */
+function chargesEclatees(
+  lignes: PrevLigne[], moisList: string[], observes: Map<string, number>,
+  refs: Referentiels,
+): { tirages: Map<string, number>; jeux: Map<string, number>; externes: Map<string, number> } {
+  const retenues = lignes.filter(l => l.section === 'charges' && !l.unite);
+  const paquet = (garde: (l: PrevLigne) => boolean) =>
+    new Map(moisList.map((m, i) => [m, r2(retenues.filter(garde).reduce((s, l) =>
+      s + (valeursDe(l, lignes)[i] ?? 0) * (1 + tauxDeLigne(l, observes) / 100), 0))]));
+  const estTirage = (l: PrevLigne) => l.categorie === CATEGORIE_FABRICATION;
+  const estJeu = (l: PrevLigne) => !estTirage(l)
+    && (refs.categoriesJeux.includes(l.categorie) || !!l.jeu);
+  return {
+    tirages: paquet(estTirage),
+    jeux: paquet(estJeu),
+    externes: paquet(l => !estTirage(l) && !estJeu(l)),
+  };
 }
 
 /** Un bloc laissé en l'état : les cotisations et salaires ne portent pas de TVA. */
@@ -196,8 +224,11 @@ export function fluxTresorerie(
   const melange = (prevu: Map<string, number>, garde: (e: JournalEntry) => boolean) =>
     new Map(moisList.map(m => [m, passe.has(m) ? duJournal(m, garde) : (prevu.get(m) ?? 0)]));
   const stock = apportStock(stocksLignes, exercice, refs.jeux ?? []);
-  const estJeu = (e: JournalEntry) => refs.categoriesJeux.includes(e.categorie);
+  const estTirage = (e: JournalEntry) => e.categorie === CATEGORIE_FABRICATION;
+  const estJeu = (e: JournalEntry) =>
+    !estTirage(e) && refs.categoriesJeux.includes(e.categorie);
   const estPerso = (e: JournalEntry) => estPersonnel(e.categorie, refs);
+  const eclat = chargesEclatees(lignes, moisList, observes, refs);
 
   // Sur un mois passé, chaque poste vient du journal ; sur un mois à venir, du
   // budget. Les ventes de jeux prévues s'effacent aussi devant le réel : elles
@@ -209,31 +240,38 @@ export function fluxTresorerie(
     new Map(moisList.map(m => [m, stock.caTTCParMois.get(m) ?? 0])),
     () => false);
   const charges = melange(
-    sectionTTC(lignes, moisList, 'charges', observes),
-    e => e.type === 'charges' && !estPerso(e) && !estJeu(e));
+    eclat.externes,
+    e => e.type === 'charges' && !estPerso(e) && !estJeu(e) && !estTirage(e));
   // Cotisations et rémunérations : pas de TVA, le TTC est le HT.
   const personnel = melange(sectionHT(lignes, moisList, 'personnel'), estPerso);
   const immos = melange(sectionTTC(lignes, moisList, 'immos', observes), e => e.type === 'immo');
-  // La TVA sur un tirage est déductible : l'usine est payée TTC, la TVA revient.
-  // Les dépenses jeux réelles prennent la place des tirages prévus — mais
-  // seulement celles restées en charges : un développement de jeu porté à
-  // l'actif est déjà compté à la ligne des immobilisations, et le compter ici
-  // une seconde fois gonflerait les sorties d'autant.
-  const fabrication = melange(
-    new Map(moisList.map(m => [m, stock.fabricationTTCParMois.get(m) ?? 0])),
+  // Les tirages : la TVA en est déductible, l'usine est payée TTC et la TVA
+  // revient. Le budget vient de l'onglet Stock, complété d'une éventuelle ligne
+  // « Fabrication des jeux » du prévisionnel ; le réel, de cette même catégorie
+  // au journal.
+  const tirages = melange(
+    new Map(moisList.map(m => [m, r2(
+      (stock.fabricationTTCParMois.get(m) ?? 0) + (eclat.tirages.get(m) ?? 0))])),
+    e => e.type === 'charges' && estTirage(e));
+  // Les dépenses d'un jeu qui ne sont pas un tirage : prototypage, avances aux
+  // auteurs, communication. Seulement celles restées en charges — un
+  // développement porté à l'actif est déjà à la ligne des immobilisations, et
+  // le compter ici une seconde fois gonflerait les sorties d'autant.
+  const depensesJeux = melange(
+    eclat.jeux,
     e => e.type === 'charges' && estJeu(e));
 
   const encaissements = new Map(moisList.map(m =>
     [m, r2((autresProduits.get(m) ?? 0) + (ventesJeux.get(m) ?? 0))]));
   const decaissements = new Map(moisList.map(m => [m, r2(
-    (charges.get(m) ?? 0) + (personnel.get(m) ?? 0)
-    + (immos.get(m) ?? 0) + (fabrication.get(m) ?? 0))]));
+    (charges.get(m) ?? 0) + (personnel.get(m) ?? 0) + (immos.get(m) ?? 0)
+    + (tirages.get(m) ?? 0) + (depensesJeux.get(m) ?? 0))]));
   const solde = new Map(moisList.map(m =>
     [m, r2((encaissements.get(m) ?? 0) - (decaissements.get(m) ?? 0))]));
 
   return {
     mois: moisList, encaissements, ventesJeux, autresProduits,
-    decaissements, charges, personnel, immos, fabrication, solde,
+    decaissements, charges, personnel, immos, tirages, depensesJeux, solde,
   };
 }
 
