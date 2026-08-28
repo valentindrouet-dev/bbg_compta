@@ -24,6 +24,7 @@ import { TresoPrevPage } from './components/prev/TresoPrevPage';
 import { ChronoPage } from './components/prev/ChronoPage';
 import { ExportsPage } from './components/settings/ExportsPage';
 import { SettingsPage } from './components/settings/SettingsPage';
+import { WikiPage } from './components/wiki/WikiPage';
 import { CategoriesPage } from './components/settings/CategoriesPage';
 import { useEtatVue } from './utils/etatVue';
 
@@ -31,14 +32,14 @@ export type Page =
   | 'dashboard'
   | 'journal' | 'synthese' | 'totale' | 'immos' | 'stocks' | 'treso' | 'tva' | 'rembours' | 'fournisseurs' | 'jeux' | 'factures'
   | 'budgets' | 'cinqans' | 'reelprevu' | 'tresoprev' | 'chrono'
-  | 'exports' | 'categories' | 'settings';
+  | 'exports' | 'categories' | 'settings' | 'wiki';
 
 /** Les pages existantes : une valeur mémorisée qui n'en fait plus partie est ignorée. */
 const PAGES: readonly Page[] = [
   'dashboard',
   'journal', 'synthese', 'totale', 'immos', 'stocks', 'treso', 'tva', 'rembours', 'fournisseurs', 'jeux', 'factures',
   'budgets', 'cinqans', 'reelprevu', 'tresoprev', 'chrono',
-  'exports', 'categories', 'settings',
+  'exports', 'categories', 'settings', 'wiki',
 ];
 
 export default function App() {
@@ -140,6 +141,7 @@ export default function App() {
         {page === 'exports' && <ExportsPage />}
         {page === 'categories' && <CategoriesPage />}
         {page === 'settings' && <SettingsPage />}
+        {page === 'wiki' && <WikiPage onAllerA={setPage} />}
       </main>
     </div>
   );

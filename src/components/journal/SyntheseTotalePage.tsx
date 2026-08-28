@@ -435,17 +435,6 @@ export function SyntheseTotalePage() {
                       ))}
                       <td className="text-right tabular-nums grand">{euros(grandTotal)}</td>
                     </tr>
-                    {bloc.ttc && unite === 'HT' && (
-                      <tr>
-                        <td title="Le même bloc, taxes comprises.">Total (TTC)</td>
-                        {colonnes.map(ex => (
-                          <td key={ex} className="text-right tabular-nums">
-                            {bloc.ttc!.get(ex) ? euros(r2(bloc.ttc!.get(ex)!)) : '·'}
-                          </td>
-                        ))}
-                        <td className="text-right tabular-nums">{euros(somme(bloc.ttc))}</td>
-                      </tr>
-                    )}
                   </tfoot>
                 </table>
               </div>

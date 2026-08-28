@@ -470,29 +470,9 @@ export function SynthesePage({ onAllerA }: { onAllerA?: (page: Page, ligne: stri
                         <td className="text-right tabular-nums grand">{euros(grandTotal)}</td>
                         <td className="text-right tabular-nums">{euros0(r2(grandTotal / nbMois))}</td>
                       </tr>
-                      {bloc.ttc && unite === 'HT' && (
-                        <tr>
-                          <td title="Le même bloc, taxes comprises : c'est le montant réellement sorti du compte.">
-                            Total {bloc.cle === 'produits' ? 'produits'
-                              : bloc.cle === 'personnel' ? 'personnel' : 'charges'} (TTC)
-                          </td>
-                          {syn.moisList.map(m => (
-                            <td key={m} className="text-right tabular-nums">{euros(r2(bloc.ttc!.get(m) ?? 0))}</td>
-                          ))}
-                          <td className="text-right tabular-nums">{euros(totalDe(bloc.ttc))}</td>
-                          <td></td>
-                        </tr>
-                      )}
                     </tfoot>
                   </table>
                 </div>
-              )}
-              {bloc.cle === 'charges' && (
-                <p className="text-xs mt-2" style={{ color: '#9a92b5' }}>
-                  « / mois » = moyenne sur les {nbMois} mois qui portent des écritures.
-                  Les couleurs et les groupes des catégories se règlent dans l'onglet Catégories ;
-                  la teinte du bloc, avec la palette ci-dessus.
-                </p>
               )}
             </Card>
           );
@@ -705,21 +685,6 @@ function BlocImmos({ syn, couleurs, unite, meta, survol, quitte, immos, simple }
               ))}
               <td className="text-right tabular-nums grand">{euros(grandTotal)}</td>
             </tr>
-            {unite === 'HT' && (
-              <tr>
-                <td title="Le même bloc, taxes comprises : le montant réellement sorti du compte.">
-                  Total investi (TTC)
-                </td>
-                {syn.moisList.map(m => (
-                  <td key={m} className="text-right tabular-nums">
-                    {euros(r2(syn.immoTTCParMois.get(m) ?? 0))}
-                  </td>
-                ))}
-                <td className="text-right tabular-nums">
-                  {euros(r2([...syn.immoTTCParMois.values()].reduce((s, v) => s + v, 0)))}
-                </td>
-              </tr>
-            )}
           </tfoot>
         </table>
       </div>

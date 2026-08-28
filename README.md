@@ -202,6 +202,13 @@ sont recalculés en direct à partir des écritures.
     quand on balaie les mois. Neuf sections : synthèse, résultat & TVA, journal,
     immobilisations, stocks, trésorerie, jeux, chronologie et contrôles
     comptables. Elle s'imprime en PDF d'un `Cmd + P`
+- **Wiki** — l'index de tout le vocabulaire et de tous les calculs : HT, TTC, TVA,
+  EBE, REX, RC, IS, résultat net, immobilisation, amortissement, dotation, VNC,
+  stock, coût de revient, variation de stock, marge, canal de vente, coût moyen
+  pondéré, capital, compte courant d'associé, placement, TNS, imprévus… **40
+  entrées** en 7 chapitres, chacune avec sa définition, **la formule exacte que
+  l'app applique**, le piège classique quand il y en a un, et un lien vers la
+  page où ça se saisit. Une barre de recherche traverse tout
 - **Paramètres** — catégories, moyens de paiement, plan comptable,
   sauvegarde / restauration / réinitialisation
 
@@ -211,7 +218,9 @@ Trois bascules en haut des pages de chiffres — synthèse annuelle, synthèse
 totale, prévisionnel. **Elles valent partout** : réglées ici, retrouvées là-bas,
 et retrouvées telles quelles au rechargement.
 
-- **HT / TTC** — la base du résultat, ou ce qui sort vraiment du compte.
+- **HT / TTC** — la base du résultat, ou ce qui sort vraiment du compte. Le
+  tableau bascule entièrement : en HT il n'affiche plus de ligne TTC en doublon,
+  puisque le bouton est là pour ça.
 - **Détaillée / Simplifiée** — toutes les lignes, ou les totaux seuls.
 - **Sous-totaux / Sans** — afficher ou masquer le sous-total de chaque groupe de
   catégories et de chaque jeu. Sur un tableau qui compte beaucoup de groupes ils
