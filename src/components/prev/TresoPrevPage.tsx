@@ -110,6 +110,25 @@ export function TresoPrevPage() {
     });
   }, [entries, finances]);
 
+  // Sur l'exercice en cours, les deux tableaux ne peuvent pas tomber sur le même
+  // chiffre : celui du haut ajoute le budget des mois qui restent, celui du bas
+  // s'arrête à ce qui est écrit au journal. On affiche l'écart au lieu de
+  // laisser chercher — c'est la question qu'on se pose en regardant les deux.
+  const rapprochement = useMemo(() => {
+    const i = prevuCumule.findIndex(x => x.nReels > 0 && x.nReels < x.nMois);
+    if (i < 0) return null;
+    const p = prevuCumule[i];
+    const r = realise[i];
+    if (!r) return null;
+    return {
+      ex: p.ex,
+      restants: p.nMois - p.nReels,
+      journal: r.treso,
+      budget: r2(p.treso - r.treso),
+      prevue: p.treso,
+    };
+  }, [prevuCumule, realise]);
+
   const finPrevue = prevuCumule[prevuCumule.length - 1]?.treso ?? 0;
   const totalVentesJeux = r2(prevuCumule.reduce((s, x) => s + x.ventesJeux, 0));
 
@@ -170,7 +189,8 @@ export function TresoPrevPage() {
                 get={x => x.charges} lignes={prevuCumule} />
               <RowP label="Personnel et rémunérations" get={x => x.personnel} lignes={prevuCumule} />
               <RowP label="Investissements (immobilisations)" get={x => x.immos} lignes={prevuCumule} />
-              <RowP label="Tirages payés à l'usine" aide="Exemplaires fabriqués × coût de revient, onglet Stock"
+              <RowP label="Tirages et dépenses jeux"
+                aide="À venir : exemplaires fabriqués × coût de revient, onglet Stock. Passé : les dépenses jeux du journal restées en charges — celles portées à l'actif sont à la ligne des immobilisations."
                 get={x => x.fabrication} lignes={prevuCumule} />
               <RowP label="Placements" get={x => x.placements} lignes={prevuCumule} />
               <RowP label="Sorties totales" get={x => x.sorties} lignes={prevuCumule} strong />
@@ -191,6 +211,44 @@ export function TresoPrevPage() {
           <b> mouvements financiers</b>, saisis en Trésorerie.
         </p>
       </Card>
+
+      {rapprochement && (
+        <Card title={`Pourquoi les deux tableaux diffèrent sur ${rapprochement.ex}`} className="mb-6">
+          <table className="sheet text-sm border-collapse" style={{ width: 'min(100%, 560px)' }}>
+            <tbody>
+              <tr>
+                <td>Trésorerie fin d'exercice au journal seul</td>
+                <td className={`text-right tabular-nums ${rapprochement.journal < 0 ? 'text-[#b7332e]' : ''}`}>
+                  {euros(rapprochement.journal)}
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  {rapprochement.restants > 1
+                    ? `Budget des ${rapprochement.restants} mois pas encore écoulés`
+                    : 'Budget du mois pas encore écoulé'}
+                </td>
+                <td className={`text-right tabular-nums ${rapprochement.budget < 0 ? 'text-[#b7332e]' : ''}`}>
+                  {rapprochement.budget > 0 ? '+' : ''}{euros(rapprochement.budget)}
+                </td>
+              </tr>
+              <tr className="bg-[#efeafa] font-bold">
+                <td>Trésorerie fin d'exercice prévue</td>
+                <td className={`text-right tabular-nums ${rapprochement.prevue < 0 ? 'text-[#b7332e]' : ''}`}>
+                  {euros(rapprochement.prevue)}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <p className="text-xs text-[#9a92b5] mt-2">
+            La première ligne est celle de la page <b>Trésorerie</b> et du tableau <b>Réalisé</b>
+            {' '}ci-dessous : les deux disent la même chose, puisque les deux ne lisent que le
+            journal. La seconde est ce que le prévisionnel attend encore d'ici la clôture. Tant que
+            l'exercice n'est pas fini, un écart entre les deux tableaux est normal — c'est le budget
+            qui reste à réaliser, pas une erreur de calcul.
+          </p>
+        </Card>
+      )}
 
       <Card title="Réalisé (TTC) — calculé depuis le journal" className="mb-6">
         <div className="overflow-x-auto -mx-4 px-4">

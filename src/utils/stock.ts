@@ -284,6 +284,8 @@ export interface ApportStock {
   caTTCParMois: Map<string, number>;
   /** Tirages payés à l'usine, HT puis TTC (la TVA de fabrication est déductible). */
   fabricationParMois: Map<string, number>;
+  /** Le même tirage, TTC : c'est ce montant-là qui sort du compte en banque. */
+  fabricationTTCParMois: Map<string, number>;
   fabricationParJeuEtMois: Map<string, Map<string, number>>;
   /** Correction de rattachement : + quand le stock monte. */
   variationParMois: Map<string, number>;
@@ -303,7 +305,8 @@ export function apportStock(
   const out: ApportStock = {
     caParMois: new Map(), caParJeuEtMois: new Map(), caParJeuCanalEtMois: new Map(),
     caTTCParMois: new Map(),
-    fabricationParMois: new Map(), fabricationParJeuEtMois: new Map(),
+    fabricationParMois: new Map(), fabricationTTCParMois: new Map(),
+    fabricationParJeuEtMois: new Map(),
     variationParMois: new Map(), cogsParMois: new Map(),
     margeParMois: new Map(), valeurParMois: new Map(),
   };
@@ -327,6 +330,9 @@ export function apportStock(
       ajoute(out.caParMois, r.mois, r.ca);
       ajoute(out.caTTCParMois, r.mois, r.caTTC);
       ajoute(out.fabricationParMois, r.mois, r.coutFabrication);
+      // On paie l'usine TTC, avec le taux du jeu — pas un 20 % supposé.
+      ajoute(out.fabricationTTCParMois, r.mois,
+        r2(r.coutFabrication * (1 + (s.ligne.tauxTVA ?? TVA_JEUX_DEFAUT) / 100)));
       ajoute(out.variationParMois, r.mois, r.variationStock);
       ajoute(out.cogsParMois, r.mois, r.cogs);
       ajoute(out.margeParMois, r.mois, r.marge);

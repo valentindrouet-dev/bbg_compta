@@ -144,7 +144,14 @@ sont recalculés en direct à partir des écritures.
   **convertie en TTC ligne à ligne** (chacune garde son taux ; cotisations et
   rémunérations n'en portent pas). Les **ventes de jeux** et les **tirages
   d'usine** viennent de l'onglet Stock. Capital, compte courant d'associé et
-  placements restent des mouvements financiers. La saisie d'origine du tableur
+  placements restent des mouvements financiers. Un **dépense de jeu portée à
+  l'actif** ne compte qu'une fois, à la ligne des immobilisations : la ligne
+  « Tirages et dépenses jeux » ne reprend que les dépenses jeux restées en
+  charges, plus les tirages budgétés. Entre les deux tableaux, un bloc
+  **« Pourquoi les deux tableaux diffèrent »** pose l'écart : trésorerie au
+  journal seul (celle de la page Trésorerie), plus le budget des mois pas encore
+  écoulés, égale la trésorerie prévue. Tant que l'exercice court, cet écart est
+  normal — c'est le budget qui reste à réaliser. La saisie d'origine du tableur
   est conservée en dessous, repliée, pour mémoire
 - **Chronologie** — frise 2025-30 des projets. Elle s'ouvre **verrouillée** :
   on la lit, on la zoome, mais rien n'y bouge — ni glissement, ni renommage, ni

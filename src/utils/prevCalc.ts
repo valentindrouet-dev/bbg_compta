@@ -215,10 +215,13 @@ export function fluxTresorerie(
   const personnel = melange(sectionHT(lignes, moisList, 'personnel'), estPerso);
   const immos = melange(sectionTTC(lignes, moisList, 'immos', observes), e => e.type === 'immo');
   // La TVA sur un tirage est déductible : l'usine est payée TTC, la TVA revient.
-  // Les dépenses jeux réelles prennent la place des tirages prévus.
+  // Les dépenses jeux réelles prennent la place des tirages prévus — mais
+  // seulement celles restées en charges : un développement de jeu porté à
+  // l'actif est déjà compté à la ligne des immobilisations, et le compter ici
+  // une seconde fois gonflerait les sorties d'autant.
   const fabrication = melange(
-    new Map(moisList.map(m => [m, r2((stock.fabricationParMois.get(m) ?? 0) * 1.2)])),
-    e => e.type !== 'produit' && estJeu(e));
+    new Map(moisList.map(m => [m, stock.fabricationTTCParMois.get(m) ?? 0])),
+    e => e.type === 'charges' && estJeu(e));
 
   const encaissements = new Map(moisList.map(m =>
     [m, r2((autresProduits.get(m) ?? 0) + (ventesJeux.get(m) ?? 0))]));
