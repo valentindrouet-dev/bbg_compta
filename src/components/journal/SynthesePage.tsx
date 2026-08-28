@@ -268,7 +268,7 @@ export function SynthesePage({ onAllerA }: { onAllerA?: (page: Page, ligne: stri
       />
 
       <div className="space-y-5">
-        {blocs.map(bloc => {
+        {blocs.flatMap(bloc => {
           const t = teinteBloc(bloc.cle, couleurs);
           const grandTotal = totalDe(bloc.totaux);
           // Ce que les jeux pèsent dans ce bloc, mois par mois. Ces montants
@@ -292,23 +292,45 @@ export function SynthesePage({ onAllerA }: { onAllerA?: (page: Page, ligne: stri
           const ordreGroupes = [...groupes.filter(g => parGroupe.has(g)), ...(parGroupe.has('') ? [''] : [])];
           const avecGroupes = ordreGroupes.length > 1 || (ordreGroupes.length === 1 && ordreGroupes[0] !== '');
 
-          return (
+          // Les jeux sortent du tableau du fonctionnement : leur carte, leur
+          // total, leur palette. Les deux totaux font celui du bloc.
+          const vues = totauxJeux
+            ? [
+              {
+                cle: bloc.cle, bloc: bloc.cle, t, titre: bloc.titre, jeux: false,
+                total: r2(grandTotal - totauxJeux.total),
+                parMois: (m: string) =>
+                  r2((bloc.totaux.get(m) ?? 0) - (totauxJeux.parMois.get(m) ?? 0)),
+              },
+              {
+                cle: `${bloc.cle}-jeux`, bloc: 'jeux' as BlocCle, t: teinteBloc('jeux', couleurs),
+                titre: `${bloc.titre} — jeux`, jeux: true,
+                total: totauxJeux.total,
+                parMois: (m: string) => totauxJeux.parMois.get(m) ?? 0,
+              },
+            ]
+            : [{
+              cle: bloc.cle, bloc: bloc.cle, t, titre: bloc.titre, jeux: false,
+              total: grandTotal, parMois: (m: string) => r2(bloc.totaux.get(m) ?? 0),
+            }];
+
+          return vues.map(vue => (
             <Card
-              key={bloc.cle} title={bloc.titre}
+              key={vue.cle} title={vue.titre}
               actions={
                 <>
-                  <TotalBloc label={`Total ${unite}`} valeur={euros(grandTotal)} t={t} />
-                  <BlocColorMenu bloc={bloc.cle} />
+                  <TotalBloc label={`Total ${unite}`} valeur={euros(vue.total)} t={vue.t} />
+                  <BlocColorMenu bloc={vue.bloc} />
                 </>
               }
             >
-              {!bloc.cats.length ? (
+              {!bloc.cats.length && !vue.jeux ? (
                 <p className="text-sm italic" style={{ color: '#9a92b5' }}>{bloc.vide}</p>
               ) : (
                 <div className="overflow-x-auto -mx-4 px-4">
                   <table
-                    data-table={`synthese:${bloc.cle}:${syn.moisList.length}`} data-bloc={bloc.cle}
-                    className="sheet text-xs" style={{ minWidth: 900, ...styleBloc(t) }}
+                    data-table={`synthese:${vue.cle}:${syn.moisList.length}`} data-bloc={vue.bloc}
+                    className="sheet text-xs" style={{ minWidth: 900, ...styleBloc(vue.t) }}
                   >
                     <thead>
                       <tr>
@@ -325,7 +347,7 @@ export function SynthesePage({ onAllerA }: { onAllerA?: (page: Page, ligne: stri
                       </tr>
                     </thead>
                     <tbody>
-                      {ordreGroupes.map(g => (
+                      {(vue.jeux ? [] : ordreGroupes).map(g => (
                         <Fragment key={`grp-${g}`}>
                           {avecGroupes && (
                             <tr className="band-bloc" {...(g ? reorg.ligne('groupe', g) : {})}>
@@ -436,26 +458,7 @@ export function SynthesePage({ onAllerA }: { onAllerA?: (page: Page, ligne: stri
                           d'un coup d'œil ce que coûte la structure et ce que
                           coûtent les projets. Ils ne s'ajoutent pas au total du
                           bloc — ils le découpent. */}
-                      {!!totauxJeux && (
-                        <tr className="band-bloc">
-                          <td className="py-1">Sous-total fonctionnement BBG</td>
-                          {syn.moisList.map(m => {
-                            const v = r2((bloc.totaux.get(m) ?? 0) - (totauxJeux.parMois.get(m) ?? 0));
-                            return (
-                              <td key={m} className="text-right tabular-nums">
-                                {v ? euros0(v) : '·'}
-                              </td>
-                            );
-                          })}
-                          <td className="text-right tabular-nums col-total">
-                            {euros(r2(grandTotal - totauxJeux.total))}
-                          </td>
-                          <td className="text-right tabular-nums">
-                            {euros0(r2((grandTotal - totauxJeux.total) / nbMois))}
-                          </td>
-                        </tr>
-                      )}
-                      {bloc.parJeu && ordreJeux([...bloc.parJeu.keys()]).map(jeu => {
+                      {vue.jeux && bloc.parJeu && ordreJeux([...bloc.parJeu.keys()]).map(jeu => {
                         const postes = bloc.parJeu!.get(jeu)!;
                         return (
                         <Fragment key={`jeu-${jeu}`}>
@@ -533,48 +536,29 @@ export function SynthesePage({ onAllerA }: { onAllerA?: (page: Page, ligne: stri
                         </Fragment>
                         );
                       })}
-                      {!!totauxJeux && (
-                        <tr className="band-bloc">
-                          <td className="py-1">
-                            <span className="inline-flex items-center gap-1.5">
-                              <Gamepad2 size={13} /> Sous-total jeux
-                            </span>
-                          </td>
-                          {syn.moisList.map(m => {
-                            const v = totauxJeux.parMois.get(m) ?? 0;
-                            return (
-                              <td key={m} className="text-right tabular-nums">
-                                {v ? euros0(v) : '·'}
-                              </td>
-                            );
-                          })}
-                          <td className="text-right tabular-nums col-total">
-                            {euros(totauxJeux.total)}
-                          </td>
-                          <td className="text-right tabular-nums">
-                            {euros0(r2(totauxJeux.total / nbMois))}
-                          </td>
-                        </tr>
-                      )}
                     </tbody>
                     <tfoot>
                       <tr className="total-bloc">
-                        <td>TOTAL {bloc.cle === 'produits' ? 'PRODUITS' : bloc.cle === 'personnel' ? 'PERSONNEL' : 'CHARGES'} ({unite})</td>
+                        <td>
+                          TOTAL {bloc.cle === 'produits' ? 'PRODUITS'
+                            : bloc.cle === 'personnel' ? 'PERSONNEL' : 'CHARGES'}
+                          {vue.jeux ? ' — JEUX' : ''} ({unite})
+                        </td>
                         {syn.moisList.map(m => (
                           <td key={m} className="text-right tabular-nums"
                             style={estMoisPrevu(m) ? { fontStyle: 'italic', opacity: 0.75 } : undefined}>
-                            {bloc.totaux.get(m) ? euros0(r2(bloc.totaux.get(m)!)) : '·'}
+                            {vue.parMois(m) ? euros0(vue.parMois(m)) : '·'}
                           </td>
                         ))}
-                        <td className="text-right tabular-nums grand">{euros(grandTotal)}</td>
-                        <td className="text-right tabular-nums">{euros0(r2(grandTotal / nbMois))}</td>
+                        <td className="text-right tabular-nums grand">{euros(vue.total)}</td>
+                        <td className="text-right tabular-nums">{euros0(r2(vue.total / nbMois))}</td>
                       </tr>
                     </tfoot>
                   </table>
                 </div>
               )}
             </Card>
-          );
+          ));
         })}
 
         {/* -------------------------------------------- Immobilisations -- */}
@@ -649,12 +633,20 @@ function BlocImmos({ syn, couleurs, unite, meta, survol, quitte, immos, simple }
   const totalDotations = r2(syn.moisList.reduce((s, m) => s + dotationDuMois(immos, m), 0));
   if (!cats.length) return null;
 
+  // Le développement de jeux porté à l'actif sort dans sa propre carte : même
+  // bloc comptable, mais on veut lire séparément ce qu'a coûté la structure.
+  const parMoisJeux = (m: string) => r2(jeuxImmo.reduce((s, j) => s + totalJeuMois(j, m), 0));
+  const totalImmoJeux = r2(syn.moisList.reduce((acc, m) => acc + parMoisJeux(m), 0));
+  const teinteJeux = teinteBloc('jeux', couleurs);
+
   return (
+    <>
     <Card
       title={`Immobilisations — investissements (${unite})`}
       actions={
         <>
-          <TotalBloc label={`Investi ${unite}`} valeur={euros(grandTotal)} t={t} />
+          <TotalBloc label={`Investi ${unite}`}
+            valeur={euros(r2(grandTotal - totalImmoJeux))} t={t} />
           <BlocColorMenu bloc="immos" />
         </>
       }
@@ -705,20 +697,82 @@ function BlocImmos({ syn, couleurs, unite, meta, survol, quitte, immos, simple }
                 immobilisations comme les autres, mais on veut savoir ce que
                 chaque jeu a coûté. Deux sous-totaux les encadrent, comme dans
                 les charges — ils découpent l'investi, ils ne s'y ajoutent pas. */}
-            {!!jeuxImmo.length && (
-              <tr className="band-bloc">
-                <td className="py-1">Sous-total fonctionnement BBG</td>
-                {syn.moisList.map(m => {
-                  const v = r2((syn.immoParMois.get(m) ?? 0)
-                    - jeuxImmo.reduce((s, j) => s + totalJeuMois(j, m), 0));
-                  return <td key={m} className="text-right tabular-nums">{v ? euros0(v) : '·'}</td>;
-                })}
-                <td className="text-right tabular-nums col-total">
-                  {euros(r2(syn.moisList.reduce((acc, m) => acc + (syn.immoParMois.get(m) ?? 0)
-                    - jeuxImmo.reduce((s, j) => s + totalJeuMois(j, m), 0), 0)))}
-                </td>
+            <tr className="band-bloc">
+              <td colSpan={syn.moisList.length + 2} className="py-1">
+                Dotations aux amortissements — ce qui pèse réellement sur le résultat
+              </td>
+            </tr>
+            <tr>
+              <td>Dotation du mois</td>
+              {syn.moisList.map(m => {
+                const d = dotationDuMois(immos, m);
+                return <td key={m} className="text-right tabular-nums">{d ? euros(d) : '·'}</td>;
+              })}
+              <td className="text-right tabular-nums font-semibold col-total">{euros(totalDotations)}</td>
+            </tr>
+            <tr style={{ color: '#6f6690' }}>
+              <td>Cumul sur l'exercice</td>
+              {(() => {
+                let cumul = 0;
+                return syn.moisList.map(m => {
+                  cumul = r2(cumul + dotationDuMois(immos, m));
+                  return <td key={m} className="text-right tabular-nums">{cumul ? euros(cumul) : '·'}</td>;
+                });
+              })()}
+              <td className="col-total"></td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr className="total-bloc">
+              <td>TOTAL INVESTI ({unite})</td>
+              {syn.moisList.map(m => {
+                const v = r2((syn.immoParMois.get(m) ?? 0) - parMoisJeux(m));
+                return (
+                  <td key={m} className="text-right tabular-nums">{v ? euros0(v) : '·'}</td>
+                );
+              })}
+              <td className="text-right tabular-nums grand">
+                {euros(r2(grandTotal - totalImmoJeux))}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <p className="text-xs mt-2" style={{ color: '#9a92b5' }}>
+        Une immobilisation n'est <b>pas une charge de l'exercice</b> : c'est un investissement inscrit
+        à l'actif. Le montant apparaît le mois de l'achat, mais ce qui entre dans le résultat, c'est la
+        <b> dotation aux amortissements</b> — {euros(totalDotations)} sur cet exercice. Le détail bien
+        par bien est dans l'onglet Immobilisations.
+      </p>
+    </Card>
+
+    {/* Le développement de jeux porté à l'actif : sa carte, son total, sa
+        palette. Il s'ajoute à l'investi ci-dessus pour faire l'investi total. */}
+    {!!jeuxImmo.length && (
+      <Card
+        title={`Immobilisations — jeux (${unite})`}
+        actions={
+          <>
+            <TotalBloc label={`Investi ${unite}`} valeur={euros(totalImmoJeux)} t={teinteJeux} />
+            <BlocColorMenu bloc="jeux" />
+          </>
+        }
+      >
+        <div className="overflow-x-auto -mx-4 px-4">
+          <table
+            data-table={`synthese:immos-jeux:${syn.moisList.length}`} data-bloc="jeux"
+            className="sheet text-xs" style={{ minWidth: 900, ...styleBloc(teinteJeux) }}
+          >
+            <thead>
+              <tr>
+                <th className="text-left" style={{ minWidth: 230 }}>Jeu / poste</th>
+                {syn.moisList.map(m => (
+                  <th key={m} className="num" style={{ minWidth: 74 }}>{labelMois(m)}</th>
+                ))}
+                <th className="num" style={{ minWidth: 96 }}>Total</th>
               </tr>
-            )}
+            </thead>
+            <tbody>
             {jeuxImmo.map(jeu => (
               <Fragment key={`immojeu-${jeu}`}>
                 {/* Sans ligne de total, c'est le bandeau du jeu qui porte ses
@@ -781,68 +835,28 @@ function BlocImmos({ syn, couleurs, unite, meta, survol, quitte, immos, simple }
                 )}
               </Fragment>
             ))}
-            {!!jeuxImmo.length && (
-              <tr className="band-bloc">
-                <td className="py-1">
-                  <span className="inline-flex items-center gap-1.5">
-                    <Gamepad2 size={13} /> Sous-total jeux
-                  </span>
-                </td>
-                {syn.moisList.map(m => {
-                  const v = r2(jeuxImmo.reduce((s, j) => s + totalJeuMois(j, m), 0));
-                  return <td key={m} className="text-right tabular-nums">{v ? euros0(v) : '·'}</td>;
-                })}
-                <td className="text-right tabular-nums col-total">
-                  {euros(r2(syn.moisList.reduce((acc, m) =>
-                    acc + jeuxImmo.reduce((s, j) => s + totalJeuMois(j, m), 0), 0)))}
-                </td>
+            </tbody>
+            <tfoot>
+              <tr className="total-bloc">
+                <td>TOTAL INVESTI — JEUX ({unite})</td>
+                {syn.moisList.map(m => (
+                  <td key={m} className="text-right tabular-nums">
+                    {parMoisJeux(m) ? euros0(parMoisJeux(m)) : '·'}
+                  </td>
+                ))}
+                <td className="text-right tabular-nums grand">{euros(totalImmoJeux)}</td>
               </tr>
-            )}
-            <tr className="band-bloc">
-              <td colSpan={syn.moisList.length + 2} className="py-1">
-                Dotations aux amortissements — ce qui pèse réellement sur le résultat
-              </td>
-            </tr>
-            <tr>
-              <td>Dotation du mois</td>
-              {syn.moisList.map(m => {
-                const d = dotationDuMois(immos, m);
-                return <td key={m} className="text-right tabular-nums">{d ? euros(d) : '·'}</td>;
-              })}
-              <td className="text-right tabular-nums font-semibold col-total">{euros(totalDotations)}</td>
-            </tr>
-            <tr style={{ color: '#6f6690' }}>
-              <td>Cumul sur l'exercice</td>
-              {(() => {
-                let cumul = 0;
-                return syn.moisList.map(m => {
-                  cumul = r2(cumul + dotationDuMois(immos, m));
-                  return <td key={m} className="text-right tabular-nums">{cumul ? euros(cumul) : '·'}</td>;
-                });
-              })()}
-              <td className="col-total"></td>
-            </tr>
-          </tbody>
-          <tfoot>
-            <tr className="total-bloc">
-              <td>TOTAL INVESTI ({unite})</td>
-              {syn.moisList.map(m => (
-                <td key={m} className="text-right tabular-nums">
-                  {syn.immoParMois.get(m) ? euros0(r2(syn.immoParMois.get(m)!)) : '·'}
-                </td>
-              ))}
-              <td className="text-right tabular-nums grand">{euros(grandTotal)}</td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-      <p className="text-xs mt-2" style={{ color: '#9a92b5' }}>
-        Une immobilisation n'est <b>pas une charge de l'exercice</b> : c'est un investissement inscrit
-        à l'actif. Le montant apparaît le mois de l'achat, mais ce qui entre dans le résultat, c'est la
-        <b> dotation aux amortissements</b> — {euros(totalDotations)} sur cet exercice. Le détail bien
-        par bien est dans l'onglet Immobilisations.
-      </p>
-    </Card>
+            </tfoot>
+          </table>
+        </div>
+        <p className="text-xs mt-2" style={{ color: '#9a92b5' }}>
+          Le <b>développement graphique</b> et les <b>illustrations</b> d'un jeu sont des coûts de
+          création portés à l'actif : ils ne pèsent sur le résultat que par leur dotation, étalée sur
+          la durée d'amortissement. Ce total s'ajoute à l'investi de la carte du dessus.
+        </p>
+      </Card>
+    )}
+    </>
   );
 }
 

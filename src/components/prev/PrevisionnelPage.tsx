@@ -63,39 +63,6 @@ const SECTIONS_DE_VUE: Record<VuePrev, PrevSection[]> = {
   total: [],
 };
 
-/**
- * Le sous-total qui sépare le fonctionnement des projets, dans un bloc du
- * prévisionnel. Il découpe le total du bloc : ce qu'il montre y est déjà.
- */
-function SousTotalPrev({ label, jeu, lignes, moisList, valeur, somme, reel }: {
-  label: string; jeu?: boolean;
-  lignes: PrevLigne[]; moisList: string[];
-  valeur: (l: PrevLigne, i: number) => number;
-  somme: (ls: PrevLigne[]) => number;
-  reel: number;
-}) {
-  const prevu = somme(lignes);
-  return (
-    <tr className="band-bloc">
-      <td className="py-1">
-        <span className="inline-flex items-center gap-1.5">
-          {jeu && <Gamepad2 size={13} />} {label}
-        </span>
-      </td>
-      {moisList.map((m, i) => {
-        const v = r2(lignes.filter(l => !l.unite).reduce((x, l) => x + valeur(l, i), 0));
-        return <td key={m} className="text-right tabular-nums">{v ? euros0(v) : '·'}</td>;
-      })}
-      <td className="text-right tabular-nums col-total">{euros(prevu)}</td>
-      <td className="text-right tabular-nums">{reel ? euros0(reel) : '·'}</td>
-      <td className="text-right tabular-nums">
-        {r2(reel - prevu) ? euros0(r2(reel - prevu)) : '·'}
-      </td>
-      <td></td>
-    </tr>
-  );
-}
-
 export function PrevisionnelPage() {
   const entries = useStore(s => s.entries);
   const finances = useStore(s => s.finances);
@@ -290,10 +257,6 @@ export function PrevisionnelPage() {
     : l.section;
   const lignesDe = (sec: PrevSection) => lignes.filter(l => sectionDe(l) === sec);
   const totalSection = (sec: PrevSection) => sommeLignes(lignesDe(sec));
-  /** Prévu d'une section, mois par mois, dans la base affichée. */
-  const prevuMois = (sec: PrevSection, i: number) =>
-    r2(lignesDe(sec).filter(l => !l.unite)
-      .reduce((s, l) => s + (valeursDe(l, lignes)[i] ?? 0) * coef(l), 0));
 
   const totalPrevu = r2(SECTIONS_DEPENSES.reduce((s, sec) => s + totalSection(sec), 0));
   const totalProduits = totalSection('produits');
@@ -571,7 +534,7 @@ export function PrevisionnelPage() {
       {vue === 'total' && <TotalPrev exercice={exercice} moisList={moisList} />}
 
       <div className="space-y-5">
-        {SECTIONS.filter(sec => SECTIONS_DE_VUE[vue].includes(sec.cle)).map(sec => {
+        {SECTIONS.filter(sec => SECTIONS_DE_VUE[vue].includes(sec.cle)).flatMap(sec => {
           const lignesSec = lignesDe(sec.cle);
           const reelSec = reelParSection.get(sec.cle) ?? new Map<string, number>();
           const catsSec = new Set(lignesSec.map(l => l.categorie));
@@ -610,7 +573,6 @@ export function PrevisionnelPage() {
           // Le premier jeu marque la frontière : au-dessus le fonctionnement,
           // en dessous les projets.
           const groupesJeux = ordre.filter(estJeu);
-          const premierJeu = groupesJeux[0];
           const lignesJeux = groupesJeux.flatMap(g => parGroupe.get(g) ?? []);
           const lignesHorsJeux = ordre.filter(g => !estJeu(g))
             .flatMap(g => parGroupe.get(g) ?? []);
@@ -618,13 +580,39 @@ export function PrevisionnelPage() {
             r2(ls.reduce((x, l) => x + (reelSec.get(l.categorie) ?? 0), 0));
           const reelDesJeux = reelDeLignes(lignesJeux);
           const reelDuFonctionnement = reelDeLignes(lignesHorsJeux);
-          const avecGroupes = ordre.some(estJeu)
-            || ordre.length > 1 || (ordre.length === 1 && ordre[0] !== '');
+          // Les jeux ne partagent plus le tableau du fonctionnement : ils ont
+          // leur carte, leur total et leur palette. Même bloc comptable — le
+          // total du bloc reste la somme des deux — mais deux lectures.
+          const teinteJeux = teinteBloc('jeux', couleurs);
+          const vues = groupesJeux.length && !estIndicateurs
+            ? [
+              {
+                cle: sec.cle, bloc: sec.cle as BlocCle, t, titre: sec.titre,
+                ordre: ordre.filter(g => !estJeu(g)),
+                lignes: lignesHorsJeux, total: sommeLignes(lignesHorsJeux),
+                reel: reelDuFonctionnement, jeux: false,
+              },
+              {
+                cle: `${sec.cle}-jeux`, bloc: 'jeux' as BlocCle, t: teinteJeux,
+                titre: `${sec.titre} — jeux`,
+                ordre: groupesJeux,
+                lignes: lignesJeux, total: sommeLignes(lignesJeux),
+                reel: reelDesJeux, jeux: true,
+              },
+            ]
+            : [{
+              cle: sec.cle, bloc: (estIndicateurs ? 'resultat' : sec.cle) as BlocCle, t,
+              titre: sec.titre, ordre, lignes: lignesSec, total,
+              reel: r2([...reelSec.values()].reduce((x, v) => x + v, 0)), jeux: false,
+            }];
 
+          return vues.map(vue => {
+          const avecGroupes = vue.ordre.some(estJeu)
+            || vue.ordre.length > 1 || (vue.ordre.length === 1 && vue.ordre[0] !== '');
           return (
             <Card
-              key={sec.cle}
-              title={`${sec.titre}${estIndicateurs ? '' : ` (${base.toUpperCase()})`} — prévisionnel ${exercice}`}
+              key={vue.cle}
+              title={`${vue.titre}${estIndicateurs ? '' : ` (${base.toUpperCase()})`} — prévisionnel ${exercice}`}
               actions={
                 <>
                   {sec.cle === 'produits' && (
@@ -652,8 +640,8 @@ export function PrevisionnelPage() {
                       </span>
                     </Btn>
                   )}
-                  {!estIndicateurs && <TotalBloc label="Total prévu" valeur={euros(total)} t={t} />}
-                  {!estIndicateurs && <BlocColorMenu bloc={sec.cle as BlocCle} />}
+                  {!estIndicateurs && <TotalBloc label="Total prévu" valeur={euros(vue.total)} t={vue.t} />}
+                  {!estIndicateurs && <BlocColorMenu bloc={vue.bloc} />}
                 </>
               }
             >
@@ -665,9 +653,9 @@ export function PrevisionnelPage() {
               ) : (
                 <div className="overflow-x-auto -mx-4 px-4">
                   <table
-                    data-table={`prev:${sec.cle}:${moisList.length}`} data-bloc={sec.cle}
+                    data-table={`prev:${vue.cle}:${moisList.length}`} data-bloc={vue.bloc}
                     className="sheet text-xs"
-                    style={{ tableLayout: 'fixed', minWidth: largeurMini, ...styleBloc(t) }}
+                    style={{ tableLayout: 'fixed', minWidth: largeurMini, ...styleBloc(vue.t) }}
                   >
                     <colgroup>
                       <col style={{ width: '17%' }} />
@@ -688,17 +676,8 @@ export function PrevisionnelPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {ordre.map(g => (
-                        <Fragment key={`${sec.cle}-${g}`}>
-                          {/* Les jeux se lisent à part du fonctionnement : deux
-                              sous-totaux les encadrent. Ils découpent le total
-                              du bloc, ils ne s'y ajoutent pas. */}
-                          {g === premierJeu && (
-                            <SousTotalPrev label="Sous-total fonctionnement BBG"
-                              lignes={lignesHorsJeux} moisList={moisList}
-                              valeur={(l, i) => (valeursDe(l, lignes)[i] ?? 0) * coef(l)}
-                              somme={sommeLignes} reel={reelDuFonctionnement} />
-                          )}
+                      {vue.ordre.map(g => (
+                        <Fragment key={`${vue.cle}-${g}`}>
                           {avecGroupes && (
                             <tr className={estJeu(g) ? 'band-jeu' : 'band-bloc'}
                               style={estJeu(g) ? {
@@ -1005,7 +984,7 @@ export function PrevisionnelPage() {
                         </Fragment>
                       ))}
 
-                      {(simple ? [] : manquantes).map(cat => (
+                      {(simple || vue.jeux ? [] : manquantes).map(cat => (
                         <tr key={`manque-${cat}`} style={{ fontStyle: 'italic' }}>
                           <td>
                             <span className="inline-flex items-center gap-1" style={{ color: 'var(--bbg-orange-dark)' }}>
@@ -1031,23 +1010,20 @@ export function PrevisionnelPage() {
                           </td>
                         </tr>
                       ))}
-                      {!!premierJeu && (
-                        <SousTotalPrev label="Sous-total jeux" jeu
-                          lignes={lignesJeux} moisList={moisList}
-                          valeur={(l, i) => (valeursDe(l, lignes)[i] ?? 0) * coef(l)}
-                          somme={sommeLignes} reel={reelDesJeux} />
-                      )}
                     </tbody>
                     <tfoot>
                       <tr className="total-bloc">
-                        <td>TOTAL {sec.titre.toUpperCase()} ({base.toUpperCase()})</td>
+                        <td>
+                          TOTAL {sec.titre.toUpperCase()}{vue.jeux ? ' — JEUX' : ''} ({base.toUpperCase()})
+                        </td>
                         {moisList.map((m, i) => {
-                          const v = prevuMois(sec.cle, i);
+                          const v = r2(vue.lignes.filter(l => !l.unite)
+                            .reduce((x, l) => x + (valeursDe(l, lignes)[i] ?? 0) * coef(l), 0));
                           return <td key={m} className="text-right tabular-nums">{v ? euros0(v) : '·'}</td>;
                         })}
-                        <td className="text-right tabular-nums grand">{euros(total)}</td>
+                        <td className="text-right tabular-nums grand">{euros(vue.total)}</td>
                         <td className="text-right tabular-nums">
-                          {euros0(r2([...reelSec.values()].reduce((s, v) => s + v, 0)))}
+                          {euros0(vue.reel)}
                         </td>
                         <td className="text-right tabular-nums">
                           {euros0(r2([...reelSec.values()].reduce((s, v) => s + v, 0) - total))}
@@ -1066,6 +1042,7 @@ export function PrevisionnelPage() {
               )}
             </Card>
           );
+          });
         })}
 
       </div>

@@ -6,7 +6,6 @@
  * le compte de résultat. On y lit l'année entière sans risquer de la changer.
  */
 import { Fragment, useMemo } from 'react';
-import { Gamepad2 } from 'lucide-react';
 import { useStore } from '../../store';
 import type { PrevLigne, PrevSection } from '../../types';
 import { labelMois } from '../../utils/dates';
@@ -61,7 +60,7 @@ export function TotalPrev({ exercice, moisList }: { exercice: string; moisList: 
 
   return (
     <div className="space-y-5">
-      {BLOCS_TOTAL.map(bloc => {
+      {BLOCS_TOTAL.flatMap(bloc => {
         const lignesBloc = lignes.filter(l => l.section === bloc.cle && !l.unite);
         // Les ventes se détaillent par canal (distributeur, boutique, éditeur) ;
         // les tirages, eux, n'ont qu'une ligne par jeu.
@@ -104,11 +103,29 @@ export function TotalPrev({ exercice, moisList }: { exercice: string; moisList: 
         const jeuxDuBloc = jeux.filter(j =>
           lignesBloc.some(l => jeuDeLigne(l, jeux) === j) || duStock.some(([x]) => x === j));
 
-        return (
-          <Card key={bloc.cle} title={bloc.titre}
-            actions={<TotalBloc label={`Total ${bloc.titre.toLowerCase()}`} valeur={euros(totalBloc)} t={t} />}>
-            <div className="overflow-x-auto -mx-4 px-4" style={styleBloc(t)}>
-              <table data-table={`total:${bloc.cle}`} data-bloc={bloc.cle} className="sheet text-sm border-collapse w-full">
+        // Les jeux ont leur carte : leur total, leur palette, leur espace.
+        const lignesFonct = lignesBloc.filter(l => !jeuDeLigne(l, jeux));
+        const totalStockJeux = duStock.reduce((x, [j, libelle, parMois]) =>
+          x + [...parMois.values()].reduce((y, v) => y + v, 0)
+            * (libelle.startsWith('Droits') ? 1 : coefJeu(j)), 0);
+        const totalJeuxBloc = r2(sommeLignes(lignesBloc.filter(l => !!jeuDeLigne(l, jeux)))
+          + totalStockJeux);
+        const teinteJeux = teinteBloc('jeux', couleurs);
+        const vues = jeuxDuBloc.length
+          ? [
+            { cle: bloc.cle, bloc: bloc.cle as BlocCle, t, titre: bloc.titre, jeux: false,
+              total: r2(totalBloc - totalJeuxBloc) },
+            { cle: `${bloc.cle}-jeux`, bloc: 'jeux' as BlocCle, t: teinteJeux,
+              titre: `${bloc.titre} — jeux`, jeux: true, total: totalJeuxBloc },
+          ]
+          : [{ cle: bloc.cle, bloc: bloc.cle as BlocCle, t, titre: bloc.titre, jeux: false,
+            total: totalBloc }];
+
+        return vues.map(vue => (
+          <Card key={vue.cle} title={vue.titre}
+            actions={<TotalBloc label={`Total ${vue.titre.toLowerCase()}`} valeur={euros(vue.total)} t={vue.t} />}>
+            <div className="overflow-x-auto -mx-4 px-4" style={styleBloc(vue.t)}>
+              <table data-table={`total:${vue.cle}`} data-bloc={vue.bloc} className="sheet text-sm border-collapse w-full">
                 <thead>
                   <tr className="text-left" style={{ color: '#5c5280' }}>
                     <th className="min-w-56">Ligne</th>
@@ -119,7 +136,7 @@ export function TotalPrev({ exercice, moisList }: { exercice: string; moisList: 
                 <tbody>
                   {/* D'abord les postes généraux, puis un bandeau par jeu —
                       le même découpage que dans les onglets de saisie. */}
-                  {(simple ? [] : lignesBloc.filter(l => !jeuDeLigne(l, jeux))).map(l => {
+                  {(simple || vue.jeux ? [] : lignesFonct).map(l => {
                     const total = r2(sommeDeLigne(l, lignes) * coef(l));
                     if (!total) return null;
                     return (
@@ -133,22 +150,7 @@ export function TotalPrev({ exercice, moisList }: { exercice: string; moisList: 
                       </tr>
                     );
                   })}
-                  {/* Les jeux se lisent à part du fonctionnement, encadrés par
-                      deux sous-totaux qui découpent le total du bloc. */}
-                  {!!jeuxDuBloc.length && (
-                    <tr className="band-bloc">
-                      <td className="py-1">Sous-total fonctionnement BBG</td>
-                      {moisList.map((m, i) => {
-                        const v = r2(lignesBloc.filter(l => !jeuDeLigne(l, jeux))
-                          .reduce((x, l) => x + valeurLigne(l, i), 0));
-                        return <td key={m} className="text-right tabular-nums">{v ? euros0(v) : '·'}</td>;
-                      })}
-                      <td className="text-right tabular-nums bg-[var(--bloc-total)] font-medium">
-                        {euros(r2(sommeLignes(lignesBloc.filter(l => !jeuDeLigne(l, jeux)))))}
-                      </td>
-                    </tr>
-                  )}
-                  {jeuxDuBloc.map(jeu => {
+                  {(vue.jeux ? jeuxDuBloc : []).map(jeu => {
                     const siennes = lignesBloc.filter(l => jeuDeLigne(l, jeux) === jeu);
                     const duStockJeu = duStock.filter(([j]) => j === jeu);
                     const totalJeu = r2(sommeLignes(siennes)
@@ -200,30 +202,7 @@ export function TotalPrev({ exercice, moisList }: { exercice: string; moisList: 
                       </Fragment>
                     );
                   })}
-                  {!!jeuxDuBloc.length && (
-                    <tr className="band-bloc">
-                      <td className="py-1">
-                        <span className="inline-flex items-center gap-1.5">
-                          <Gamepad2 size={13} /> Sous-total jeux
-                        </span>
-                      </td>
-                      {moisList.map((m, i) => {
-                        const desLignes = lignesBloc.filter(l => !!jeuDeLigne(l, jeux))
-                          .reduce((x, l) => x + valeurLigne(l, i), 0);
-                        const duStockMois = duStock.reduce((x, [jeu, libelle, parMois]) =>
-                          x + (parMois.get(m) ?? 0) * (libelle.startsWith('Droits') ? 1 : coefJeu(jeu)), 0);
-                        const v = r2(desLignes + duStockMois);
-                        return <td key={m} className="text-right tabular-nums">{v ? euros0(v) : '·'}</td>;
-                      })}
-                      <td className="text-right tabular-nums bg-[var(--bloc-total)] font-medium">
-                        {euros(r2(sommeLignes(lignesBloc.filter(l => !!jeuDeLigne(l, jeux)))
-                          + duStock.reduce((x, [jeu, libelle, parMois]) =>
-                            x + [...parMois.values()].reduce((y, v) => y + v, 0)
-                              * (libelle.startsWith('Droits') ? 1 : coefJeu(jeu)), 0)))}
-                      </td>
-                    </tr>
-                  )}
-                  {bloc.cle === 'charges' && sommeMap(stock.variationParMois) !== 0 && (
+                  {!vue.jeux && bloc.cle === 'charges' && sommeMap(stock.variationParMois) !== 0 && (
                     <tr style={{ fontStyle: 'italic' }}>
                       <td title="Elle neutralise le coût des exemplaires encore en carton : seul le coût de ce qui est vendu pèse sur le résultat. Écriture comptable sans TVA : son montant est le même en HT et en TTC.">
                         Variation de stock (en moins des charges)
@@ -245,20 +224,26 @@ export function TotalPrev({ exercice, moisList }: { exercice: string; moisList: 
                 </tbody>
                 <tfoot>
                   <tr className="total-bloc">
-                    <td>TOTAL {bloc.titre.toUpperCase()}</td>
-                    {moisList.map(m => {
-                      const v = r2((parMois.get(m) ?? 0) + (apport?.get(m) ?? 0)
+                    <td>TOTAL {bloc.titre.toUpperCase()}{vue.jeux ? ' — JEUX' : ''}</td>
+                    {moisList.map((m, i) => {
+                      const desJeux = r2(lignesBloc.filter(l => !!jeuDeLigne(l, jeux))
+                        .reduce((x, l) => x + valeurLigne(l, i), 0)
+                        + duStock.reduce((x, [j, libelle, pm]) =>
+                          x + (pm.get(m) ?? 0) * (libelle.startsWith('Droits') ? 1 : coefJeu(j)), 0));
+                      const tout = r2((parMois.get(m) ?? 0) + (apport?.get(m) ?? 0)
                         - (bloc.cle === 'charges' ? (stock.variationParMois.get(m) ?? 0) : 0));
+                      const v = vue.jeux ? desJeux : r2(tout - desJeux);
                       return <td key={m} className="text-right tabular-nums">{v ? euros0(v) : '·'}</td>;
                     })}
                     <td className="text-right tabular-nums grand">
-                      {euros(r2(totalBloc - (bloc.cle === 'charges' ? sommeMap(stock.variationParMois) : 0)))}
+                      {euros(vue.jeux ? vue.total
+                        : r2(vue.total - (bloc.cle === 'charges' ? sommeMap(stock.variationParMois) : 0)))}
                     </td>
                   </tr>
                 </tfoot>
               </table>
             </div>
-            {bloc.cle === 'immos' && (
+            {bloc.cle === 'immos' && !vue.jeux && (
               <p className="text-xs mt-2" style={{ color: '#9a92b5' }}>
                 Ces montants <b>ne passent pas au compte de résultat</b> : un investissement
                 s'inscrit à l'actif, et ne pèse que par sa <b>dotation</b>, étalée sur la durée
@@ -267,7 +252,7 @@ export function TotalPrev({ exercice, moisList }: { exercice: string; moisList: 
               </p>
             )}
           </Card>
-        );
+        ));
       })}
 
       <Card title="Résultat prévisionnel de l'exercice (HT)"

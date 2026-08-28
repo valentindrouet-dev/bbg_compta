@@ -279,7 +279,7 @@ export function SyntheseTotalePage() {
       />
 
       <div className="space-y-5">
-        {blocs.map(bloc => {
+        {blocs.flatMap(bloc => {
           const t = teinteBloc(bloc.cle, couleurs);
           const grandTotal = somme(bloc.totaux);
           // Ce que les jeux pèsent dans ce bloc. Déjà compris dans son total :
@@ -307,20 +307,36 @@ export function SyntheseTotalePage() {
             || (ordreGroupes.length === 1 && ordreGroupes[0] !== '');
           const ligneTotal = (cat: string) => somme(bloc.data.get(cat) ?? new Map());
 
-          return (
+          // Les jeux dans leur propre carte, avec leur total et leur palette.
+          const vues = totauxJeux
+            ? [
+              { cle: bloc.cle, bloc: bloc.cle, t, titre: bloc.titre, jeux: false,
+                total: r2(grandTotal - totauxJeux.total),
+                parEx: (ex: typeof colonnes[number]) =>
+                  r2((bloc.totaux.get(ex) ?? 0) - (totauxJeux.parEx.get(ex) ?? 0)) },
+              { cle: `${bloc.cle}-jeux`, bloc: 'jeux' as BlocCle, t: teinteBloc('jeux', couleurs),
+                titre: `${bloc.titre} — jeux`, jeux: true,
+                total: totauxJeux.total,
+                parEx: (ex: typeof colonnes[number]) => totauxJeux.parEx.get(ex) ?? 0 },
+            ]
+            : [{ cle: bloc.cle, bloc: bloc.cle, t, titre: bloc.titre, jeux: false,
+              total: grandTotal,
+              parEx: (ex: typeof colonnes[number]) => r2(bloc.totaux.get(ex) ?? 0) }];
+
+          return vues.map(vue => (
             <Card
-              key={bloc.cle} title={bloc.titre}
+              key={vue.cle} title={vue.titre}
               actions={
                 <>
-                  <TotalBloc label={`Total ${unite}`} valeur={euros(grandTotal)} t={t} />
-                  <BlocColorMenu bloc={bloc.cle} />
+                  <TotalBloc label={`Total ${unite}`} valeur={euros(vue.total)} t={vue.t} />
+                  <BlocColorMenu bloc={vue.bloc} />
                 </>
               }
             >
               <div className="overflow-x-auto -mx-4 px-4">
                 <table
-                  data-table={`totale:${bloc.cle}`} data-bloc={bloc.cle}
-                  className="sheet text-sm" style={{ minWidth: 720, ...styleBloc(t) }}
+                  data-table={`totale:${vue.cle}`} data-bloc={vue.bloc}
+                  className="sheet text-sm" style={{ minWidth: 720, ...styleBloc(vue.t) }}
                 >
                   <thead>
                     <tr>
@@ -335,7 +351,7 @@ export function SyntheseTotalePage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {ordreGroupes.map(g => (
+                    {(vue.jeux ? [] : ordreGroupes).map(g => (
                       <Fragment key={`grp-${g}`}>
                         {avecGroupes && (
                           <tr className="band-bloc">
@@ -408,23 +424,7 @@ export function SyntheseTotalePage() {
 
                     {/* Les jeux se lisent à part du fonctionnement, encadrés
                         par deux sous-totaux. */}
-                    {!!totauxJeux && (
-                      <tr className="band-bloc">
-                        <td className="py-1">Sous-total fonctionnement BBG</td>
-                        {colonnes.map(ex => {
-                          const v = r2((bloc.totaux.get(ex) ?? 0) - (totauxJeux.parEx.get(ex) ?? 0));
-                          return (
-                            <td key={ex} className="text-right tabular-nums">
-                              {v ? euros0(v) : '·'}
-                            </td>
-                          );
-                        })}
-                        <td className="text-right tabular-nums col-total">
-                          {euros(r2(grandTotal - totauxJeux.total))}
-                        </td>
-                      </tr>
-                    )}
-                    {bloc.parJeu && [...bloc.parJeu.keys()].map(jeu => {
+                    {vue.jeux && bloc.parJeu && [...bloc.parJeu.keys()].map(jeu => {
                       const postes = bloc.parJeu!.get(jeu)!;
                       return (
                         <Fragment key={`jeu-${jeu}`}>
@@ -486,42 +486,24 @@ export function SyntheseTotalePage() {
                         </Fragment>
                       );
                     })}
-                    {!!totauxJeux && (
-                      <tr className="band-bloc">
-                        <td className="py-1">
-                          <span className="inline-flex items-center gap-1.5">
-                            <Gamepad2 size={13} /> Sous-total jeux
-                          </span>
-                        </td>
-                        {colonnes.map(ex => {
-                          const v = totauxJeux.parEx.get(ex) ?? 0;
-                          return (
-                            <td key={ex} className="text-right tabular-nums">
-                              {v ? euros0(v) : '·'}
-                            </td>
-                          );
-                        })}
-                        <td className="text-right tabular-nums col-total">
-                          {euros(totauxJeux.total)}
-                        </td>
-                      </tr>
-                    )}
                   </tbody>
                   <tfoot>
                     <tr className="total-bloc">
-                      <td>TOTAL {bloc.titre.split(' ')[0].toUpperCase()} ({unite})</td>
+                      <td>
+                        TOTAL {bloc.titre.split(' ')[0].toUpperCase()}{vue.jeux ? ' — JEUX' : ''} ({unite})
+                      </td>
                       {colonnes.map(ex => (
                         <td key={ex} className="text-right tabular-nums" style={styleCol(ex)}>
-                          {bloc.totaux.get(ex) ? euros0(r2(bloc.totaux.get(ex)!)) : '·'}
+                          {vue.parEx(ex) ? euros0(vue.parEx(ex)) : '·'}
                         </td>
                       ))}
-                      <td className="text-right tabular-nums grand">{euros(grandTotal)}</td>
+                      <td className="text-right tabular-nums grand">{euros(vue.total)}</td>
                     </tr>
                   </tfoot>
                 </table>
               </div>
             </Card>
-          );
+          ));
         })}
 
         {/* ------------------------------------- Compte de résultat --------- */}
