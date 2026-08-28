@@ -178,6 +178,15 @@ sont recalculés en direct à partir des écritures.
   précédent**. Le taux se règle **en HT ou en TTC** (l'autre suit), et le
   décalage d'encaissement se choisit (mois même, mois suivant, +2, +3). C'est
   ainsi que les *workshops* sont calculés : payés au début du mois suivant.
+
+  Le décalage crée un trou en début d'exercice : octobre se paie sur les heures
+  de **septembre**, qui appartiennent à l'année d'avant et n'ont nulle part où
+  se saisir. Un champ **report** apparaît alors dans le panneau du taux, avec
+  autant de cases que de mois de décalage, chacune nommée par son mois
+  (« sept. 26 »). Il est **repris tout seul** du dernier mois de l'exercice
+  précédent quand la ligne y existe — rapprochée par sa catégorie, pas par son
+  identifiant, qui change d'une année à l'autre — et reste modifiable à la main
+  pour la première année ou pour corriger.
 - **Vue 5 ans** — les cinq exercices côte à côte : prévu, réel, compte de
   résultat et trajectoire. Le prévu y compte le stock, comme l'onglet Total :
   les deux pages lisent le même calcul

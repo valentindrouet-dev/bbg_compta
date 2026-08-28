@@ -258,6 +258,14 @@ export interface AppState {
   /** Crée le couple « quantités » + « montant = quantités × taux, décalé ». */
   creerCalculHeures: (exercice: string, categorie: string, section: PrevSection) => void;
   /** Ajoute les lignes de la synthèse qui manquent encore, cellules vides. */
+  /** Saisir les quantités des mois qui précèdent l'exercice (report d'ouverture). */
+  setReportAvant: (exercice: string, ligneId: string, idx: number, v: number | null) => void;
+  /**
+   * Reprend, sur les lignes de quantités décalées, ce que portaient les derniers
+   * mois de l'exercice précédent. Sans quoi octobre serait payé sur des heures
+   * de septembre que rien ne permet de saisir.
+   */
+  assurerReportHeures: (exercice: string) => void;
   completerPrevisionnel: (exercice: string) => void;
   /**
    * Recopie les lignes d'un ou plusieurs blocs vers l'exercice suivant, montants
@@ -804,6 +812,53 @@ export const useStore = create<AppState>()(
             [exercice]: [...(s.previsionnels[exercice] ?? []), heures, montant],
           },
         };
+      }),
+
+      setReportAvant: (exercice, ligneId, idx, v) => set(s => ({
+        previsionnels: {
+          ...s.previsionnels,
+          [exercice]: (s.previsionnels[exercice] ?? []).map(l => {
+            if (l.id !== ligneId) return l;
+            const report = [...(l.reportAvant ?? [])];
+            while (report.length <= idx) report.push(null);
+            report[idx] = v;
+            return { ...l, reportAvant: report };
+          }),
+        },
+      })),
+
+      assurerReportHeures: (exercice) => set(s => {
+        const rang = (EXERCICES as readonly string[]).indexOf(exercice);
+        if (rang <= 0) return s;
+        const lignes = s.previsionnels[exercice] ?? [];
+        const avant = s.previsionnels[EXERCICES[rang - 1]] ?? [];
+        if (!lignes.length || !avant.length) return s;
+        // Les lignes de quantités qui alimentent une formule décalée : ce sont
+        // les seules qui ont besoin d'un report.
+        const besoin = new Map<string, number>();
+        for (const l of lignes) {
+          if (l.formule?.type === 'heures-taux' && l.formule.decalage > 0) {
+            besoin.set(l.formule.sourceId, Math.max(besoin.get(l.formule.sourceId) ?? 0, l.formule.decalage));
+          }
+        }
+        if (!besoin.size) return s;
+        let change = false;
+        const suivantes = lignes.map(l => {
+          const n = besoin.get(l.id);
+          if (!n || l.reportAvant !== undefined) return l;
+          // On rapproche par catégorie : c'est le même poste d'une année sur
+          // l'autre, même si son identifiant a changé.
+          const source = avant.find(x => x.categorie === l.categorie && x.unite === l.unite);
+          if (!source) return l;
+          // Du plus récent au plus ancien : le dernier mois de l'exercice
+          // précédent vient en premier.
+          const report = Array.from({ length: n }, (_, i) =>
+            source.valeurs[source.valeurs.length - 1 - i] ?? null);
+          if (report.every(v => v == null)) return l;
+          change = true;
+          return { ...l, reportAvant: report };
+        });
+        return change ? { previsionnels: { ...s.previsionnels, [exercice]: suivantes } } : s;
       }),
 
       dupliquerVersExercice: (source, cible, sections) => set(s => {
@@ -1483,6 +1538,10 @@ function migrerEtat(persisted: unknown, version: number): AppState {
       })),
     }));
   }
+  // v21 : une ligne de quantités décalée peut porter les mois d'avant
+  // l'exercice. Rien à convertir : le champ naît absent, et la reprise depuis
+  // l'exercice précédent le remplit à la première ouverture.
+  // (pas de transformation — la clé est optionnelle)
   // v20 : le tirage d'un jeu porte sa propre TVA — zéro pour une fabrication
   // hors UE, la TVA d'importation étant autoliquidée. Jusqu'ici la trésorerie
   // appliquait au tirage le taux des ventes, ce qui gonflait la sortie de 20 %.

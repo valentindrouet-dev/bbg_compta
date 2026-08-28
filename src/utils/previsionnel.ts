@@ -308,7 +308,12 @@ export function valeursDe(l: PrevLigne, lignes: PrevLigne[]): (number | null)[] 
   const source = lignes.find(x => x.id === f.sourceId);
   if (!source) return l.valeurs.map(() => null);
   return l.valeurs.map((_, i) => {
-    const q = source.valeurs[i - f.decalage];
+    const j = i - f.decalage;
+    // Les premiers mois de l'exercice se paient sur des heures faites *avant* :
+    // elles vivent dans le report de la ligne de quantités, du plus récent au
+    // plus ancien. Sans lui, octobre resterait vide alors que septembre a été
+    // travaillé.
+    const q = j >= 0 ? source.valeurs[j] : source.reportAvant?.[-j - 1];
     return q == null ? null : r2(q * f.tauxHT);
   });
 }

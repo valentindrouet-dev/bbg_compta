@@ -140,6 +140,16 @@ export interface PrevLigne {
   /** Une valeur par mois de l'exercice, dans l'ordre de moisExercice(). */
   valeurs: (number | null)[];
   /**
+   * Ce que portaient les mois **précédant** l'exercice, du plus récent au plus
+   * ancien : `reportAvant[0]` est le mois juste avant le premier de l'exercice.
+   *
+   * Une ligne de quantités encaissée le mois suivant a besoin des heures de
+   * septembre pour payer octobre — or septembre appartient à l'exercice d'avant
+   * et n'a nulle part où se saisir. Le report comble ce trou. Il est repris tout
+   * seul de l'exercice précédent quand la ligne y existe, et reste modifiable.
+   */
+  reportAvant?: (number | null)[];
+  /**
    * Durée d'amortissement, en années — seulement pour une ligne du bloc
    * Immobilisations. Un ordinateur ne s'amortit pas sur la même durée que des
    * travaux : c'est elle qui commande la dotation que l'investissement prévu

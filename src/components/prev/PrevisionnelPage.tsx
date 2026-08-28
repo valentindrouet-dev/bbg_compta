@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import {
   Plus, Trash2, AlertTriangle, AlertCircle, Info, Wand2, ArrowRightLeft, Gamepad2, Sigma, ListPlus, Clock, GripVertical, Percent, Calculator, Receipt, TrendingUp, Landmark, Boxes, Table2, CopyPlus,
 } from 'lucide-react';
@@ -82,10 +82,13 @@ export function PrevisionnelPage() {
   const creerCalculHeures = useStore(s => s.creerCalculHeures);
   const completerPrevisionnel = useStore(s => s.completerPrevisionnel);
   const dupliquerVersExercice = useStore(s => s.dupliquerVersExercice);
+  const setReportAvant = useStore(s => s.setReportAvant);
+  const assurerReportHeures = useStore(s => s.assurerReportHeures);
   const addPrevLignesParJeu = useStore(s => s.addPrevLignesParJeu);
 
   const [exercice, setExercice] = useEtatVue('prev.exercice', '2025-26',
     v => (EXERCICES as readonly string[]).includes(v));
+  useEffect(() => { assurerReportHeures(exercice); }, [exercice, assurerReportHeures]);
   const [simple] = useVueSimplifiee();
   const [sousTotaux] = useSousTotaux();
   /** L'onglet regardé : charges, produits, immobilisations, stock ou total. */
@@ -97,6 +100,21 @@ export function PrevisionnelPage() {
    * remplacé, et perdre une année de budget sans l'avoir voulu serait la pire
    * des surprises. L'annulation Cmd+Z reste le filet.
    */
+  // Les mois d'avant l'exercice, pour une formule décalée : la ligne de
+  // quantités les porte, et c'est elle qu'on modifie.
+  const reportDe = (f: FormuleHeuresTaux) => {
+    const source = lignes.find(x => x.id === f.sourceId);
+    if (!source) return undefined;
+    const rang = EXERCICES.indexOf(exercice as typeof EXERCICES[number]);
+    const precedents = rang > 0 ? moisExercice(EXERCICES[rang - 1]) : [];
+    return {
+      valeurs: Array.from({ length: f.decalage }, (_, i) => source.reportAvant?.[i] ?? null),
+      libelles: Array.from({ length: f.decalage }, (_, i) =>
+        labelMois(precedents[precedents.length - 1 - i] ?? '')),
+      set: (i: number, v: number | null) => setReportAvant(exercice, source.id, i, v),
+    };
+  };
+
   const exerciceSuivant = EXERCICES[EXERCICES.indexOf(exercice as typeof EXERCICES[number]) + 1];
   const dupliquer = () => {
     if (!exerciceSuivant) return;
@@ -847,6 +865,7 @@ export function PrevisionnelPage() {
                                     <TauxHoraire
                                       formule={l.formule}
                                       onChange={f => setPrevFormule(exercice, l.id, f)}
+                                      report={reportDe(l.formule)}
                                     />
                                   )}
                                   {l.formule?.type === 'pourcentage-bloc' && (
@@ -1183,8 +1202,14 @@ function TauxPourcentage({ formule, onChange, onRetirer }: {
  * Le taux horaire, en tête de la ligne calculée : saisissable en HT comme en
  * TTC (l'un se déduit de l'autre), avec le décalage de paiement.
  */
-function TauxHoraire({ formule, onChange }: {
+function TauxHoraire({ formule, onChange, report }: {
   formule: FormuleHeuresTaux; onChange: (f: FormulePrev) => void;
+  /** Les quantités des mois d'avant l'exercice, du plus récent au plus ancien. */
+  report?: {
+    valeurs: (number | null)[];
+    libelles: string[];
+    set: (i: number, v: number | null) => void;
+  };
 }) {
   const ttc = r2(formule.tauxHT * (1 + formule.tauxTVA / 100));
   const champ = "w-14 px-1 py-0.5 border rounded text-right text-[11px] tabular-nums bg-white";
@@ -1217,6 +1242,24 @@ function TauxHoraire({ formule, onChange }: {
         />
         <span>TTC</span>
       </div>
+      {formule.decalage > 0 && !!report && (
+        <div className="flex items-center gap-1 mt-0.5 whitespace-nowrap">
+          <span title={`Ce qui a été fait avant le début de l'exercice : sans ça, les ${formule.decalage} premier${formule.decalage > 1 ? 's' : ''} mois seraient payés sur du vide. Repris tout seul de l'exercice précédent, modifiable.`}
+            className="cursor-help">report</span>
+          {Array.from({ length: formule.decalage }, (_, i) => (
+            <span key={i} className="inline-flex items-center gap-0.5">
+              <input
+                className={champ} style={{ borderColor: 'var(--bbg-border-soft)' }}
+                defaultValue={report.valeurs[i] == null ? '' : String(report.valeurs[i])}
+                title={`${report.libelles[i]} — quantité du mois, avant l'exercice`}
+                onBlur={ev => report.set(i, ev.target.value === '' ? null : Number(ev.target.value))}
+                onKeyDown={ev => { if (ev.key === 'Enter') (ev.target as HTMLInputElement).blur(); }}
+              />
+              <span className="text-[10px]">{report.libelles[i]}</span>
+            </span>
+          ))}
+        </div>
+      )}
       <div className="flex items-center gap-1 mt-0.5 whitespace-nowrap">
         <span>encaissé</span>
         <select
