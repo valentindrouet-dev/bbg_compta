@@ -2,12 +2,13 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import type {
   JournalEntry, FinanceEntry, BudgetExercice, ChronoEvent, TresoPrevLine, Referentiels, CategorieMeta,
-  CanalVente, FormulePrev, JeuMeta, LigneStock, MouvementStock, PrevLigne, PrevSection,
+  CanalVente, FormulePrev, JeuMeta, LigneDroits, LigneStock, MouvementStock, PrevLigne,
+  PrevSection,
   TresoManuel,
 } from '../types';
 import {
   CANAUX_DEFAUT, CATEGORIE_FABRICATION, CATEGORIE_VARIATION_STOCK, CATEGORIE_VENTES_JEUX,
-  canalVide, ligneStockVide,
+  canalVide, droitsVides, ligneStockVide,
 } from '../utils/stock';
 import {
   categoriesImmobilisees, categoriesManquantes, estLigneCalculee, gabaritPrevisionnel,
@@ -322,6 +323,9 @@ export interface AppState {
   /** Écrit une valeur (exemplaires ou %) dans la case d'un canal de vente. */
   setCanalCell: (id: string, canalId: string, i: number, v: number | null) => void;
   addCanal: (id: string, nom: string) => void;
+  addDroits: (id: string, nom: string) => void;
+  updateDroits: (id: string, droitsId: string, patch: Partial<LigneDroits>) => void;
+  removeDroits: (id: string, droitsId: string) => void;
   updateCanal: (id: string, canalId: string, patch: Partial<CanalVente>) => void;
   removeCanal: (id: string, canalId: string) => void;
   /**
@@ -1134,6 +1138,23 @@ export const useStore = create<AppState>()(
           ? { ...l, canaux: l.canaux.filter(c => c.id !== canalId) }
           : l),
       })),
+
+      addDroits: (id, nom) => set(s => ({
+        stocks: s.stocks.map(l => l.id === id
+          ? { ...l, droits: [...(l.droits ?? []), droitsVides(nom)] }
+          : l),
+      })),
+      updateDroits: (id, droitsId, patch) => set(s => ({
+        stocks: s.stocks.map(l => l.id === id ? {
+          ...l,
+          droits: (l.droits ?? []).map(d => d.id === droitsId ? { ...d, ...patch } : d),
+        } : l),
+      })),
+      removeDroits: (id, droitsId) => set(s => ({
+        stocks: s.stocks.map(l => l.id === id
+          ? { ...l, droits: (l.droits ?? []).filter(d => d.id !== droitsId) }
+          : l),
+      })),
       assurerContinuiteStock: (exercice) => set(s => {
         const rang = (EXERCICES as readonly string[]).indexOf(exercice);
         if (rang <= 0) return s;
@@ -1155,9 +1176,14 @@ export const useStore = create<AppState>()(
             tauxTVA: modele.tauxTVA,
             fabrique: vide(),
             ventesPourcent: vide(),
+            ppht: modele.ppht,
             canaux: (modele.canaux ?? []).map(c => ({
               ...c, id: uid(), valeurs: vide(),
             })),
+            // Le contrat suit le jeu : mêmes ayants droit, mêmes taux, même
+            // avance. Le calcul, lui, sait qu'elle a déjà pu être récupérée
+            // sur les exercices précédents et ne la redemande pas.
+            droits: (modele.droits ?? []).map(d => ({ ...d, id: uid() })),
           });
         }
         if (!nouvelles.length) return s;
@@ -1179,7 +1205,7 @@ export const useStore = create<AppState>()(
     },
     {
       name: 'bbg-compta-v1',
-      version: 18,
+      version: 19,
       // Le stockage passe par le coffre : il vérifie qu'un autre onglet n'a pas
       // pris la main, signale un refus d'écriture au lieu de le taire, et
       // dépose un instantané horodaté dans IndexedDB après chaque salve de
@@ -1397,6 +1423,12 @@ function migrerEtat(persisted: unknown, version: number): AppState {
           ?? CANAUX_DEFAUT.find(x => x.nom === c.nom)?.repartition ?? 0,
       })),
     }));
+  }
+  // v19 : un jeu peut porter des droits d'auteur — un taux, une assiette, une
+  // avance récupérable. La liste naît vide et le prix public reste à renseigner :
+  // sans droits saisis, rien ne change dans les calculs.
+  if (version < 19 && s.stocks) {
+    s.stocks = s.stocks.map(l => ({ ...l, droits: l.droits ?? [] }));
   }
   // v18 : la trésorerie prévisionnelle accepte des mouvements financiers à
   // venir — une entrée de compte courant programmée, un placement prévu. La

@@ -31,7 +31,9 @@ import {
 } from '../ui';
 import { useSelectionCellules } from '../../utils/selection';
 import { useEtatVue } from '../../utils/etatVue';
-import { useBaseMontant, useSousTotaux, useVueSimplifiee } from '../../utils/reglagesVue';
+import {
+  useBaseMontant, useSousTotaux, useVueSimplifiee, type BaseMontant,
+} from '../../utils/reglagesVue';
 
 /**
  * Les onglets du prévisionnel. Chacun ne montre que ce qui le regarde ; le
@@ -83,13 +85,21 @@ export function PrevisionnelPage() {
 
   const [exercice, setExercice] = useEtatVue('prev.exercice', '2025-26',
     v => (EXERCICES as readonly string[]).includes(v));
-  /** HT (base du résultat) ou TTC (ce qui sort vraiment du compte). */
-  const [base] = useBaseMontant();
   const [simple] = useVueSimplifiee();
   const [sousTotaux] = useSousTotaux();
   /** L'onglet regardé : charges, produits, immobilisations, stock ou total. */
   const [vue, setVue] = useEtatVue<VuePrev>('prev.vue', 'charges',
     v => VUES.some(x => x.cle === v));
+  /**
+   * HT (base du résultat) ou TTC (ce qui sort vraiment du compte).
+   *
+   * Les onglets de saisie restent **toujours en HT**, quel que soit le réglage
+   * des autres pages : on y tape des montants, et taper un prix HT dans une
+   * grille affichée en TTC fausserait la donnée elle-même, pas seulement son
+   * affichage. Seul l'onglet Total, qui ne se saisit pas, suit la bascule.
+   */
+  const [baseGlobale] = useBaseMontant();
+  const base: BaseMontant = vue === 'total' ? baseGlobale : 'ht';
   /** Ligne dont le calculateur de rémunération est déplié. */
   const [calculOuvert, setCalculOuvert] = useState<string | null>(null);
   const [nouvelleCat, setNouvelleCat] = useState('');
@@ -265,14 +275,16 @@ export function PrevisionnelPage() {
               <span className="inline-flex items-center gap-1.5"><ListPlus size={14} /> Compléter la grille</span>
             </Btn>
             </>}
-            {/* Les réglages d'affichage ne dépendent pas de la saisie : le Total
-                se lit lui aussi en HT ou en TTC. Chaque onglet n'affiche que les
-                bascules qui font quelque chose chez lui — un bouton sans effet
-                est pire que pas de bouton. Le Stock tient ses montants en HT,
-                ses lignes le disent ; le Total n'a pas de ligne de sous-total à
-                masquer, ses bandeaux de jeu portent toujours leur chiffre. */}
+            {/* Chaque onglet n'affiche que les bascules qui font quelque chose
+                chez lui — un bouton sans effet est pire que pas de bouton.
+                HT/TTC n'apparaît que dans le Total : les onglets de saisie se
+                tiennent en HT et rien ne doit pouvoir les en sortir, sous peine
+                de saisir un montant dans une base et de le stocker dans
+                l'autre. Le Stock est en HT pour la même raison. Le Total, lui,
+                n'a pas de ligne de sous-total à masquer : ses bandeaux de jeu
+                portent toujours leur chiffre. */}
             <ReglagesVue
-              avecBase={vue !== 'stock'}
+              avecBase={vue === 'total'}
               avecDetail={vue !== 'stock'}
               avecSousTotaux={vue !== 'total'} />
           </>

@@ -77,8 +77,11 @@ export function resultatPrevisionnel(e: EntreesPrevisionnel): LigneResultat[] {
   const sec = (s: PrevSection) => montantsSection(lignes, moisList, s);
 
   const produits = plus(sec('produits'), stock?.caParMois);
-  // Charges = charges saisies + tirages − variation de stock.
+  // Charges = charges saisies + tirages + droits dus − variation de stock.
+  // Les droits ne pèsent qu'une fois l'avance récupérée : celle-ci a déjà été
+  // décaissée et passée en charge le mois de son versement.
   let charges = plus(sec('charges'), stock?.fabricationParMois);
+  charges = plus(charges, stock?.droitsParMois);
   charges = plus(charges, stock?.variationParMois, -1);
 
   // Dotations : celles des biens déjà au bilan, plus celles que déclencheraient
@@ -258,7 +261,8 @@ export function fluxTresorerie(
   // développement porté à l'actif est déjà à la ligne des immobilisations, et
   // le compter ici une seconde fois gonflerait les sorties d'autant.
   const depensesJeux = melange(
-    eclat.jeux,
+    new Map(moisList.map(m => [m, r2(
+      (eclat.jeux.get(m) ?? 0) + (stock.droitsParMois.get(m) ?? 0))])),
     e => e.type === 'charges' && estJeu(e));
 
   const encaissements = new Map(moisList.map(m =>

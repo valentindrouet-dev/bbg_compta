@@ -69,8 +69,14 @@ export function TotalPrev({ exercice, moisList }: { exercice: string; moisList: 
             [...canaux.entries()].map(([canal, parMois]) =>
               [jeu, `Ventes ${canal} (stock)`, parMois] as [string, string, Map<string, number>]))
           : bloc.cle === 'charges'
-            ? [...stock.fabricationParJeuEtMois.entries()].map(([jeu, parMois]) =>
-              [jeu, 'Tirages payés à l’usine (stock)', parMois] as [string, string, Map<string, number>])
+            ? [
+              ...[...stock.fabricationParJeuEtMois.entries()].map(([jeu, parMois]) =>
+                [jeu, 'Tirages payés à l’usine (stock)', parMois] as [string, string, Map<string, number>]),
+              // Les droits d'auteur dus, avances déjà déduites : une charge du
+              // jeu au même titre que son tirage.
+              ...[...stock.droitsParJeuEtMois.entries()].map(([jeu, parMois]) =>
+                [jeu, 'Droits d’auteur (stock)', parMois] as [string, string, Map<string, number>]),
+            ]
             : [];
         if (!lignesBloc.length && !duStock.length) return null;
 
@@ -78,10 +84,15 @@ export function TotalPrev({ exercice, moisList }: { exercice: string; moisList: 
         const valeurLigne = (l: PrevLigne, i: number) => (valeursDe(l, lignes)[i] ?? 0) * coef(l);
         const parMois = new Map(moisList.map((m, i) => [m, r2(
           lignesBloc.reduce((x, l) => x + valeurLigne(l, i), 0))]));
+        // Ce que le stock ajoute au bloc, en plus des lignes saisies. Les droits
+        // d'auteur s'ajoutent aux tirages : on ne leur applique pas de TVA, un
+        // auteur sous franchise en base n'en facturant pas.
+        const tirages = base === 'ttc' ? stock.fabricationTTCParMois : stock.fabricationParMois;
         const apport = bloc.cle === 'produits'
           ? (base === 'ttc' ? stock.caTTCParMois : stock.caParMois)
           : bloc.cle === 'charges'
-            ? (base === 'ttc' ? stock.fabricationTTCParMois : stock.fabricationParMois)
+            ? new Map(moisList.map(m => [m, r2(
+              (tirages.get(m) ?? 0) + (stock.droitsParMois.get(m) ?? 0))]))
             : undefined;
         // L'exact, arrondi une fois : sommer les mois déjà arrondis ferait
         // dériver le total de quelques centimes par rapport à l'onglet de saisie.
@@ -125,8 +136,9 @@ export function TotalPrev({ exercice, moisList }: { exercice: string; moisList: 
                     const siennes = lignesBloc.filter(l => jeuDeLigne(l, jeux) === jeu);
                     const duStockJeu = duStock.filter(([j]) => j === jeu);
                     const totalJeu = r2(sommeLignes(siennes)
-                      + duStockJeu.reduce((s, [, , parMois]) =>
-                        s + [...parMois.values()].reduce((x, v) => x + v, 0) * coefJeu(jeu), 0));
+                      + duStockJeu.reduce((s, [, libelle, parMois]) =>
+                        s + [...parMois.values()].reduce((x, v) => x + v, 0)
+                          * (libelle.startsWith('Droits') ? 1 : coefJeu(jeu)), 0));
                     if (!totalJeu) return null;
                     return (
                       <Fragment key={`jeu-${jeu}`}>
@@ -151,11 +163,16 @@ export function TotalPrev({ exercice, moisList }: { exercice: string; moisList: 
                           );
                         })}
                         {(simple ? [] : duStockJeu).map(([, libelle, parMoisJeu]) => {
-                          const k = coefJeu(jeu);
+                          const k = libelle.startsWith('Droits') ? 1 : coefJeu(jeu);
                           const total = r2([...parMoisJeu.values()].reduce((s, v) => s + v, 0) * k);
                           return (
                             <tr key={`${jeu}-${libelle}`}>
-                              <td style={{ paddingLeft: 22 }}>{libelle}</td>
+                              <td style={{ paddingLeft: 22 }}
+                                title={libelle.startsWith('Droits')
+                                  ? 'Droits dus après récupération de l’avance. Affichés sans TVA : un auteur sous franchise en base n’en facture pas — si le tien la facture, saisis-la au journal.'
+                                  : undefined}>
+                                {libelle}
+                              </td>
                               {moisList.map(m => {
                                 const v = r2((parMoisJeu.get(m) ?? 0) * k);
                                 return <td key={m} className="text-right tabular-nums">{v ? euros0(v) : '·'}</td>;

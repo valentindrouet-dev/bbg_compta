@@ -179,7 +179,45 @@ export interface LigneStock {
    * donc son prix et sa propre ligne de quantités.
    */
   canaux: CanalVente[];
+  /**
+   * Prix public conseillé HT — le prix en boutique, hors TVA. Il ne sert pas à
+   * calculer les ventes (chaque canal a le sien) mais il est souvent l'assiette
+   * contractuelle des droits d'auteur, et c'est de toute façon un chiffre qu'on
+   * veut garder à côté du coût de revient.
+   */
+  ppht?: number;
+  /**
+   * Les droits à reverser sur ce jeu : un auteur, une illustratrice, un
+   * traducteur… Chacun a son taux, son assiette et son avance.
+   */
+  droits?: LigneDroits[];
   note?: string;
+}
+
+/**
+ * Des droits à reverser sur les ventes d'un jeu.
+ *
+ * Une avance versée à la signature n'est pas un cadeau : elle est *récupérable*
+ * sur les premiers droits acquis. Tant que les droits cumulés n'ont pas
+ * rattrapé l'avance, il n'y a rien de plus à payer — l'avance a déjà été
+ * décaissée, et la repasser en charge la compterait deux fois. Au-delà, chaque
+ * vente coûte réellement ses droits, et la marge s'en ressent.
+ */
+export interface LigneDroits {
+  id: string;
+  /** « Auteur », « Illustratrice »… ce qui apparaît sur la ligne. */
+  nom: string;
+  /** Taux des droits, en % de l'assiette. */
+  taux: number;
+  /**
+   * L'assiette du taux :
+   * - `ppht` : le prix public conseillé HT, le même pour tous les canaux ;
+   * - `ventes` : le prix réellement encaissé, donc pondéré tout seul par la
+   *   répartition entre distributeur, boutique et éditeur du mois.
+   */
+  base: 'ppht' | 'ventes';
+  /** Avance déjà versée, récupérable sur les premiers droits acquis. */
+  avance: number;
 }
 
 /**

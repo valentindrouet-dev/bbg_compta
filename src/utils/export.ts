@@ -272,6 +272,7 @@ export function blobExcel(state: AppState, exercice: string): Blob {
         'Exercice': ex,
         'Jeu': s.ligne.jeu,
         'Coût de revient unitaire HT': s.ligne.coutUnitaire,
+        'Prix public HT (PPHT)': s.ligne.ppht ?? 0,
         'TVA %': s.ligne.tauxTVA ?? 20,
         'Stock ouverture': s.total.stockDebut,
         'Fabriqués': s.total.fabrique,
@@ -284,6 +285,18 @@ export function blobExcel(state: AppState, exercice: string): Blob {
         'Ventes HT': s.total.ca,
         'Ventes TTC': s.total.caTTC,
         'Coût des ventes': s.total.cogs,
+        ...Object.fromEntries((s.ligne.droits ?? []).flatMap(d => {
+          const t = s.total.parDroit.get(d.id);
+          return [
+            [`Droits ${d.nom} — taux %`, d.taux],
+            [`Droits ${d.nom} — assiette`, d.base === 'ppht' ? 'PPHT' : 'prix encaissé'],
+            [`Droits ${d.nom} — avance`, d.avance],
+            [`Droits ${d.nom} — acquis`, t?.brut ?? 0],
+            [`Droits ${d.nom} — dus`, t?.du ?? 0],
+            [`Droits ${d.nom} — reste avance`, t?.resteAvance ?? 0],
+          ];
+        })),
+        'Droits dus (total)': s.total.droitsDus,
         'Variation de stock': s.total.variationStock,
         'Marge': s.total.marge,
         'Valeur du stock': s.total.valeurStock,

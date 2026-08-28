@@ -108,7 +108,25 @@ sont recalculés en direct à partir des écritures.
     en carton, si bien que **seul le coût de ce qui est vendu pèse sur le
     résultat**. Un badge prévient si le stock passe sous zéro. Le coût de revient
     unitaire se recopie depuis le Production Calculator — c'est lui qui tient les
-    devis usine. Un jeu qui a du stock **continue d'un exercice à l'autre** :
+    devis usine ; le **PPHT** (prix public HT) se note à côté, il sert d'assiette
+    aux droits.
+
+    **Les droits à reverser** tiennent sous le tableau : autant de lignes que
+    d'ayants droit — un auteur, une illustratrice — chacune avec son **taux**,
+    son **assiette** et son **avance**. Deux assiettes, le contrat tranche :
+    *% du PPHT*, le même quel que soit le canal (8 % d'un PPHT de 40 € font
+    3,20 € par exemplaire) ; ou *% du prix encaissé*, auquel cas la pondération
+    entre distributeur, boutique et éditeur se fait toute seule, puisqu'on part
+    du chiffre d'affaires du mois. L'**avance** est récupérable : tant que les
+    droits acquis ne l'ont pas rattrapée, il n'y a rien de plus à payer —
+    l'argent est déjà sorti le mois où tu l'as versée, le repasser en charge le
+    compterait deux fois. Le tableau montre entre parenthèses ce qu'elle absorbe
+    chaque mois, et la colonne « reste à récupérer » dit combien il manque avant
+    la bascule. Passé ce seuil, chaque vente coûte ses droits et **la marge s'en
+    ressent**. Le compteur ne se remet pas à zéro d'un exercice à l'autre : une
+    avance soldée reste soldée. Les droits dus remontent en charges du résultat
+    prévisionnel, en sortie de la trésorerie prévisionnelle, et dans l'onglet
+    Total sous « Droits d'auteur (stock) ». Un jeu qui a du stock **continue d'un exercice à l'autre** :
     en ouvrant l'onglet de l'année suivante, sa ligne est reprise avec son coût
     de revient et ses canaux, et le stock de clôture devient l'ouverture
   - **Total** — tout le prévisionnel de l'exercice d'un seul tenant et
@@ -230,13 +248,19 @@ sont recalculés en direct à partir des écritures.
 ## Réglages d'affichage, communs à toutes les pages
 
 Trois bascules en haut des pages de chiffres — synthèse annuelle, synthèse
-totale, prévisionnel (**tous ses onglets**, Stock et Total compris).
-**Elles valent partout** : réglées ici, retrouvées là-bas, et retrouvées telles
-quelles au rechargement. Chaque page n'affiche que les bascules qui font quelque
-chose chez elle — un bouton sans effet est pire que pas de bouton : l'onglet
-Stock tient ses montants en HT et ses lignes le disent, l'onglet Total n'a pas
-de ligne de sous-total à masquer puisque ses bandeaux de jeu portent toujours
-leur chiffre.
+totale, prévisionnel. **Elles valent partout** : réglées ici, retrouvées là-bas,
+et retrouvées telles quelles au rechargement. Chaque page n'affiche que les
+bascules qui font quelque chose chez elle — un bouton sans effet est pire que
+pas de bouton.
+
+**HT / TTC ne s'affiche pas dans les onglets de saisie du prévisionnel**
+(Charges, Produits, Immobilisations, Stock) : ils se tiennent en HT et rien ne
+peut les en sortir. On y **tape** des montants, et taper un prix HT dans une
+grille affichée en TTC fausserait la donnée elle-même, pas seulement son
+affichage. Seul l'onglet **Total**, qui ne se saisit pas, suit la bascule — et
+son compte de résultat reste en HT quoi qu'il arrive, la TVA n'y entrant pas.
+L'onglet Total n'a pas non plus de bascule de sous-totaux : il n'a pas de ligne
+de sous-total à masquer, ses bandeaux de jeu portant toujours leur chiffre.
 
 - **HT / TTC** — la base du résultat, ou ce qui sort vraiment du compte. Le
   tableau bascule entièrement : en HT il n'affiche plus de ligne TTC en doublon,

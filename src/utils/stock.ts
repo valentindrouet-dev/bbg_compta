@@ -19,7 +19,7 @@
  * [Production Calculator](https://valentindrouet-dev.github.io/boardgame_prod_calculator/),
  * qui reste seul maître des devis usine. On l'y recopie, une fois par tirage.
  */
-import type { CanalVente, LigneStock, MouvementStock } from '../types';
+import type { CanalVente, LigneDroits, LigneStock, MouvementStock } from '../types';
 import { compareMois, exerciceDuMois, moisExercice, EXERCICES } from './dates';
 import { r2 } from './money';
 
@@ -76,6 +76,18 @@ export interface MoisCanal {
   ca: number;
 }
 
+/** Ce qu'un ayant droit acquiert sur un mois, avance déduite. */
+export interface MoisDroits {
+  /** Droits bruts acquis sur les ventes du mois, avant imputation de l'avance. */
+  brut: number;
+  /** La part du brut absorbée par l'avance déjà versée : rien à payer dessus. */
+  surAvance: number;
+  /** Ce qui est réellement dû ce mois-là, et qui pèse sur la marge. */
+  du: number;
+  /** Ce qui reste à récupérer sur l'avance à la fin du mois. */
+  resteAvance: number;
+}
+
 /** Un mois de stock pour un jeu, tout ce qui en découle calculé. */
 export interface MoisStock {
   mois: string;
@@ -97,7 +109,13 @@ export interface MoisStock {
   cogs: number;
   /** (stock fin − stock début) × coût unitaire : + quand le stock monte. */
   variationStock: number;
-  /** Ventes − coût des ventes. C'est elle, la marge réelle du mois. */
+  /** Les droits du mois, ayant droit par ayant droit (clé : identifiant). */
+  droits: Map<string, MoisDroits>;
+  /** Droits bruts acquis ce mois, tous ayants droit confondus. */
+  droitsBruts: number;
+  /** Droits réellement dus ce mois : ce qui reste une fois l'avance épuisée. */
+  droitsDus: number;
+  /** Ventes − coût des ventes − droits dus. C'est elle, la marge réelle du mois. */
   marge: number;
   /** Valeur du stock à la fin du mois, au coût de revient. */
   valeurStock: number;
@@ -112,8 +130,11 @@ export interface StockJeu {
     stockDebut: number; stockFin: number;
     coutFabrication: number; ca: number; caTTC: number; cogs: number;
     variationStock: number; marge: number; valeurStock: number;
+    droitsBruts: number; droitsDus: number;
     /** Exemplaires et chiffre d'affaires par canal. */
     parCanal: Map<string, MoisCanal>;
+    /** Cumuls par ayant droit, avec ce qui reste de son avance à la clôture. */
+    parDroit: Map<string, { brut: number; du: number; resteAvance: number }>;
   };
   /** Le stock est-il descendu sous zéro ? On vend alors ce qu'on n'a pas. */
   decouvert: boolean;
@@ -177,6 +198,49 @@ export function totalRepartition(ligne: LigneStock): number {
     .reduce((s, c) => s + (c.repartition ?? 0), 0));
 }
 
+/** Identifiant stable d'un ayant droit d'un exercice à l'autre : son nom. */
+export function cleDroit(d: LigneDroits): string {
+  return d.nom.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    || d.id;
+}
+
+/** Une ligne de droits vide, prête à être remplie. */
+let compteurDroit = 0;
+export function droitsVides(nom = 'Auteur'): LigneDroits {
+  return {
+    id: `droits-${Date.now().toString(36)}-${++compteurDroit}`,
+    nom, taux: 0, base: 'ppht', avance: 0,
+  };
+}
+
+/**
+ * Les droits bruts déjà acquis avant cet exercice, ayant droit par ayant droit.
+ *
+ * L'avance se récupère sur toute la vie du jeu, pas sur un exercice : si elle a
+ * été soldée l'an dernier, les ventes de cette année doivent payer leurs droits
+ * dès le premier exemplaire. On remonte donc la chaîne des exercices, comme
+ * pour le stock d'ouverture, et on rapproche les ayants droit par leur nom —
+ * leur identifiant, lui, change d'un exercice à l'autre.
+ */
+function droitsAcquisAvant(
+  lignes: LigneStock[], jeu: string, exercice: string,
+): Map<string, number> {
+  const rang = EXERCICES.indexOf(exercice as typeof EXERCICES[number]);
+  const out = new Map<string, number>();
+  for (let i = 0; i < rang; i++) {
+    const l = lignes.find(x => x.jeu === jeu && x.exercice === EXERCICES[i]);
+    if (!l?.droits?.length) continue;
+    const parId = new Map((l.droits ?? []).map(d => [d.id, cleDroit(d)]));
+    for (const r of derouleStock(l, lignes).mois) {
+      for (const [id, d] of r.droits) {
+        const cle = parId.get(id);
+        if (cle) out.set(cle, (out.get(cle) ?? 0) + d.brut);
+      }
+    }
+  }
+  return out;
+}
+
 /** Déroule un exercice de stock pour un jeu, mois par mois. */
 export function derouleStock(ligne: LigneStock, lignes: LigneStock[]): StockJeu {
   const mois = moisExercice(ligne.exercice);
@@ -188,6 +252,14 @@ export function derouleStock(ligne: LigneStock, lignes: LigneStock[]): StockJeu 
   const tirage = ouverture + somme(ligne.fabrique);
   let stock = ouverture;
   let decouvert = false;
+
+  // Les droits : chacun avec son taux, son assiette et son avance à récupérer.
+  // Le cumul démarre là où les exercices précédents l'ont laissé.
+  const droits = ligne.droits ?? [];
+  const dejaAcquis = droits.length
+    ? droitsAcquisAvant(lignes, ligne.jeu, ligne.exercice)
+    : new Map<string, number>();
+  const cumulDroits = new Map(droits.map(d => [d.id, dejaAcquis.get(cleDroit(d)) ?? 0]));
 
   const rows: MoisStock[] = mois.map((m, i) => {
     const fabrique = ligne.fabrique[i] ?? 0;
@@ -207,6 +279,31 @@ export function derouleStock(ligne: LigneStock, lignes: LigneStock[]): StockJeu 
     }
     ca = r2(ca);
 
+    // Les droits du mois. L'assiette « ppht » applique le taux au prix public,
+    // exemplaire par exemplaire ; l'assiette « ventes » l'applique au chiffre
+    // d'affaires du mois — qui est déjà pondéré par la répartition entre
+    // canaux, puisqu'il additionne ce que chacun a réellement encaissé.
+    const parDroit = new Map<string, MoisDroits>();
+    let droitsBruts = 0;
+    let droitsDus = 0;
+    for (const d of droits) {
+      const assiette = d.base === 'ppht' ? (ligne.ppht ?? 0) * vendue : ca;
+      const brut = r2(((d.taux || 0) / 100) * assiette);
+      const avance = d.avance || 0;
+      const avant = cumulDroits.get(d.id) ?? 0;
+      const apres = avant + brut;
+      // Ce qui tombe encore sous l'avance n'est pas à payer : elle a déjà été
+      // versée. Seul l'excédent est dû, et c'est lui qui pèse sur la marge.
+      const surAvance = r2(Math.max(0, Math.min(apres, avance) - Math.min(avant, avance)));
+      const du = r2(brut - surAvance);
+      cumulDroits.set(d.id, apres);
+      parDroit.set(d.id, { brut, surAvance, du, resteAvance: r2(Math.max(0, avance - apres)) });
+      droitsBruts += brut;
+      droitsDus += du;
+    }
+    droitsBruts = r2(droitsBruts);
+    droitsDus = r2(droitsDus);
+
     const stockFin = disponible - vendue;
     if (stockFin < 0) decouvert = true;
     stock = stockFin;
@@ -216,7 +313,8 @@ export function derouleStock(ligne: LigneStock, lignes: LigneStock[]): StockJeu 
       ca, caTTC: r2(ca * (1 + tva)),
       cogs: r2(vendue * cu),
       variationStock: r2((stockFin - stockDebut) * cu),
-      marge: r2(ca - vendue * cu),
+      droits: parDroit, droitsBruts, droitsDus,
+      marge: r2(ca - vendue * cu - droitsDus),
       valeurStock: r2(stockFin * cu),
     };
   });
@@ -229,6 +327,15 @@ export function derouleStock(ligne: LigneStock, lignes: LigneStock[]): StockJeu 
       ca: r2(rows.reduce((s, r) => s + (r.parCanal.get(c.id)?.ca ?? 0), 0)),
     });
   }
+  const totalDroit = new Map<string, { brut: number; du: number; resteAvance: number }>();
+  for (const d of droits) {
+    const dernier = rows[rows.length - 1]?.droits.get(d.id);
+    totalDroit.set(d.id, {
+      brut: r2(rows.reduce((s, r) => s + (r.droits.get(d.id)?.brut ?? 0), 0)),
+      du: r2(rows.reduce((s, r) => s + (r.droits.get(d.id)?.du ?? 0), 0)),
+      resteAvance: dernier?.resteAvance ?? (d.avance || 0),
+    });
+  }
   return {
     ligne, mois: rows, decouvert,
     total: {
@@ -237,9 +344,11 @@ export function derouleStock(ligne: LigneStock, lignes: LigneStock[]): StockJeu 
       coutFabrication: t(r => r.coutFabrication),
       ca: t(r => r.ca), caTTC: t(r => r.caTTC), cogs: t(r => r.cogs),
       variationStock: r2((stock - ouverture) * cu),
+      droitsBruts: t(r => r.droitsBruts), droitsDus: t(r => r.droitsDus),
       marge: t(r => r.marge),
       valeurStock: r2(stock * cu),
       parCanal: totalCanal,
+      parDroit: totalDroit,
     },
   };
 }
@@ -269,6 +378,7 @@ export function ligneStockVide(
     fabrique: new Array<number | null>(n).fill(null),
     ventesPourcent: new Array<number | null>(n).fill(null),
     canaux: CANAUX_DEFAUT.map(c => canalVide(c.nom, n, 0, c.repartition)),
+    droits: [],
   };
 }
 
@@ -291,6 +401,9 @@ export interface ApportStock {
   variationParMois: Map<string, number>;
   /** Coût des exemplaires vendus. */
   cogsParMois: Map<string, number>;
+  /** Droits réellement dus, une fois les avances récupérées. */
+  droitsParMois: Map<string, number>;
+  droitsParJeuEtMois: Map<string, Map<string, number>>;
   margeParMois: Map<string, number>;
   /** Valeur du stock à la fin de chaque mois. */
   valeurParMois: Map<string, number>;
@@ -310,6 +423,7 @@ export function apportStock(
     fabricationParMois: new Map(), fabricationTTCParMois: new Map(),
     fabricationParJeuEtMois: new Map(),
     variationParMois: new Map(), cogsParMois: new Map(),
+    droitsParMois: new Map(), droitsParJeuEtMois: new Map(),
     margeParMois: new Map(), valeurParMois: new Map(),
     tauxParJeu: new Map(),
   };
@@ -339,6 +453,13 @@ export function apportStock(
         r2(r.coutFabrication * (1 + (s.ligne.tauxTVA ?? TVA_JEUX_DEFAUT) / 100)));
       ajoute(out.variationParMois, r.mois, r.variationStock);
       ajoute(out.cogsParMois, r.mois, r.cogs);
+      if (r.droitsDus) {
+        ajoute(out.droitsParMois, r.mois, r.droitsDus);
+        if (!out.droitsParJeuEtMois.has(s.ligne.jeu)) {
+          out.droitsParJeuEtMois.set(s.ligne.jeu, new Map());
+        }
+        ajoute(out.droitsParJeuEtMois.get(s.ligne.jeu)!, r.mois, r.droitsDus);
+      }
       ajoute(out.margeParMois, r.mois, r.marge);
       ajoute(out.valeurParMois, r.mois, r.valeurStock);
       if (r.ca) parJeuCA.set(r.mois, r.ca);

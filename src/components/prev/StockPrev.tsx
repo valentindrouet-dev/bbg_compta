@@ -7,7 +7,7 @@
  * de stock qui remet chaque coût en face de la vente qui lui correspond.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Trash2, ExternalLink, AlertTriangle } from 'lucide-react';
+import { Plus, Trash2, ExternalLink, AlertTriangle, BookUser } from 'lucide-react';
 import { useStore } from '../../store';
 import type { LigneStock } from '../../types';
 import { labelMois } from '../../utils/dates';
@@ -49,6 +49,9 @@ export function StockPrev({ exercice, moisList }: { exercice: string; moisList: 
   const totalCA = t(s => s.total.ca);
   const totalFab = t(s => s.total.coutFabrication);
   const totalMarge = t(s => s.total.marge);
+  const totalDroits = t(s => s.total.droitsDus);
+  const resteAvances = r2(lignes.reduce((x, s) =>
+    x + [...s.total.parDroit.values()].reduce((y, d) => y + d.resteAvance, 0), 0));
   const valeurStock = t(s => s.total.valeurStock);
   const exemplaires = lignes.reduce((x, s) => x + s.total.stockFin, 0);
 
@@ -60,7 +63,10 @@ export function StockPrev({ exercice, moisList }: { exercice: string; moisList: 
         <StatCard label="Tirages payés à l'usine" value={euros0(totalFab)} tone="accent"
           sub={`${lignes.reduce((x, s) => x + s.total.fabrique, 0)} exemplaires`} />
         <StatCard label="Marge sur ventes" value={euros0(totalMarge)}
-          tone={totalMarge >= 0 ? 'good' : 'bad'} sub="ventes − coût des exemplaires vendus" />
+          tone={totalMarge >= 0 ? 'good' : 'bad'}
+          sub={totalDroits || resteAvances
+            ? `après ${euros0(totalDroits)} de droits${resteAvances ? ` — ${euros0(resteAvances)} d'avances encore à récupérer` : ''}`
+            : 'ventes − coût des exemplaires vendus'} />
         <StatCard label="Stock en fin d'exercice" value={euros0(valeurStock)}
           tone="neutral" sub={`${exemplaires} exemplaires, au coût de revient`} />
         <StatCard label="Effet sur le résultat" value={euros0(totalMarge)}
@@ -126,6 +132,9 @@ function TableauJeu({ s, moisList, couleur, lienProd, onPatch, onRemove }: {
 }) {
   const setCanalCell = useStore(st => st.setCanalCell);
   const addCanal = useStore(st => st.addCanal);
+  const addDroits = useStore(st => st.addDroits);
+  const updateDroits = useStore(st => st.updateDroits);
+  const removeDroits = useStore(st => st.removeDroits);
   const updateCanal = useStore(st => st.updateCanal);
   const removeCanal = useStore(st => st.removeCanal);
   const setStockFabrique = useStore(st => st.setStockFabrique);
@@ -190,6 +199,12 @@ function TableauJeu({ s, moisList, couleur, lienProd, onPatch, onRemove }: {
             Coût de revient
             <MoneyInput value={l.coutUnitaire || null} className="w-24"
               onCommit={v => onPatch({ coutUnitaire: v ?? 0 })} placeholder="0 €" />
+          </label>
+          <label className="inline-flex items-center gap-1.5" style={{ color: '#5c5280' }}
+            title="Prix public conseillé hors taxes — le prix en boutique. Il ne sert pas aux ventes (chaque canal a le sien) mais c'est l'assiette habituelle des droits d'auteur.">
+            PPHT
+            <MoneyInput value={l.ppht || null} className="w-24"
+              onCommit={v => onPatch({ ppht: v ?? 0 })} placeholder="0 €" />
           </label>
           <label className="inline-flex items-center gap-1.5" style={{ color: '#5c5280' }} title="Stock d'ouverture, en exemplaires">
             Stock initial
@@ -465,6 +480,66 @@ function TableauJeu({ s, moisList, couleur, lienProd, onPatch, onRemove }: {
             <Ligne label="Coût des exemplaires vendus"
               aide="Vendus × coût de revient — la seule part du tirage qui pèse au résultat"
               get={i => s.mois[i].cogs} total={s.total.cogs} />
+            {/* Les droits : un par ayant droit, et ce qu'il coûte vraiment.
+                Tant que l'avance n'est pas récupérée, la ligne reste à zéro et
+                le reste à rattraper s'affiche en clair — c'est le moment de
+                bascule qu'on veut voir venir. */}
+            {(l.droits ?? []).map(d => {
+              const t = s.total.parDroit.get(d.id);
+              const assiette = d.base === 'ppht'
+                ? `${`${d.taux} %`} du PPHT (${euros(l.ppht ?? 0)}) par exemplaire vendu`
+                : `${`${d.taux} %`} du prix réellement encaissé, pondéré tout seul par la répartition entre canaux`;
+              return (
+                <tr key={`dr-${d.id}`}>
+                  <td style={{ paddingLeft: 18 }}
+                    title={`Droits « ${d.nom} » — ${assiette}. Brut acquis sur l'exercice : ${euros(t?.brut ?? 0)}.`}
+                    className="cursor-help">
+                    <span className="inline-flex items-center gap-1.5 flex-wrap">
+                      <BookUser size={12} /> Droits {d.nom}
+                      {(t?.resteAvance ?? 0) > 0 && (
+                        <span className="text-xs px-1.5 py-0.5 rounded-full"
+                          style={{ backgroundColor: '#fdf3e2', color: '#8a6d1f' }}>
+                          avance : reste {euros(t!.resteAvance)} à récupérer
+                        </span>
+                      )}
+                    </span>
+                  </td>
+                  {moisList.map((m, i) => {
+                    const md = s.mois[i].droits.get(d.id);
+                    const v = md?.du ?? 0;
+                    // Un mois entièrement absorbé par l'avance n'est pas un mois
+                    // vide : on montre entre parenthèses ce qu'elle a mangé,
+                    // sinon la bascule arrive sans prévenir.
+                    if (!v && md?.surAvance) {
+                      return (
+                        <td key={m} className="text-right tabular-nums text-xs"
+                          style={{ color: '#a79bc4', fontStyle: 'italic' }}
+                          title={`${euros(md.brut)} de droits acquis, imputés sur l'avance — reste ${euros(md.resteAvance)} à récupérer`}>
+                          ({euros0(md.surAvance)})
+                        </td>
+                      );
+                    }
+                    return (
+                      <td key={m} className="text-right tabular-nums"
+                        title={md && md.surAvance
+                          ? `${euros(md.brut)} acquis, dont ${euros(md.surAvance)} imputés sur l'avance`
+                          : undefined}>
+                        {v ? euros0(v) : '·'}
+                      </td>
+                    );
+                  })}
+                  <td className="text-right tabular-nums"
+                    style={{ backgroundColor: 'var(--bloc-total)', fontWeight: 700 }}>
+                    {t?.du ? euros(t.du) : '·'}
+                  </td>
+                </tr>
+              );
+            })}
+            {(l.droits ?? []).length > 1 && (
+              <Ligne label="TOTAL DROITS" fort
+                aide="Tous ayants droit confondus, avances déjà déduites"
+                get={i => s.mois[i].droitsDus} total={s.total.droitsDus} />
+            )}
             <Ligne label="Variation de stock" signe
               aide="(stock fin − stock début) × coût de revient : elle neutralise le coût des exemplaires encore en carton"
               get={i => s.mois[i].variationStock} total={s.total.variationStock} />
@@ -474,7 +549,7 @@ function TableauJeu({ s, moisList, couleur, lienProd, onPatch, onRemove }: {
           </tbody>
           <tfoot>
             <tr className="total-bloc">
-              <td title="Ventes − coût des exemplaires vendus. C'est l'effet net du stock sur le résultat.">
+              <td title="Ventes − coût des exemplaires vendus − droits dus. C'est l'effet net du stock sur le résultat.">
                 MARGE SUR VENTES — {l.jeu.toUpperCase()}
               </td>
               {moisList.map((m, i) => {
@@ -485,6 +560,104 @@ function TableauJeu({ s, moisList, couleur, lienProd, onPatch, onRemove }: {
             </tr>
           </tfoot>
         </table>
+      </div>
+
+      {/* Les droits à reverser : un bloc de saisie sous le tableau, comme les
+          canaux plus haut. On peut en avoir plusieurs — un auteur, une
+          illustratrice — chacun avec son taux, son assiette et son avance. */}
+      <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--bbg-border-soft)' }}>
+        <div className="flex items-center gap-2 flex-wrap mb-2">
+          <span className="text-sm font-semibold inline-flex items-center gap-1.5"
+            style={{ color: '#5c5280' }}>
+            <BookUser size={14} /> Droits à reverser
+          </span>
+          <Btn onClick={() => {
+            const n = prompt('Nom de l\'ayant droit (auteur, illustratrice…)');
+            if (n?.trim()) addDroits(l.id, n.trim());
+          }}>
+            <span className="inline-flex items-center gap-1"><Plus size={13} /> Ajouter</span>
+          </Btn>
+        </div>
+        {(l.droits ?? []).length ? (
+          <table className="text-sm border-collapse">
+            <thead>
+              <tr className="text-left text-xs" style={{ color: '#6f6690' }}>
+                <th className="pr-3 pb-1">Ayant droit</th>
+                <th className="pr-3 pb-1">Taux</th>
+                <th className="pr-3 pb-1">Assiette</th>
+                <th className="pr-3 pb-1">Avance versée</th>
+                <th className="pr-3 pb-1">Reste à récupérer</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {(l.droits ?? []).map(d => {
+                const t = s.total.parDroit.get(d.id);
+                return (
+                  <tr key={d.id} className="group">
+                    <td className="pr-3 py-0.5">
+                      <input
+                        className="border rounded px-1.5 py-1 text-sm w-40 bg-white"
+                        style={{ borderColor: 'var(--bbg-border)' }}
+                        defaultValue={d.nom}
+                        onBlur={e => updateDroits(l.id, d.id, { nom: e.target.value })} />
+                    </td>
+                    <td className="pr-3 py-0.5">
+                      <span className="inline-flex items-center gap-1">
+                        <input
+                          type="number" min={0} step={0.5}
+                          className="border rounded px-1 py-1 w-16 text-right bg-white"
+                          style={{ borderColor: 'var(--bbg-border)' }}
+                          value={d.taux || ''}
+                          onChange={e => updateDroits(l.id, d.id, { taux: Number(e.target.value) || 0 })} />
+                        <span style={{ color: '#6f6690' }}>%</span>
+                      </span>
+                    </td>
+                    <td className="pr-3 py-0.5">
+                      <select
+                        className="border rounded px-1 py-1 text-sm bg-white"
+                        style={{ borderColor: 'var(--bbg-border)' }}
+                        value={d.base}
+                        onChange={e => updateDroits(l.id, d.id, {
+                          base: e.target.value as 'ppht' | 'ventes',
+                        })}
+                        title={d.base === 'ppht'
+                          ? 'Le taux s\'applique au prix public HT, le même quel que soit le canal'
+                          : 'Le taux s\'applique au prix réellement encaissé — la pondération entre canaux se fait toute seule'}>
+                        <option value="ppht">% du PPHT</option>
+                        <option value="ventes">% du prix encaissé</option>
+                      </select>
+                    </td>
+                    <td className="pr-3 py-0.5">
+                      <MoneyInput value={d.avance || null} className="w-24"
+                        onCommit={v => updateDroits(l.id, d.id, { avance: v ?? 0 })}
+                        placeholder="0 €" />
+                    </td>
+                    <td className="pr-3 py-0.5 tabular-nums"
+                      style={{ color: (t?.resteAvance ?? 0) > 0 ? '#8a6d1f' : '#38761d' }}
+                      title={(t?.resteAvance ?? 0) > 0
+                        ? 'Tant qu\'il reste de l\'avance, les droits ne pèsent pas sur la marge'
+                        : 'Avance soldée : chaque vente coûte désormais ses droits'}>
+                      {(t?.resteAvance ?? 0) > 0 ? euros(t!.resteAvance) : 'soldée'}
+                    </td>
+                    <td>
+                      <button className="text-[#d98b86] hover:text-[#b7332e] opacity-0 group-hover:opacity-100"
+                        onClick={() => { if (confirm(`Supprimer les droits « ${d.nom} » ?`)) removeDroits(l.id, d.id); }}>
+                        <Trash2 size={13} />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        ) : (
+          <p className="text-xs" style={{ color: '#9a92b5' }}>
+            Aucun droit sur ce jeu. Ajoute un auteur ou une illustratrice pour que ses droits
+            se retranchent de la marge — l'<b>avance</b> déjà versée se récupère d'abord sur les
+            premières ventes, et les droits ne commencent à peser qu'une fois qu'elle est soldée.
+          </p>
+        )}
       </div>
     </Card>
   );

@@ -250,9 +250,50 @@ const CHAPITRES: Chapitre[] = [
       {
         mot: 'Marge sur ventes',
         court: 'L’effet net du stock sur le résultat.',
-        formule: 'Marge = ventes − coût des exemplaires vendus',
+        formule: 'Marge = ventes − coût des exemplaires vendus − droits dus',
         detail: 'Vérification utile : coût des tirages − variation de stock = coût des ventes. Si '
           + 'les deux ne tombent pas d’accord, un chiffre est faux.',
+      },
+      {
+        mot: 'Droits d’auteur',
+        aussi: ['redevances', 'royalties'],
+        court: 'Un pourcentage des ventes reversé à l’auteur ou à l’illustratrice.',
+        formule: 'Droits = taux × assiette × exemplaires vendus',
+        detail: 'Deux assiettes possibles, et le contrat tranche. Le **% du PPHT** applique le taux '
+          + 'au prix public hors taxes, le même quel que soit le canal : un jeu à 40 € PPHT avec 8 % '
+          + 'de droits coûte 3,20 € par exemplaire, qu’il parte chez un distributeur ou en boutique. '
+          + 'Le **% du prix encaissé** applique le taux à ce que tu reçois vraiment : la pondération '
+          + 'entre distributeur, boutique et éditeur se fait alors toute seule, puisqu’on part du '
+          + 'chiffre d’affaires du mois. Plusieurs ayants droit peuvent coexister sur un même jeu — '
+          + 'chacun a son taux, son assiette et son avance.',
+        ou: { texte: 'Prévisionnel → Stock', page: 'budgets' },
+        attention: 'Les droits se retranchent de la marge : ce ne sont pas des ventes en moins, '
+          + 'mais une charge de plus.',
+      },
+      {
+        mot: 'Avance sur droits',
+        aussi: ['à-valoir', 'avance récupérable'],
+        court: 'Une somme versée d’avance, que les premiers droits remboursent.',
+        formule: 'Droits dus = max(0, droits cumulés − avance)',
+        detail: 'Verser 1 000 € à la signature n’est pas un cadeau : c’est une avance sur les droits '
+          + 'à venir. Tant que les droits acquis n’ont pas rattrapé ces 1 000 €, il n’y a rien de plus '
+          + 'à payer — l’argent est déjà sorti, et le repasser en charge le compterait deux fois. '
+          + 'Passé ce seuil, chaque vente coûte réellement ses droits et la marge s’en ressent. '
+          + 'Le tableau montre entre parenthèses ce que l’avance absorbe chaque mois, pour qu’on voie '
+          + 'venir la bascule. Le compteur ne se remet pas à zéro d’un exercice à l’autre : une avance '
+          + 'soldée l’an dernier reste soldée.',
+        ou: { texte: 'Prévisionnel → Stock', page: 'budgets' },
+        attention: 'L’avance elle-même se saisit au journal, le mois où tu la verses '
+          + '(catégorie « Avances Droit d’Auteur »). Ici, elle ne sert que de seuil.',
+      },
+      {
+        mot: 'PPHT',
+        aussi: ['prix public HT', 'prix public conseillé'],
+        court: 'Le prix en boutique, hors TVA.',
+        detail: 'Ce n’est pas un prix auquel tu vends — chaque canal a le sien — mais c’est souvent '
+          + 'l’assiette contractuelle des droits d’auteur, et un repère commode à garder à côté du '
+          + 'coût de revient. Il se saisit en haut du tableau de stock de chaque jeu.',
+        ou: { texte: 'Prévisionnel → Stock', page: 'budgets' },
       },
       {
         mot: 'Canal de vente',
