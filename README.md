@@ -194,15 +194,27 @@ sont recalculés en direct à partir des écritures.
   placements restent des mouvements financiers. Les sorties s'arrêtent sur un
   sous-total **Sorties d'exploitation** *avant* les placements : placer n'est
   pas dépenser, l'argent change de compte sans quitter l'entreprise. Les jeux
-  tiennent sur deux lignes distinctes — **Tirages de jeux**, ce qu'on paie à
-  l'usine, et **Dépenses jeux**, ce qu'un jeu coûte à côté (prototypage, avances
-  aux auteurs, communication). Une dépense de jeu **portée à l'actif** n'est ni
+  tiennent sur trois lignes distinctes — **Tirages de jeux**, ce qu'on paie à
+  l'usine ; **Droits d'auteur**, ce qu'on reverse aux auteurs et illustratrices,
+  avances comprises ; et **Dépenses jeux**, le reste (prototypage,
+  communication). Les droits ont leur ligne parce qu'ils ne tombent pas au même
+  moment que le reste : l'avance part à la signature, les droits suivent les
+  ventes, longtemps après. Une dépense de jeu **portée à l'actif** n'est ni
   dans l'une ni dans l'autre : elle compte une seule fois, à la ligne des
   immobilisations. On peut enfin saisir des **mouvements financiers prévus** —
   un apport en compte courant attendu, un placement, un remboursement
   programmé : ils ne pèsent que sur les mois pas encore écoulés, et n'entrent
   ni dans la page Trésorerie ni dans le tableau Réalisé, qui ne disent que ce
-  qui a eu lieu. Entre les deux tableaux, un bloc
+  qui a eu lieu. Une **vue mois par mois** déplie l'exercice choisi, sous le
+  tableau annuel : les mêmes postes, une colonne par mois, chacune indiquant si
+  elle vient du journal ou du budget, plus un solde du mois et une trésorerie
+  cumulée. Sous les **sorties d'exploitation**, une barre mesure chaque mois
+  contre le plus lourd de l'exercice — hors placements, puisque mettre 80 000 €
+  sur un compte à terme écraserait tous les autres mois alors que rien n'est
+  dépensé ; le chiffre reste écrit, la barre le classe sans le remplacer. La
+  dernière ligne cumule depuis l'ouverture : **si elle passe en rouge, le compte
+  est à découvert ce mois-là**, même quand l'année entière tombe juste. Entre les
+  deux tableaux, un bloc
   **« Pourquoi les deux tableaux diffèrent »** pose l'écart : trésorerie au
   journal seul (celle de la page Trésorerie), plus le budget des mois pas encore
   écoulés, égale la trésorerie prévue. Tant que l'exercice court, cet écart est
