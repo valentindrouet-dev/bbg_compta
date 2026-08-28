@@ -63,6 +63,39 @@ const SECTIONS_DE_VUE: Record<VuePrev, PrevSection[]> = {
   total: [],
 };
 
+/**
+ * Le sous-total qui sépare le fonctionnement des projets, dans un bloc du
+ * prévisionnel. Il découpe le total du bloc : ce qu'il montre y est déjà.
+ */
+function SousTotalPrev({ label, jeu, lignes, moisList, valeur, somme, reel }: {
+  label: string; jeu?: boolean;
+  lignes: PrevLigne[]; moisList: string[];
+  valeur: (l: PrevLigne, i: number) => number;
+  somme: (ls: PrevLigne[]) => number;
+  reel: number;
+}) {
+  const prevu = somme(lignes);
+  return (
+    <tr className="band-bloc">
+      <td className="py-1">
+        <span className="inline-flex items-center gap-1.5">
+          {jeu && <Gamepad2 size={13} />} {label}
+        </span>
+      </td>
+      {moisList.map((m, i) => {
+        const v = r2(lignes.filter(l => !l.unite).reduce((x, l) => x + valeur(l, i), 0));
+        return <td key={m} className="text-right tabular-nums">{v ? euros0(v) : '·'}</td>;
+      })}
+      <td className="text-right tabular-nums col-total">{euros(prevu)}</td>
+      <td className="text-right tabular-nums">{reel ? euros0(reel) : '·'}</td>
+      <td className="text-right tabular-nums">
+        {r2(reel - prevu) ? euros0(r2(reel - prevu)) : '·'}
+      </td>
+      <td></td>
+    </tr>
+  );
+}
+
 export function PrevisionnelPage() {
   const entries = useStore(s => s.entries);
   const finances = useStore(s => s.finances);
@@ -574,6 +607,17 @@ export function PrevisionnelPage() {
             ...jeuxCatalogue.filter(j => parGroupe.has(j)),
             ...[...parGroupe.keys()].filter(g => g && !estJeu(g) && !groupes.includes(g)),
           ];
+          // Le premier jeu marque la frontière : au-dessus le fonctionnement,
+          // en dessous les projets.
+          const groupesJeux = ordre.filter(estJeu);
+          const premierJeu = groupesJeux[0];
+          const lignesJeux = groupesJeux.flatMap(g => parGroupe.get(g) ?? []);
+          const lignesHorsJeux = ordre.filter(g => !estJeu(g))
+            .flatMap(g => parGroupe.get(g) ?? []);
+          const reelDeLignes = (ls: PrevLigne[]) =>
+            r2(ls.reduce((x, l) => x + (reelSec.get(l.categorie) ?? 0), 0));
+          const reelDesJeux = reelDeLignes(lignesJeux);
+          const reelDuFonctionnement = reelDeLignes(lignesHorsJeux);
           const avecGroupes = ordre.some(estJeu)
             || ordre.length > 1 || (ordre.length === 1 && ordre[0] !== '');
 
@@ -646,6 +690,15 @@ export function PrevisionnelPage() {
                     <tbody>
                       {ordre.map(g => (
                         <Fragment key={`${sec.cle}-${g}`}>
+                          {/* Les jeux se lisent à part du fonctionnement : deux
+                              sous-totaux les encadrent. Ils découpent le total
+                              du bloc, ils ne s'y ajoutent pas. */}
+                          {g === premierJeu && (
+                            <SousTotalPrev label="Sous-total fonctionnement BBG"
+                              lignes={lignesHorsJeux} moisList={moisList}
+                              valeur={(l, i) => (valeursDe(l, lignes)[i] ?? 0) * coef(l)}
+                              somme={sommeLignes} reel={reelDuFonctionnement} />
+                          )}
                           {avecGroupes && (
                             <tr className={estJeu(g) ? 'band-jeu' : 'band-bloc'}
                               style={estJeu(g) ? {
@@ -978,6 +1031,12 @@ export function PrevisionnelPage() {
                           </td>
                         </tr>
                       ))}
+                      {!!premierJeu && (
+                        <SousTotalPrev label="Sous-total jeux" jeu
+                          lignes={lignesJeux} moisList={moisList}
+                          valeur={(l, i) => (valeursDe(l, lignes)[i] ?? 0) * coef(l)}
+                          somme={sommeLignes} reel={reelDesJeux} />
+                      )}
                     </tbody>
                     <tfoot>
                       <tr className="total-bloc">

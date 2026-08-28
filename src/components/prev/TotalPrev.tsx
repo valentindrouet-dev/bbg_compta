@@ -6,6 +6,7 @@
  * le compte de résultat. On y lit l'année entière sans risquer de la changer.
  */
 import { Fragment, useMemo } from 'react';
+import { Gamepad2 } from 'lucide-react';
 import { useStore } from '../../store';
 import type { PrevLigne, PrevSection } from '../../types';
 import { labelMois } from '../../utils/dates';
@@ -132,6 +133,21 @@ export function TotalPrev({ exercice, moisList }: { exercice: string; moisList: 
                       </tr>
                     );
                   })}
+                  {/* Les jeux se lisent à part du fonctionnement, encadrés par
+                      deux sous-totaux qui découpent le total du bloc. */}
+                  {!!jeuxDuBloc.length && (
+                    <tr className="band-bloc">
+                      <td className="py-1">Sous-total fonctionnement BBG</td>
+                      {moisList.map((m, i) => {
+                        const v = r2(lignesBloc.filter(l => !jeuDeLigne(l, jeux))
+                          .reduce((x, l) => x + valeurLigne(l, i), 0));
+                        return <td key={m} className="text-right tabular-nums">{v ? euros0(v) : '·'}</td>;
+                      })}
+                      <td className="text-right tabular-nums bg-[var(--bloc-total)] font-medium">
+                        {euros(r2(sommeLignes(lignesBloc.filter(l => !jeuDeLigne(l, jeux)))))}
+                      </td>
+                    </tr>
+                  )}
                   {jeuxDuBloc.map(jeu => {
                     const siennes = lignesBloc.filter(l => jeuDeLigne(l, jeux) === jeu);
                     const duStockJeu = duStock.filter(([j]) => j === jeu);
@@ -184,6 +200,29 @@ export function TotalPrev({ exercice, moisList }: { exercice: string; moisList: 
                       </Fragment>
                     );
                   })}
+                  {!!jeuxDuBloc.length && (
+                    <tr className="band-bloc">
+                      <td className="py-1">
+                        <span className="inline-flex items-center gap-1.5">
+                          <Gamepad2 size={13} /> Sous-total jeux
+                        </span>
+                      </td>
+                      {moisList.map((m, i) => {
+                        const desLignes = lignesBloc.filter(l => !!jeuDeLigne(l, jeux))
+                          .reduce((x, l) => x + valeurLigne(l, i), 0);
+                        const duStockMois = duStock.reduce((x, [jeu, libelle, parMois]) =>
+                          x + (parMois.get(m) ?? 0) * (libelle.startsWith('Droits') ? 1 : coefJeu(jeu)), 0);
+                        const v = r2(desLignes + duStockMois);
+                        return <td key={m} className="text-right tabular-nums">{v ? euros0(v) : '·'}</td>;
+                      })}
+                      <td className="text-right tabular-nums bg-[var(--bloc-total)] font-medium">
+                        {euros(r2(sommeLignes(lignesBloc.filter(l => !!jeuDeLigne(l, jeux)))
+                          + duStock.reduce((x, [jeu, libelle, parMois]) =>
+                            x + [...parMois.values()].reduce((y, v) => y + v, 0)
+                              * (libelle.startsWith('Droits') ? 1 : coefJeu(jeu)), 0)))}
+                      </td>
+                    </tr>
+                  )}
                   {bloc.cle === 'charges' && sommeMap(stock.variationParMois) !== 0 && (
                     <tr style={{ fontStyle: 'italic' }}>
                       <td title="Elle neutralise le coût des exemplaires encore en carton : seul le coût de ce qui est vendu pèse sur le résultat. Écriture comptable sans TVA : son montant est le même en HT et en TTC.">

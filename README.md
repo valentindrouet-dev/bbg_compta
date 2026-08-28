@@ -389,6 +389,14 @@ de sous-total à masquer, ses bandeaux de jeu portant toujours leur chiffre.
   l'exercice : ils sont dans les **Charges**, également sous un bandeau par jeu,
   à la suite des postes généraux. La synthèse et le prévisionnel suivent la
   même organisation ; l'onglet **Jeux** garde la vue complète par jeu.
+- **Fonctionnement / jeux** : dans chaque bloc qui contient des jeux, deux
+  sous-totaux les encadrent — **Sous-total fonctionnement BBG** avant les
+  bandeaux, **Sous-total jeux** après. On lit ainsi d'un coup d'œil ce que coûte
+  la structure et ce que coûtent les projets, sans faire la soustraction de
+  tête. Ils **découpent** le total du bloc, ils ne s'y ajoutent pas : la somme
+  des deux fait exactement le total affiché en bas. Présents dans la synthèse
+  annuelle, la synthèse totale, l'onglet Charges du prévisionnel et son onglet
+  Total, sur les charges comme sur les immobilisations
 - **Immobiliser un poste de jeu** : dans le bloc Jeux de la synthèse, le lien
   **immobiliser** au survol d'une ligne porte tout le poste à l'actif sur
   l'exercice (amorti sur 5 ans) ; **repasser en charges** fait l'inverse.

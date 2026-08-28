@@ -282,6 +282,14 @@ export function SyntheseTotalePage() {
         {blocs.map(bloc => {
           const t = teinteBloc(bloc.cle, couleurs);
           const grandTotal = somme(bloc.totaux);
+          // Ce que les jeux pèsent dans ce bloc. Déjà compris dans son total :
+          // les deux sous-totaux le découpent, ils ne s'y ajoutent pas.
+          const totauxJeux = bloc.parJeu?.size ? (() => {
+            const parEx = new Map(colonnes.map(ex => [ex, r2([...bloc.parJeu!.values()]
+              .reduce((x, postes) => x + [...postes.values()]
+                .reduce((y, m) => y + (m.get(ex) ?? 0), 0), 0))]));
+            return { parEx, total: r2([...parEx.values()].reduce((s, v) => s + v, 0)) };
+          })() : null;
           if (!bloc.cats.length && !bloc.parJeu?.size) return null;
 
           // Répartition par groupe, comme dans la synthèse annuelle.
@@ -398,7 +406,24 @@ export function SyntheseTotalePage() {
                       </Fragment>
                     ))}
 
-                    {/* Un bandeau par jeu, comme dans la synthèse annuelle. */}
+                    {/* Les jeux se lisent à part du fonctionnement, encadrés
+                        par deux sous-totaux. */}
+                    {!!totauxJeux && (
+                      <tr className="band-bloc">
+                        <td className="py-1">Sous-total fonctionnement BBG</td>
+                        {colonnes.map(ex => {
+                          const v = r2((bloc.totaux.get(ex) ?? 0) - (totauxJeux.parEx.get(ex) ?? 0));
+                          return (
+                            <td key={ex} className="text-right tabular-nums">
+                              {v ? euros0(v) : '·'}
+                            </td>
+                          );
+                        })}
+                        <td className="text-right tabular-nums col-total">
+                          {euros(r2(grandTotal - totauxJeux.total))}
+                        </td>
+                      </tr>
+                    )}
                     {bloc.parJeu && [...bloc.parJeu.keys()].map(jeu => {
                       const postes = bloc.parJeu!.get(jeu)!;
                       return (
@@ -461,6 +486,26 @@ export function SyntheseTotalePage() {
                         </Fragment>
                       );
                     })}
+                    {!!totauxJeux && (
+                      <tr className="band-bloc">
+                        <td className="py-1">
+                          <span className="inline-flex items-center gap-1.5">
+                            <Gamepad2 size={13} /> Sous-total jeux
+                          </span>
+                        </td>
+                        {colonnes.map(ex => {
+                          const v = totauxJeux.parEx.get(ex) ?? 0;
+                          return (
+                            <td key={ex} className="text-right tabular-nums">
+                              {v ? euros0(v) : '·'}
+                            </td>
+                          );
+                        })}
+                        <td className="text-right tabular-nums col-total">
+                          {euros(totauxJeux.total)}
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                   <tfoot>
                     <tr className="total-bloc">
