@@ -26,6 +26,16 @@ import { r2 } from './money';
 /** TVA appliquée aux ventes de jeux quand la ligne n'en fixe pas. */
 export const TVA_JEUX_DEFAUT = 20;
 
+/**
+ * TVA du tirage quand la ligne n'en fixe pas : **zéro**.
+ *
+ * Les jeux sont fabriqués en Chine. L'usine facture hors taxes, et la TVA
+ * d'importation est autoliquidée — déclarée et déduite sur la même CA3, donc
+ * sans sortie de caisse. Ce qu'on paie à l'usine en euros est donc le même
+ * chiffre en HT et en TTC. Une fabrication française mettrait 20 ici.
+ */
+export const TVA_TIRAGE_DEFAUT = 0;
+
 /** La catégorie de produit qui porte les ventes issues du stock. */
 export const CATEGORIE_VENTES_JEUX = 'Ventes de jeux';
 
@@ -143,18 +153,69 @@ export interface StockJeu {
 const somme = (xs: (number | null)[]) => xs.reduce<number>((s, v) => s + (v ?? 0), 0);
 
 /**
+ * La clé d'un tirage, stable d'un exercice à l'autre.
+ *
+ * Un jeu réimprimé a plusieurs tirages, chacun avec son coût de revient, ses
+ * prix et son propre stock : ils se suivent séparément. Une ligne sans `serie`
+ * est le tirage unique du jeu — c'est le cas de tout ce qui existait avant.
+ */
+export function cleSerie(l: LigneStock): string {
+  return l.serie ?? l.jeu;
+}
+
+/** Les lignes d'un même tirage, tous exercices confondus, dans l'ordre. */
+function lignesDeSerie(lignes: LigneStock[], serie: string): LigneStock[] {
+  return lignes.filter(l => cleSerie(l) === serie)
+    .sort((a, b) => EXERCICES.indexOf(a.exercice as typeof EXERCICES[number])
+      - EXERCICES.indexOf(b.exercice as typeof EXERCICES[number]));
+}
+
+/**
+ * Le tirage cumulé d'une série jusqu'à un exercice inclus : stock d'ouverture
+ * initial plus tout ce qui est sorti d'usine depuis le début.
+ *
+ * C'est cette assiette-là que le « % de ventes » découpe, et non le stock
+ * restant : sans quoi 20 % ne voudraient pas dire la même chose d'une année sur
+ * l'autre, et la somme des pourcentages ne dirait plus rien. Avec elle,
+ * 100 % cumulés = tout le tirage écoulé.
+ */
+export function tirageCumule(
+  lignes: LigneStock[], serie: string, exercice: string,
+): number {
+  const rang = EXERCICES.indexOf(exercice as typeof EXERCICES[number]);
+  return lignesDeSerie(lignes, serie)
+    .filter(l => EXERCICES.indexOf(l.exercice as typeof EXERCICES[number]) <= rang)
+    .reduce((s, l) => s + (l.stockInitial ?? 0) + somme(l.fabrique), 0);
+}
+
+/**
+ * Le pourcentage de ventes déjà engagé sur une série, exercice par exercice.
+ *
+ * Il se cumule sur toute la vie du tirage : c'est le garde-fou qui dit qu'on ne
+ * prévoit pas de vendre 130 % de ce qu'on a fait imprimer.
+ */
+export function ventesCumulees(
+  lignes: LigneStock[], serie: string,
+): { total: number; parExercice: { exercice: string; pourcent: number }[] } {
+  const parExercice = lignesDeSerie(lignes, serie).map(l => ({
+    exercice: l.exercice,
+    pourcent: r2(somme(l.ventesPourcent ?? [])),
+  }));
+  return { total: r2(parExercice.reduce((s, x) => s + x.pourcent, 0)), parExercice };
+}
+
+/**
  * Le stock d'ouverture d'un jeu pour un exercice : ce qui restait à la clôture
  * du précédent. On remonte la chaîne des exercices depuis le premier, pour que
  * l'ouverture ne soit jamais saisie deux fois.
  */
-export function stockOuverture(lignes: LigneStock[], jeu: string, exercice: string): number {
+export function stockOuverture(lignes: LigneStock[], serie: string, exercice: string): number {
   const rang = EXERCICES.indexOf(exercice as typeof EXERCICES[number]);
-  if (rang <= 0) {
-    return lignes.find(l => l.jeu === jeu && l.exercice === exercice)?.stockInitial ?? 0;
-  }
-  let stock = lignes.find(l => l.jeu === jeu && l.exercice === EXERCICES[0])?.stockInitial ?? 0;
+  const de = (ex: string) => lignes.find(l => cleSerie(l) === serie && l.exercice === ex);
+  if (rang <= 0) return de(exercice)?.stockInitial ?? 0;
+  let stock = de(EXERCICES[0])?.stockInitial ?? 0;
   for (let i = 0; i < rang; i++) {
-    const l = lignes.find(x => x.jeu === jeu && x.exercice === EXERCICES[i]);
+    const l = de(EXERCICES[i]);
     if (!l) continue;
     stock += somme(l.fabrique);
     // On refait passer l'exercice pour résoudre les pourcentages, sinon un
@@ -223,12 +284,12 @@ export function droitsVides(nom = 'Auteur'): LigneDroits {
  * leur identifiant, lui, change d'un exercice à l'autre.
  */
 function droitsAcquisAvant(
-  lignes: LigneStock[], jeu: string, exercice: string,
+  lignes: LigneStock[], serie: string, exercice: string,
 ): Map<string, number> {
   const rang = EXERCICES.indexOf(exercice as typeof EXERCICES[number]);
   const out = new Map<string, number>();
   for (let i = 0; i < rang; i++) {
-    const l = lignes.find(x => x.jeu === jeu && x.exercice === EXERCICES[i]);
+    const l = lignes.find(x => cleSerie(x) === serie && x.exercice === EXERCICES[i]);
     if (!l?.droits?.length) continue;
     const parId = new Map((l.droits ?? []).map(d => [d.id, cleDroit(d)]));
     for (const r of derouleStock(l, lignes).mois) {
@@ -247,9 +308,12 @@ export function derouleStock(ligne: LigneStock, lignes: LigneStock[]): StockJeu 
   const cu = ligne.coutUnitaire || 0;
   const tva = (ligne.tauxTVA ?? TVA_JEUX_DEFAUT) / 100;
   const canaux = ligne.canaux ?? [];
-  const ouverture = stockOuverture(lignes, ligne.jeu, ligne.exercice);
-  // Le tirage de l'exercice sert d'assiette aux pourcentages « du tirage ».
-  const tirage = ouverture + somme(ligne.fabrique);
+  const serie = cleSerie(ligne);
+  const ouverture = stockOuverture(lignes, serie, ligne.exercice);
+  // L'assiette des pourcentages est le tirage **cumulé** de la série, pas le
+  // stock qui reste : c'est ce qui rend « 20 % » comparable d'une année sur
+  // l'autre et permet de dire qu'on ne dépassera pas 100 % du tirage.
+  const tirage = tirageCumule(lignes, serie, ligne.exercice);
   let stock = ouverture;
   let decouvert = false;
 
@@ -257,7 +321,7 @@ export function derouleStock(ligne: LigneStock, lignes: LigneStock[]): StockJeu 
   // Le cumul démarre là où les exercices précédents l'ont laissé.
   const droits = ligne.droits ?? [];
   const dejaAcquis = droits.length
-    ? droitsAcquisAvant(lignes, ligne.jeu, ligne.exercice)
+    ? droitsAcquisAvant(lignes, serie, ligne.exercice)
     : new Map<string, number>();
   const cumulDroits = new Map(droits.map(d => [d.id, dejaAcquis.get(cleDroit(d)) ?? 0]));
 
@@ -363,18 +427,22 @@ export function stocksExercice(
   };
   return lignes
     .filter(l => l.exercice === exercice)
-    .sort((a, b) => rang(a.jeu) - rang(b.jeu) || a.jeu.localeCompare(b.jeu))
+    // Les tirages d'un même jeu se suivent, dans l'ordre où ils ont été créés.
+    .sort((a, b) => rang(a.jeu) - rang(b.jeu) || a.jeu.localeCompare(b.jeu)
+      || cleSerie(a).localeCompare(cleSerie(b)))
     .map(l => derouleStock(l, lignes));
 }
 
-/** Une ligne de stock vierge pour un jeu et un exercice, avec ses trois canaux. */
+/** Une ligne de stock vierge pour un tirage, avec ses trois canaux. */
 export function ligneStockVide(
-  jeu: string, exercice: string, id: string,
+  jeu: string, exercice: string, id: string, serie?: string, tirage?: string,
 ): LigneStock {
   const n = moisExercice(exercice).length;
   return {
     id, jeu, exercice,
-    coutUnitaire: 0, tauxTVA: TVA_JEUX_DEFAUT,
+    ...(serie ? { serie } : {}),
+    ...(tirage ? { tirage } : {}),
+    coutUnitaire: 0, tauxTVA: TVA_JEUX_DEFAUT, tauxTVAFabrication: TVA_TIRAGE_DEFAUT,
     fabrique: new Array<number | null>(n).fill(null),
     ventesPourcent: new Array<number | null>(n).fill(null),
     canaux: CANAUX_DEFAUT.map(c => canalVide(c.nom, n, 0, c.repartition)),
@@ -448,9 +516,11 @@ export function apportStock(
       ajoute(out.caParMois, r.mois, r.ca);
       ajoute(out.caTTCParMois, r.mois, r.caTTC);
       ajoute(out.fabricationParMois, r.mois, r.coutFabrication);
-      // On paie l'usine TTC, avec le taux du jeu — pas un 20 % supposé.
+      // La TVA du tirage est celle de l'usine, pas celle des ventes : une
+      // fabrication chinoise n'en porte pas, et le montant est le même des deux
+      // côtés.
       ajoute(out.fabricationTTCParMois, r.mois,
-        r2(r.coutFabrication * (1 + (s.ligne.tauxTVA ?? TVA_JEUX_DEFAUT) / 100)));
+        r2(r.coutFabrication * (1 + (s.ligne.tauxTVAFabrication ?? TVA_TIRAGE_DEFAUT) / 100)));
       ajoute(out.variationParMois, r.mois, r.variationStock);
       ajoute(out.cogsParMois, r.mois, r.cogs);
       if (r.droitsDus) {

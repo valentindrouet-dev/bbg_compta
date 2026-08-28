@@ -287,6 +287,37 @@ const CHAPITRES: Chapitre[] = [
           + '(catégorie « Avances Droit d’Auteur »). Ici, elle ne sert que de seuil.',
       },
       {
+        mot: 'Tirage',
+        aussi: ['impression', 'réimpression', 'série'],
+        court: 'Une fabrication : ses exemplaires, son coût, son stock.',
+        detail: 'Un jeu qui se vend bien se réimprime, et le second tirage n’a ni le même coût de '
+          + 'revient ni forcément les mêmes prix. Chacun a donc son tableau, suivi pour son compte : '
+          + 'son stock, ses canaux, ses droits. Le **% de ventes** se rapporte au tirage complet — '
+          + 'stock d’ouverture plus tout ce qui est sorti d’usine — et non au stock restant, si bien '
+          + 'que 20 % veulent dire la même chose chaque année. La colonne Total affiche le **cumul de '
+          + 'tous les exercices** : au-delà de 100 %, on prévoit de vendre plus d’exemplaires qu’il '
+          + 'n’en a été imprimé, et l’app le signale en rouge.',
+        ou: { texte: 'Prévisionnel → Stock', page: 'budgets' },
+        attention: 'Les pourcentages de deux tirages ne s’additionnent pas : 100 % d’un tirage, '
+          + 'ce sont ses exemplaires à lui.',
+      },
+      {
+        mot: 'TVA à l’importation',
+        aussi: ['autoliquidation', 'fabrication en Chine', 'dédouanement'],
+        court: 'La TVA d’un tirage venu de Chine ne sort pas du compte.',
+        detail: 'L’usine chinoise facture hors taxes : rien à payer sur sa facture. La TVA due à '
+          + 'l’importation est **autoliquidée** depuis 2022 — déclarée et déduite sur la même CA3 — '
+          + 'donc sans sortie de caisse pour une société entièrement taxable. Le montant en euros du '
+          + 'tirage est ainsi le même en HT et en TTC, et c’est pour cela que la **TVA tirage** vaut '
+          + '0 % par défaut. Une fabrication française mettrait 20. Le **transport international** '
+          + 'suit la même logique. En revanche, le **dédouanement**, la **livraison** locale et la '
+          + '**manutention** sont des prestations françaises à 20 % : elles se saisissent comme des '
+          + 'charges ordinaires, avec leur taux.',
+        ou: { texte: 'Prévisionnel → Stock, champ « TVA tirage »', page: 'budgets' },
+        attention: 'Les **droits de douane** ne sont pas de la TVA : ils ne se récupèrent pas et '
+          + 'entrent dans le coût de revient de l’exemplaire.',
+      },
+      {
         mot: 'PPHT',
         aussi: ['prix public HT', 'prix public conseillé'],
         court: 'Le prix en boutique, hors TVA.',

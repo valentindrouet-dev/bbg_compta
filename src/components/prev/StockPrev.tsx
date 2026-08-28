@@ -14,7 +14,8 @@ import { labelMois } from '../../utils/dates';
 import { euros, euros0, r2 } from '../../utils/money';
 import { couleurJeu, encreSur } from '../../utils/jeux';
 import {
-  CANAUX_DEFAUT, stocksExercice, totalRepartition, type StockJeu,
+  CANAUX_DEFAUT, cleSerie, stocksExercice, tirageCumule, totalRepartition, ventesCumulees,
+  type StockJeu,
 } from '../../utils/stock';
 import { Card, Btn, MoneyInput, StatCard, BandeauJeu, styleBloc } from '../ui';
 import { useSousTotaux } from '../../utils/reglagesVue';
@@ -84,28 +85,46 @@ export function StockPrev({ exercice, moisList }: { exercice: string; moisList: 
         />
       ))}
 
-      <Card title="Ajouter un jeu au tableau de stock">
-        {sansLigne.length ? (
-          <div className="flex items-center gap-2">
-            <select
-              className="border rounded px-2 py-1.5 text-sm bg-white"
-              style={{ borderColor: 'var(--bbg-border)' }}
-              value={nouveau}
-              onChange={e => setNouveau(e.target.value)}
-            >
-              <option value="">Choisir un jeu…</option>
-              {sansLigne.map(j => <option key={j} value={j}>{j}</option>)}
-            </select>
-            <Btn variant="primary" disabled={!nouveau}
-              onClick={() => { if (nouveau) { addLigneStock(exercice, nouveau); setNouveau(''); } }}>
+      <Card title="Ajouter un tableau de stock">
+        <div className="flex items-center gap-2 flex-wrap">
+          <select
+            className="border rounded px-2 py-1.5 text-sm bg-white"
+            style={{ borderColor: 'var(--bbg-border)' }}
+            value={nouveau}
+            onChange={e => setNouveau(e.target.value)}
+          >
+            <option value="">Choisir un jeu…</option>
+            {jeux.map(j => (
+              <option key={j} value={j}>
+                {j}{sansLigne.includes(j) ? '' : ' (a déjà un tirage)'}
+              </option>
+            ))}
+          </select>
+          {nouveau && sansLigne.includes(nouveau) ? (
+            <Btn variant="primary"
+              onClick={() => { addLigneStock(exercice, nouveau); setNouveau(''); }}>
               <span className="inline-flex items-center gap-1.5"><Plus size={14} /> Ajouter</span>
             </Btn>
-          </div>
-        ) : (
-          <p className="text-sm" style={{ color: '#6f6690' }}>
-            Tous les jeux du catalogue ont leur tableau. Un nouveau jeu s'ajoute dans l'onglet Jeux.
-          </p>
-        )}
+          ) : (
+            <Btn variant="primary" disabled={!nouveau}
+              title="Un jeu qui se vend bien se réimprime : le nouveau tirage a son propre coût de revient, ses propres prix et son propre stock, suivi séparément du précédent."
+              onClick={() => {
+                if (!nouveau) return;
+                addLigneStock(exercice, nouveau, true);
+                setNouveau('');
+              }}>
+              <span className="inline-flex items-center gap-1.5">
+                <Plus size={14} /> Nouveau tirage de {nouveau || '…'}
+              </span>
+            </Btn>
+          )}
+        </div>
+        <p className="text-xs mt-2" style={{ color: '#9a92b5' }}>
+          Chaque <b>tirage</b> a son propre tableau : son coût de revient, ses prix, son stock et
+          ses droits. Un jeu réimprimé en a donc plusieurs, et leurs pourcentages d'écoulement se
+          comptent séparément — 100 % d'un tirage, ce sont ses exemplaires à lui.
+          {!jeux.length && ' Un nouveau jeu s\'ajoute dans l\'onglet Jeux.'}
+        </p>
       </Card>
 
       <p className="text-xs" style={{ color: '#9a92b5' }}>
@@ -120,6 +139,16 @@ export function StockPrev({ exercice, moisList }: { exercice: string; moisList: 
         du mois où tu la paies ; la <b>variation de stock</b> la neutralise pour les exemplaires
         encore en carton, si bien que seul le coût de ce qui est <b>vraiment vendu</b> pèse sur le
         résultat. Le stock d'ouverture d'un exercice est la clôture du précédent, repris tout seul.
+        L'assiette du pourcentage est le <b>tirage complet</b>, tous exercices confondus : 20 %
+        veulent dire la même chose chaque année, et la colonne <b>Total</b> affiche le cumul —
+        au-delà de 100 %, tu prévois de vendre plus d'exemplaires qu'il n'en a été imprimé, et
+        l'app le signale. Un jeu réimprimé a <b>plusieurs tirages</b>, chacun son tableau, son
+        coût de revient, ses prix et son stock : leurs pourcentages se comptent séparément.
+        La <b>TVA du tirage</b> est à 0 % : l'usine chinoise facture hors taxes et la TVA
+        d'importation est autoliquidée — déclarée et déduite sur la même CA3, sans sortie de
+        caisse. Le transport international l'est aussi ; en revanche le <b>dédouanement</b>, la{' '}
+        <b>livraison</b> et la <b>manutention</b> portent 20 % : ce sont des lignes de charges à
+        part, dans l'onglet Charges, avec leur propre taux.
       </p>
     </div>
   );
@@ -130,6 +159,7 @@ function TableauJeu({ s, moisList, couleur, lienProd, onPatch, onRemove }: {
   onPatch: (p: Partial<LigneStock>) => void;
   onRemove: () => void;
 }) {
+  const tousLesStocks = useStore(st => st.stocks);
   const setCanalCell = useStore(st => st.setCanalCell);
   const addCanal = useStore(st => st.addCanal);
   const addDroits = useStore(st => st.addDroits);
@@ -145,9 +175,11 @@ function TableauJeu({ s, moisList, couleur, lienProd, onPatch, onRemove }: {
   const encre = encreSur(couleur);
   const l = s.ligne;
   const nCanaux = (l.canaux ?? []).length;
-  /** Le tirage de l'exercice : c'est lui que les répartitions découpent. */
-  const tirage = s.total.stockDebut + s.total.fabrique;
+  /** Le tirage cumulé de la série : c'est lui que les pourcentages découpent. */
+  const tirage = tirageCumule(tousLesStocks, cleSerie(l), l.exercice);
   const totalRythme = (l.ventesPourcent ?? []).reduce<number>((x, v) => x + (v ?? 0), 0);
+  // Le garde-fou : la somme des pourcentages de TOUS les exercices de ce tirage.
+  const cumul = ventesCumulees(tousLesStocks, cleSerie(l));
   const partsTotal = totalRepartition(l);
   const partsCompletes = !(l.canaux ?? []).some(c => c.mode === 'repartition') || Math.abs(partsTotal - 100) < 0.5;
   const libres = CANAUX_DEFAUT.map(c => c.nom).filter(n => !(l.canaux ?? []).some(c => c.nom === n));
@@ -180,6 +212,14 @@ function TableauJeu({ s, moisList, couleur, lienProd, onPatch, onRemove }: {
         <span className="inline-flex items-center gap-2">
           <span className="px-2.5 py-0.5 rounded-full text-sm font-bold"
             style={{ backgroundColor: couleur, color: encre }}>{l.jeu}</span>
+          {l.tirage && (
+            <input
+              className="text-sm font-semibold px-1.5 py-0.5 rounded border border-transparent hover:border-[#ddd6ef] bg-transparent w-28"
+              style={{ color: '#5c5280' }}
+              defaultValue={l.tirage}
+              title="Nom de ce tirage — il n'a de valeur que pour toi"
+              onBlur={e => onPatch({ tirage: e.target.value })} />
+          )}
           <span className="text-sm font-normal" style={{ color: '#6f6690' }}>
             {s.total.stockFin} exemplaire{s.total.stockFin > 1 ? 's' : ''} en stock à la clôture
           </span>
@@ -199,6 +239,19 @@ function TableauJeu({ s, moisList, couleur, lienProd, onPatch, onRemove }: {
             Coût de revient
             <MoneyInput value={l.coutUnitaire || null} className="w-24"
               onCommit={v => onPatch({ coutUnitaire: v ?? 0 })} placeholder="0 €" />
+          </label>
+          <label className="inline-flex items-center gap-1.5" style={{ color: '#5c5280' }}
+            title="TVA que l'usine facture sur le tirage. 0 % pour une fabrication hors UE — la TVA d'importation est autoliquidée, déclarée et déduite sur la même CA3, donc sans sortie de caisse. Une fabrication française mettrait 20.">
+            TVA tirage
+            <span className="inline-flex items-center gap-0.5">
+              <input
+                type="number" min={0} max={30} step={0.1}
+                className="border rounded px-1 py-1 w-14 text-right bg-white"
+                style={{ borderColor: 'var(--bbg-border)' }}
+                value={l.tauxTVAFabrication ?? 0}
+                onChange={e => onPatch({ tauxTVAFabrication: Number(e.target.value) || 0 })} />
+              <span style={{ color: '#6f6690' }}>%</span>
+            </span>
           </label>
           <label className="inline-flex items-center gap-1.5" style={{ color: '#5c5280' }}
             title="Prix public conseillé hors taxes — le prix en boutique. Il ne sert pas aux ventes (chaque canal a le sien) mais c'est l'assiette habituelle des droits d'auteur.">
@@ -292,10 +345,43 @@ function TableauJeu({ s, moisList, couleur, lienProd, onPatch, onRemove }: {
                   </td>
                 );
               })}
-              <td className="text-right tabular-nums" style={{ backgroundColor: 'var(--bloc-total)', fontWeight: 700 }}>
-                {totalRythme ? `${r2(totalRythme)} %` : '·'}
+              {/* Le total n'est pas celui de l'année mais celui du tirage, tous
+                  exercices confondus : c'est lui qui doit rester sous 100 %,
+                  sinon on prévoit de vendre plus d'exemplaires qu'il n'en a été
+                  imprimé. */}
+              <td className="text-right tabular-nums"
+                style={{
+                  backgroundColor: cumul.total > 100.5 ? '#fdecea' : 'var(--bloc-total)',
+                  color: cumul.total > 100.5 ? '#b7332e' : undefined,
+                  fontWeight: 700,
+                }}
+                title={`Cumul de tous les exercices de ce tirage :\n`
+                  + cumul.parExercice.filter(x => x.pourcent)
+                    .map(x => `  ${x.exercice} : ${x.pourcent} %`).join('\n')
+                  + `\n\nSoit ${Math.round((cumul.total / 100) * tirage)} exemplaires sur ${tirage}.`
+                  + (cumul.total > 100.5 ? '\n\n⚠️ Plus de 100 % : tu prévois de vendre plus que le tirage.' : '')}>
+                {cumul.total ? `${cumul.total} %` : '·'}
+                {totalRythme !== cumul.total && (
+                  <div className="text-[10px] leading-none font-normal"
+                    style={{ color: cumul.total > 100.5 ? '#b7332e' : '#6f6690' }}>
+                    dont {r2(totalRythme)} % ici
+                  </div>
+                )}
               </td>
             </tr>
+            {cumul.total > 100.5 && (
+              <tr>
+                <td colSpan={moisList.length + 2} className="py-1 text-xs"
+                  style={{ backgroundColor: '#fdecea', color: '#b7332e' }}>
+                  <span className="inline-flex items-center gap-1.5">
+                    <AlertTriangle size={12} />
+                    Ce tirage est écoulé à <b>{cumul.total} %</b> en cumulé sur tous les exercices :
+                    tu prévois de vendre {Math.round((cumul.total / 100) * tirage)} exemplaires
+                    pour {tirage} imprimés. Réduis un mois, ou ajoute un tirage.
+                  </span>
+                </td>
+              </tr>
+            )}
 
             {/* ------ Un canal de vente par ligne : sa part, son prix ---------- */}
             {(l.canaux ?? []).map(c => {

@@ -89,6 +89,15 @@ sont recalculés en direct à partir des écritures.
     montants **ne passent pas au compte de résultat** — seules leurs dotations
     le font ; ils sortent en revanche de la trésorerie en totalité, le mois où
     ils sont engagés
+  - Sur **Charges**, **Produits** et **Immobilisations**, un bouton
+    **« Dupliquer vers 2026-27 »** recopie toutes les lignes du bloc et leurs
+    montants vers l'exercice suivant, pour ne pas repartir d'une page blanche
+    chaque année. Il prévient toujours avant : combien de lignes seront copiées,
+    combien de lignes **remplies** seraient remplacées à l'arrivée, et — quand on
+    part du premier exercice, qui compte quatorze mois — combien d'euros portés
+    par la pré-immatriculation et septembre 2025 n'ont pas d'équivalent en face.
+    Les mois se recalent d'octobre à septembre, jamais case par case. Les autres
+    blocs ne sont pas touchés, et Cmd+Z annule
   - **Stock** — jeu par jeu, et une seule ligne pilote tout :
     1. **Fabriqués** — ce qui sort d'usine, mois par mois
     2. **% de ventes** — quelle part du tirage part ce mois-là
@@ -110,6 +119,26 @@ sont recalculés en direct à partir des écritures.
     unitaire se recopie depuis le Production Calculator — c'est lui qui tient les
     devis usine ; le **PPHT** (prix public HT) se note à côté, il sert d'assiette
     aux droits.
+
+    **Un jeu qui se vend bien se réimprime** : « Nouveau tirage de EDIT » crée un
+    second tableau, avec son propre coût de revient, ses prix, son stock et ses
+    droits. Les deux tirages se suivent séparément, chacun continuant d'un
+    exercice à l'autre pour son compte.
+
+    L'assiette du **% de ventes** est le **tirage complet** — stock d'ouverture
+    plus tout ce qui est sorti d'usine — et non le stock restant : 20 % veulent
+    ainsi dire la même chose chaque année. La colonne Total affiche le **cumul de
+    tous les exercices**, avec le détail au survol ; au-delà de 100 %, un
+    bandeau rouge prévient qu'on prévoit de vendre plus d'exemplaires qu'il n'en
+    a été imprimé.
+
+    La **TVA du tirage** est un champ à part, à **0 % par défaut** : l'usine
+    chinoise facture hors taxes et la TVA d'importation est autoliquidée —
+    déclarée et déduite sur la même CA3, donc sans sortie de caisse. Le montant
+    en euros du tirage est le même en HT et en TTC. Une fabrication française
+    mettrait 20. Le transport international suit la même logique ; le
+    dédouanement, la livraison locale et la manutention sont des prestations
+    françaises à 20 %, à saisir comme des charges ordinaires.
 
     **Les droits à reverser** tiennent sous le tableau : autant de lignes que
     d'ayants droit — un auteur, une illustratrice — chacune avec son **taux**,

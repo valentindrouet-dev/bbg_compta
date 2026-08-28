@@ -159,10 +159,27 @@ export interface LigneStock {
   id: string;
   exercice: string;
   jeu: string;
+  /**
+   * Identifiant du **tirage**, stable d'un exercice à l'autre. Un jeu qui se
+   * vend bien se réimprime : le second tirage a son propre coût de revient, ses
+   * propres prix et son propre stock, et se suit donc à part. Absent = le jeu
+   * n'a qu'un tirage, et c'est son nom qui fait clé (les lignes d'avant le
+   * multi-tirage restent valides sans rien changer).
+   */
+  serie?: string;
+  /** Nom du tirage tel qu'il s'affiche : « 2e tirage », « réimpression »… */
+  tirage?: string;
   /** Coût de revient unitaire HT (fabrication + transport), par exemplaire. */
   coutUnitaire: number;
   /** TVA des ventes, en % (20 par défaut). */
   tauxTVA?: number;
+  /**
+   * TVA du tirage, en % — celle que l'usine facture. **0 par défaut** : une
+   * fabrication hors UE n'en porte pas, la TVA d'importation étant autoliquidée
+   * (déclarée et déduite sur la même CA3, donc sans sortie de caisse). Une
+   * fabrication française la porterait à 20.
+   */
+  tauxTVAFabrication?: number;
   /** Stock d'ouverture, en exemplaires — seulement sur le premier exercice. */
   stockInitial?: number;
   /** Exemplaires fabriqués, une case par mois de l'exercice. */

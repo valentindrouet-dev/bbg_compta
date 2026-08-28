@@ -271,9 +271,11 @@ export function blobExcel(state: AppState, exercice: string): Blob {
       lignesStockPrev.push({
         'Exercice': ex,
         'Jeu': s.ligne.jeu,
+        'Tirage': s.ligne.tirage ?? '1er tirage',
         'Coût de revient unitaire HT': s.ligne.coutUnitaire,
         'Prix public HT (PPHT)': s.ligne.ppht ?? 0,
-        'TVA %': s.ligne.tauxTVA ?? 20,
+        'TVA ventes %': s.ligne.tauxTVA ?? 20,
+        'TVA tirage %': s.ligne.tauxTVAFabrication ?? 0,
         'Stock ouverture': s.total.stockDebut,
         'Fabriqués': s.total.fabrique,
         'Rythme de ventes cumulé %': r2((s.ligne.ventesPourcent ?? [])

@@ -1,6 +1,6 @@
 import { Fragment, useMemo, useState } from 'react';
 import {
-  Plus, Trash2, AlertTriangle, AlertCircle, Info, Wand2, ArrowRightLeft, Gamepad2, Sigma, ListPlus, Clock, GripVertical, Percent, Calculator, Receipt, TrendingUp, Landmark, Boxes, Table2,
+  Plus, Trash2, AlertTriangle, AlertCircle, Info, Wand2, ArrowRightLeft, Gamepad2, Sigma, ListPlus, Clock, GripVertical, Percent, Calculator, Receipt, TrendingUp, Landmark, Boxes, Table2, CopyPlus,
 } from 'lucide-react';
 import { useStore } from '../../store';
 import { BAREME_TNS, cotisationsTNS } from '../../utils/tns';
@@ -81,6 +81,7 @@ export function PrevisionnelPage() {
   const setPrevFormule = useStore(s => s.setPrevFormule);
   const creerCalculHeures = useStore(s => s.creerCalculHeures);
   const completerPrevisionnel = useStore(s => s.completerPrevisionnel);
+  const dupliquerVersExercice = useStore(s => s.dupliquerVersExercice);
   const addPrevLignesParJeu = useStore(s => s.addPrevLignesParJeu);
 
   const [exercice, setExercice] = useEtatVue('prev.exercice', '2025-26',
@@ -90,6 +91,59 @@ export function PrevisionnelPage() {
   /** L'onglet regardé : charges, produits, immobilisations, stock ou total. */
   const [vue, setVue] = useEtatVue<VuePrev>('prev.vue', 'charges',
     v => VUES.some(x => x.cle === v));
+  /**
+   * Recopier un bloc vers l'exercice suivant, plutôt que de repartir d'une page
+   * blanche chaque année. On prévient toujours avant : le bloc d'arrivée est
+   * remplacé, et perdre une année de budget sans l'avoir voulu serait la pire
+   * des surprises. L'annulation Cmd+Z reste le filet.
+   */
+  const exerciceSuivant = EXERCICES[EXERCICES.indexOf(exercice as typeof EXERCICES[number]) + 1];
+  const dupliquer = () => {
+    if (!exerciceSuivant) return;
+    const sections = SECTIONS_DE_VUE[vue];
+    const nom = VUES.find(v => v.cle === vue)!.titre.toLowerCase();
+    const aCopier = (previsionnels[exercice] ?? []).filter(l => sections.includes(l.section));
+    if (!aCopier.length) {
+      alert(`Il n'y a aucune ligne à copier dans le bloc ${nom} de ${exercice}.`);
+      return;
+    }
+    // Une ligne sans le moindre montant n'est pas une donnée à protéger : on
+    // ne compte que celles qui portent quelque chose, sinon l'avertissement
+    // crierait au loup à chaque fois et finirait par ne plus être lu.
+    const remplies = (l: PrevLigne) => l.valeurs.some(v => v != null && v !== 0);
+    const existantes = (previsionnels[exerciceSuivant] ?? [])
+      .filter(l => sections.includes(l.section) && remplies(l));
+    // Les mois se recalent d'octobre à septembre. Le premier exercice en compte
+    // deux de plus (pré-immatriculation et septembre 2025) : ce qu'ils portent
+    // n'a pas d'équivalent en face, et il faut le dire avant, pas après.
+    const nSource = moisExercice(exercice).length;
+    const nCible = moisExercice(exerciceSuivant).length;
+    const enTrop = Math.max(0, nSource - Math.min(nCible, 12));
+    const montantPerdu = enTrop
+      ? r2(aCopier.reduce((x, l) => x
+        + l.valeurs.slice(0, enTrop).reduce<number>((y, v) => y + (v ?? 0), 0), 0))
+      : 0;
+    const noteMois = montantPerdu
+      ? `\n\nLes ${enTrop} premier${enTrop > 1 ? 's' : ''} mois de ${exercice} `
+        + `(${moisExercice(exercice).slice(0, enTrop).map(labelMois).join(', ')}) n'ont pas `
+        + `d'équivalent dans ${exerciceSuivant} : ${euros(montantPerdu)} ne seront pas copiés. `
+        + `Le reste se recale d'octobre à septembre.`
+      : '';
+    const message = existantes.length
+      ? `⚠️  ATTENTION — ${exerciceSuivant} contient déjà ${existantes.length} ligne`
+        + `${existantes.length > 1 ? 's remplies' : ' remplie'} dans le bloc ${nom}.\n\n`
+        + `Copier les ${aCopier.length} ligne${aCopier.length > 1 ? 's' : ''} de ${exercice} `
+        + `va les REMPLACER, montants compris.${noteMois}\n\n`
+        + `Les autres blocs de ${exerciceSuivant} ne sont pas touchés, et Cmd+Z annule.\n\n`
+        + `Remplacer ?`
+      : `Copier les ${aCopier.length} ligne${aCopier.length > 1 ? 's' : ''} du bloc ${nom} `
+        + `de ${exercice} vers ${exerciceSuivant}, montants compris ?${noteMois}\n\n`
+        + `Aucune ligne remplie dans le bloc ${nom} de ${exerciceSuivant} : rien ne sera perdu.`;
+    if (!confirm(message)) return;
+    dupliquerVersExercice(exercice, exerciceSuivant, sections);
+    setExercice(exerciceSuivant);
+  };
+
   /**
    * HT (base du résultat) ou TTC (ce qui sort vraiment du compte).
    *
@@ -274,6 +328,14 @@ export function PrevisionnelPage() {
               title="Ajouter les lignes de la synthèse qui manquent encore, cellules vides">
               <span className="inline-flex items-center gap-1.5"><ListPlus size={14} /> Compléter la grille</span>
             </Btn>
+            {exerciceSuivant && (
+              <Btn onClick={dupliquer}
+                title={`Recopier les lignes et les montants de ce bloc vers ${exerciceSuivant}, pour ne pas repartir d'une page blanche`}>
+                <span className="inline-flex items-center gap-1.5">
+                  <CopyPlus size={14} /> Dupliquer vers {exerciceSuivant}
+                </span>
+              </Btn>
+            )}
             </>}
             {/* Chaque onglet n'affiche que les bascules qui font quelque chose
                 chez lui — un bouton sans effet est pire que pas de bouton.

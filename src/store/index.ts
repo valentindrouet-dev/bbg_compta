@@ -8,7 +8,7 @@ import type {
 } from '../types';
 import {
   CANAUX_DEFAUT, CATEGORIE_FABRICATION, CATEGORIE_VARIATION_STOCK, CATEGORIE_VENTES_JEUX,
-  canalVide, droitsVides, ligneStockVide,
+  canalVide, cleSerie, droitsVides, ligneStockVide,
 } from '../utils/stock';
 import {
   categoriesImmobilisees, categoriesManquantes, estLigneCalculee, gabaritPrevisionnel,
@@ -259,6 +259,12 @@ export interface AppState {
   creerCalculHeures: (exercice: string, categorie: string, section: PrevSection) => void;
   /** Ajoute les lignes de la synthèse qui manquent encore, cellules vides. */
   completerPrevisionnel: (exercice: string) => void;
+  /**
+   * Recopie les lignes d'un ou plusieurs blocs vers l'exercice suivant, montants
+   * compris. Les lignes déjà présentes dans ces blocs à l'arrivée sont
+   * remplacées — l'appelant prévient avant, et l'annulation Cmd+Z rattrape.
+   */
+  dupliquerVersExercice: (source: string, cible: string, sections: PrevSection[]) => void;
 
   addChrono: (c: Omit<ChronoEvent, 'id'>) => void;
   updateChrono: (id: string, patch: Partial<ChronoEvent>) => void;
@@ -313,7 +319,7 @@ export interface AppState {
 
   // ----- Stock ----------------------------------------------------------
   /** Crée la ligne de stock d'un jeu pour un exercice (sans doublon). */
-  addLigneStock: (exercice: string, jeu: string) => void;
+  addLigneStock: (exercice: string, jeu: string, nouveauTirage?: boolean) => void;
   updateLigneStock: (id: string, patch: Partial<LigneStock>) => void;
   removeLigneStock: (id: string) => void;
   /** Écrit une quantité fabriquée dans une case du mois. */
@@ -800,6 +806,38 @@ export const useStore = create<AppState>()(
         };
       }),
 
+      dupliquerVersExercice: (source, cible, sections) => set(s => {
+        const aCopier = (s.previsionnels[source] ?? []).filter(l => sections.includes(l.section));
+        if (!aCopier.length) return s;
+        const nMois = moisExercice(cible).length;
+        const nSource = moisExercice(source).length;
+        // Les mois ne se recopient pas case par case : le premier exercice en
+        // compte quatorze (pré-immatriculation et septembre 2025 en plus) et
+        // les suivants douze. On aligne donc sur les douze mois d'octobre à
+        // septembre, en partant de la fin — sinon octobre atterrirait en
+        // décembre et tout le budget serait décalé de deux mois.
+        const communs = Math.min(nMois, nSource, 12);
+        const decalageSource = nSource - communs;
+        const decalageCible = nMois - communs;
+        // Les lignes de l'arrivée qui ne sont pas dans les blocs copiés restent
+        // intactes : dupliquer les charges ne doit pas toucher aux produits.
+        const gardees = (s.previsionnels[cible] ?? []).filter(l => !sections.includes(l.section));
+        // Une formule qui renvoie à une autre ligne doit suivre sa cible : on
+        // remappe les identifiants, sinon elle pointerait vers l'exercice source.
+        const nouveaux = new Map(aCopier.map(l => [l.id, uid()]));
+        const copiees = aCopier.map(l => {
+          const valeurs = new Array<number | null>(nMois).fill(null);
+          for (let i = 0; i < communs; i++) {
+            valeurs[decalageCible + i] = l.valeurs[decalageSource + i] ?? null;
+          }
+          const formule = l.formule?.type === 'heures-taux'
+            ? { ...l.formule, sourceId: nouveaux.get(l.formule.sourceId) ?? l.formule.sourceId }
+            : l.formule;
+          return { ...l, id: nouveaux.get(l.id)!, exercice: cible, valeurs, formule };
+        });
+        return { previsionnels: { ...s.previsionnels, [cible]: [...gardees, ...copiees] } };
+      }),
+
       completerPrevisionnel: (exercice) => set(s => {
         const nMois = moisExercice(exercice).length;
         const manquantes = categoriesManquantes(
@@ -1093,9 +1131,23 @@ export const useStore = create<AppState>()(
       }),
 
       // ----- Stock --------------------------------------------------------
-      addLigneStock: (exercice, jeu) => set(s => {
-        if (s.stocks.some(l => l.exercice === exercice && l.jeu === jeu)) return s;
-        return { stocks: [...s.stocks, ligneStockVide(jeu, exercice, uid())] };
+      addLigneStock: (exercice, jeu, nouveauTirage) => set(s => {
+        // Un jeu qui se vend bien se réimprime. Chaque tirage a son coût de
+        // revient, ses prix et son stock : c'est une série à part, suivie pour
+        // son compte. Le premier garde le nom du jeu pour clé, si bien que tout
+        // ce qui existait avant le multi-tirage reste valide tel quel.
+        const series = new Set(s.stocks.filter(l => l.jeu === jeu).map(l => cleSerie(l)));
+        if (!nouveauTirage) {
+          if (s.stocks.some(l => l.exercice === exercice && cleSerie(l) === jeu)) return s;
+          if (!series.has(jeu) && series.size) return s;
+          return { stocks: [...s.stocks, ligneStockVide(jeu, exercice, uid())] };
+        }
+        let n = series.size + 1;
+        while (series.has(`${jeu} — tirage ${n}`)) n++;
+        return {
+          stocks: [...s.stocks,
+            ligneStockVide(jeu, exercice, uid(), `${jeu} — tirage ${n}`, `${n}e tirage`)],
+        };
       }),
       updateLigneStock: (id, patch) => set(s => ({
         stocks: s.stocks.map(l => l.id === id ? { ...l, ...patch } : l),
@@ -1159,21 +1211,28 @@ export const useStore = create<AppState>()(
         const rang = (EXERCICES as readonly string[]).indexOf(exercice);
         if (rang <= 0) return s;
         const nMois = moisExercice(exercice).length;
-        const deja = new Set(s.stocks.filter(l => l.exercice === exercice).map(l => l.jeu));
+        // La continuité se fait tirage par tirage : deux tirages d'un même jeu
+        // sont deux stocks distincts, et chacun se poursuit pour son compte.
+        const deja = new Set(s.stocks.filter(l => l.exercice === exercice).map(l => cleSerie(l)));
         // Le modèle le plus récent : c'est lui qui porte le bon coût de revient
         // et les bons prix de vente.
         const modeles = new Map<string, LigneStock>();
         for (let i = 0; i < rang; i++) {
-          for (const l of s.stocks.filter(x => x.exercice === EXERCICES[i])) modeles.set(l.jeu, l);
+          for (const l of s.stocks.filter(x => x.exercice === EXERCICES[i])) {
+            modeles.set(cleSerie(l), l);
+          }
         }
         const vide = () => new Array<number | null>(nMois).fill(null);
         const nouvelles: LigneStock[] = [];
-        for (const [jeu, modele] of modeles) {
-          if (deja.has(jeu)) continue;
+        for (const [serie, modele] of modeles) {
+          if (deja.has(serie)) continue;
           nouvelles.push({
-            id: uid(), jeu, exercice,
+            id: uid(), jeu: modele.jeu, exercice,
+            ...(modele.serie ? { serie: modele.serie } : {}),
+            ...(modele.tirage ? { tirage: modele.tirage } : {}),
             coutUnitaire: modele.coutUnitaire,
             tauxTVA: modele.tauxTVA,
+            tauxTVAFabrication: modele.tauxTVAFabrication,
             fabrique: vide(),
             ventesPourcent: vide(),
             ppht: modele.ppht,
@@ -1205,7 +1264,7 @@ export const useStore = create<AppState>()(
     },
     {
       name: 'bbg-compta-v1',
-      version: 19,
+      version: 20,
       // Le stockage passe par le coffre : il vérifie qu'un autre onglet n'a pas
       // pris la main, signale un refus d'écriture au lieu de le taire, et
       // dépose un instantané horodaté dans IndexedDB après chaque salve de
@@ -1423,6 +1482,12 @@ function migrerEtat(persisted: unknown, version: number): AppState {
           ?? CANAUX_DEFAUT.find(x => x.nom === c.nom)?.repartition ?? 0,
       })),
     }));
+  }
+  // v20 : le tirage d'un jeu porte sa propre TVA — zéro pour une fabrication
+  // hors UE, la TVA d'importation étant autoliquidée. Jusqu'ici la trésorerie
+  // appliquait au tirage le taux des ventes, ce qui gonflait la sortie de 20 %.
+  if (version < 20 && s.stocks) {
+    s.stocks = s.stocks.map(l => ({ ...l, tauxTVAFabrication: l.tauxTVAFabrication ?? 0 }));
   }
   // v19 : un jeu peut porter des droits d'auteur — un taux, une assiette, une
   // avance récupérable. La liste naît vide et le prix public reste à renseigner :
