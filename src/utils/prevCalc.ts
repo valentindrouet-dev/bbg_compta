@@ -7,7 +7,7 @@
 import type {
   FinanceEntry, JournalEntry, LigneStock, PrevLigne, PrevSection, Referentiels,
 } from '../types';
-import { estChargeFinanciere, estPersonnel } from './blocs';
+import { estChargeFinanciere, estDroitsAuteur, estPersonnel } from './blocs';
 import {
   compteResultat, dotationsParMois, produitsFinanciersParMois,
   type ImmoInfo, type LigneResultat,
@@ -143,7 +143,9 @@ export interface FluxTreso {
   immos: Map<string, number>;
   /** Ce qu'on paie à l'usine : les exemplaires fabriqués. */
   tirages: Map<string, number>;
-  /** Ce qu'un jeu coûte à côté du tirage : prototypage, avances, communication. */
+  /** Ce qu'on reverse aux auteurs et illustrateurs, avances comprises. */
+  droits: Map<string, number>;
+  /** Ce qu'un jeu coûte à côté du tirage et des droits : prototypage, communication. */
   depensesJeux: Map<string, number>;
   /** Encaissements − décaissements. */
   solde: Map<string, number>;
@@ -174,18 +176,23 @@ function sectionTTC(
 function chargesEclatees(
   lignes: PrevLigne[], moisList: string[], observes: Map<string, number>,
   refs: Referentiels,
-): { tirages: Map<string, number>; jeux: Map<string, number>; externes: Map<string, number> } {
+): {
+  tirages: Map<string, number>; droits: Map<string, number>;
+  jeux: Map<string, number>; externes: Map<string, number>;
+} {
   const retenues = lignes.filter(l => l.section === 'charges' && !l.unite);
   const paquet = (garde: (l: PrevLigne) => boolean) =>
     new Map(moisList.map((m, i) => [m, r2(retenues.filter(garde).reduce((s, l) =>
       s + (valeursDe(l, lignes)[i] ?? 0) * (1 + tauxDeLigne(l, observes) / 100), 0))]));
   const estTirage = (l: PrevLigne) => l.categorie === CATEGORIE_FABRICATION;
-  const estJeu = (l: PrevLigne) => !estTirage(l)
+  const estDroits = (l: PrevLigne) => !estTirage(l) && estDroitsAuteur(l.categorie);
+  const estJeu = (l: PrevLigne) => !estTirage(l) && !estDroits(l)
     && (refs.categoriesJeux.includes(l.categorie) || !!l.jeu);
   return {
     tirages: paquet(estTirage),
+    droits: paquet(estDroits),
     jeux: paquet(estJeu),
-    externes: paquet(l => !estTirage(l) && !estJeu(l)),
+    externes: paquet(l => !estTirage(l) && !estDroits(l) && !estJeu(l)),
   };
 }
 
@@ -228,8 +235,9 @@ export function fluxTresorerie(
     new Map(moisList.map(m => [m, passe.has(m) ? duJournal(m, garde) : (prevu.get(m) ?? 0)]));
   const stock = apportStock(stocksLignes, exercice, refs.jeux ?? []);
   const estTirage = (e: JournalEntry) => e.categorie === CATEGORIE_FABRICATION;
+  const estDroits = (e: JournalEntry) => estDroitsAuteur(e.categorie);
   const estJeu = (e: JournalEntry) =>
-    !estTirage(e) && refs.categoriesJeux.includes(e.categorie);
+    !estTirage(e) && !estDroits(e) && refs.categoriesJeux.includes(e.categorie);
   const estPerso = (e: JournalEntry) => estPersonnel(e.categorie, refs);
   const eclat = chargesEclatees(lignes, moisList, observes, refs);
 
@@ -244,7 +252,8 @@ export function fluxTresorerie(
     () => false);
   const charges = melange(
     eclat.externes,
-    e => e.type === 'charges' && !estPerso(e) && !estJeu(e) && !estTirage(e));
+    e => e.type === 'charges'
+      && !estPerso(e) && !estJeu(e) && !estTirage(e) && !estDroits(e));
   // Cotisations et rémunérations : pas de TVA, le TTC est le HT.
   const personnel = melange(sectionHT(lignes, moisList, 'personnel'), estPerso);
   const immos = melange(sectionTTC(lignes, moisList, 'immos', observes), e => e.type === 'immo');
@@ -260,22 +269,28 @@ export function fluxTresorerie(
   // auteurs, communication. Seulement celles restées en charges — un
   // développement porté à l'actif est déjà à la ligne des immobilisations, et
   // le compter ici une seconde fois gonflerait les sorties d'autant.
-  const depensesJeux = melange(
+  // Les droits sur leur propre ligne : ils ne se déclenchent pas au même moment
+  // que le reste des dépenses d'un jeu — l'avance part à la signature, les
+  // droits suivent les ventes, longtemps après.
+  const droits = melange(
     new Map(moisList.map(m => [m, r2(
-      (eclat.jeux.get(m) ?? 0) + (stock.droitsParMois.get(m) ?? 0))])),
+      (eclat.droits.get(m) ?? 0) + (stock.droitsParMois.get(m) ?? 0))])),
+    e => e.type === 'charges' && estDroits(e));
+  const depensesJeux = melange(
+    eclat.jeux,
     e => e.type === 'charges' && estJeu(e));
 
   const encaissements = new Map(moisList.map(m =>
     [m, r2((autresProduits.get(m) ?? 0) + (ventesJeux.get(m) ?? 0))]));
   const decaissements = new Map(moisList.map(m => [m, r2(
     (charges.get(m) ?? 0) + (personnel.get(m) ?? 0) + (immos.get(m) ?? 0)
-    + (tirages.get(m) ?? 0) + (depensesJeux.get(m) ?? 0))]));
+    + (tirages.get(m) ?? 0) + (droits.get(m) ?? 0) + (depensesJeux.get(m) ?? 0))]));
   const solde = new Map(moisList.map(m =>
     [m, r2((encaissements.get(m) ?? 0) - (decaissements.get(m) ?? 0))]));
 
   return {
     mois: moisList, encaissements, ventesJeux, autresProduits,
-    decaissements, charges, personnel, immos, tirages, depensesJeux, solde,
+    decaissements, charges, personnel, immos, tirages, droits, depensesJeux, solde,
   };
 }
 

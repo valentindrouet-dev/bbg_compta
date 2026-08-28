@@ -11,9 +11,10 @@ import { useMemo } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { useStore } from '../../store';
 import type { FinanceEntry } from '../../types';
-import { EXERCICES, moisExercice, todayISO } from '../../utils/dates';
+import { EXERCICES, labelMois, moisExercice, todayISO } from '../../utils/dates';
 import { FINANCE_TYPES } from '../../utils/finance';
-import { euros, r2 } from '../../utils/money';
+import { euros, euros0, r2 } from '../../utils/money';
+import { useEtatVue } from '../../utils/etatVue';
 import { ordreAffichage } from '../../utils/previsionnel';
 import { fluxTresorerie, moisEcoules, sommeMap } from '../../utils/prevCalc';
 import { PageHeader, Card, Btn, MoneyInput, StatCard } from '../ui';
@@ -25,6 +26,9 @@ export function TresoPrevPage() {
   const entries = useStore(s => s.entries);
   const finances = useStore(s => s.finances);
   const mouvementsPrev = useStore(s => s.mouvementsPrev);
+  /** L'exercice détaillé mois par mois, retrouvé au retour sur la page. */
+  const [exerciceDetail, setExerciceDetail] = useEtatVue<string>(
+    'tresoprev.detail', EXERCICES[0], v => (EXERCICES as readonly string[]).includes(v));
   const addMouvementPrev = useStore(s => s.addMouvementPrev);
   const updateMouvementPrev = useStore(s => s.updateMouvementPrev);
   const removeMouvementPrev = useStore(s => s.removeMouvementPrev);
@@ -68,6 +72,8 @@ export function TresoPrevPage() {
     const sorties = r2(sortiesExploitation - placements - autres);
     return {
       ex,
+      // Gardés pour la vue mensuelle : c'est le même calcul, pas un second.
+      moisList, flux: f, mouvements,
       nReels: reels.length,
       nMois: moisList.length,
       ventesJeux: sommeMap(f.ventesJeux),
@@ -78,6 +84,7 @@ export function TresoPrevPage() {
       personnel: r2(-sommeMap(f.personnel)),
       immos: r2(-sommeMap(f.immos)),
       tirages: r2(-sommeMap(f.tirages)),
+      droits: r2(-sommeMap(f.droits)),
       depensesJeux: r2(-sommeMap(f.depensesJeux)),
       sortiesExploitation: r2(-sortiesExploitation),
       placements, autres,
@@ -149,6 +156,68 @@ export function TresoPrevPage() {
     };
   }, [prevuCumule, realise]);
 
+  /**
+   * Le détail mois par mois de l'exercice choisi.
+   *
+   * La vue par exercice dit combien l'année coûte ; elle ne dit pas *quand*. Un
+   * tirage de 32 400 € et un trimestre d'URSSAF tombant le même mois, c'est un
+   * découvert qu'on ne voit pas dans un total annuel — d'où cette vue.
+   */
+  const detail = useMemo(() => {
+    const i = Math.max(0, EXERCICES.indexOf(exerciceDetail as typeof EXERCICES[number]));
+    const x = prevuCumule[i];
+    if (!x) return null;
+    const ouverture = i > 0 ? prevuCumule[i - 1].treso : 0;
+    const moisDe = (d: string) => (d < '2025-09-01' ? 'pre-immat' : d.slice(0, 7));
+    const parType = (t: string) => new Map(x.moisList.map(m =>
+      [m, r2(x.mouvements.filter(f => f.type === t && moisDe(f.date) === m)
+        .reduce((s, f) => s + f.montant, 0))]));
+    const capital = parType('capital');
+    const cca = parType('cca');
+    const remboursementCCA = parType('remboursement_cca');
+    const placements = parType('placement');
+    const produitsFinanciers = parType('produit_financier');
+    const autres = parType('autre');
+    const g = (m: Map<string, number>, mois: string) => m.get(mois) ?? 0;
+    let cumule = ouverture;
+    const lignes = x.moisList.map(m => {
+      // Les placements et « autres » sont des mouvements signés : ils entrent
+      // dans les sorties tels quels, sans changement de signe.
+      const entrees = r2(g(x.flux.encaissements, m) + g(produitsFinanciers, m));
+      const sortiesExploitation = r2(-g(x.flux.decaissements, m));
+      const sorties = r2(sortiesExploitation + g(placements, m) + g(autres, m));
+      const apports = r2(g(capital, m) + g(cca, m) + g(remboursementCCA, m));
+      const solde = r2(entrees + sorties + apports);
+      cumule = r2(cumule + solde);
+      return {
+        mois: m,
+        autresProduits: g(x.flux.autresProduits, m),
+        ventesJeux: g(x.flux.ventesJeux, m),
+        produitsFinanciers: g(produitsFinanciers, m),
+        entrees,
+        charges: r2(-g(x.flux.charges, m)),
+        personnel: r2(-g(x.flux.personnel, m)),
+        immos: r2(-g(x.flux.immos, m)),
+        tirages: r2(-g(x.flux.tirages, m)),
+        droits: r2(-g(x.flux.droits, m)),
+        depensesJeux: r2(-g(x.flux.depensesJeux, m)),
+        sortiesExploitation,
+        placements: g(placements, m),
+        sorties,
+        capital: g(capital, m),
+        cca: g(cca, m),
+        remboursementCCA: g(remboursementCCA, m),
+        solde,
+        cumule,
+      };
+    });
+    // L'échelle des barres se prend sur les sorties **d'exploitation**, pas sur
+    // le total : un placement de 80 000 € écraserait tous les autres mois alors
+    // qu'il ne coûte rien — l'argent change de compte, il ne part pas.
+    const pire = Math.max(1, ...lignes.map(l => Math.abs(l.sortiesExploitation)));
+    return { ex: x.ex, ouverture, lignes, pire, nReels: x.nReels };
+  }, [prevuCumule, exerciceDetail]);
+
   const finPrevue = prevuCumule[prevuCumule.length - 1]?.treso ?? 0;
   const totalVentesJeux = r2(prevuCumule.reduce((s, x) => s + x.ventesJeux, 0));
 
@@ -212,8 +281,11 @@ export function TresoPrevPage() {
               <RowP label="Tirages de jeux"
                 aide="Ce qu'on paie à l'usine. À venir : exemplaires fabriqués × coût de revient, onglet Stock. Passé : la catégorie « Fabrication des jeux » au journal."
                 get={x => x.tirages} lignes={prevuCumule} />
+              <RowP label="Droits d'auteur"
+                aide="Ce qu'on reverse aux auteurs et illustrateurs, avances comprises. À venir : les droits dus calculés dans l'onglet Stock, une fois l'avance récupérée. Passé : les versements du journal."
+                get={x => x.droits} lignes={prevuCumule} />
               <RowP label="Dépenses jeux"
-                aide="Ce qu'un jeu coûte à côté du tirage : prototypage, avances aux auteurs, communication. Les développements portés à l'actif sont à la ligne des immobilisations, pas ici."
+                aide="Ce qu'un jeu coûte à côté du tirage et des droits : prototypage, communication. Les développements portés à l'actif sont à la ligne des immobilisations, pas ici."
                 get={x => x.depensesJeux} lignes={prevuCumule} />
               <RowP label="Sorties d'exploitation" get={x => x.sortiesExploitation} lignes={prevuCumule} strong />
               <RowP label="Placements"
@@ -237,6 +309,84 @@ export function TresoPrevPage() {
           <b> mouvements financiers</b>, saisis en Trésorerie.
         </p>
       </Card>
+
+      {detail && (
+        <Card
+          title={`Mois par mois — ${detail.ex}`}
+          className="mb-6"
+          actions={
+            <div className="flex gap-1">
+              {EXERCICES.map(ex => (
+                <Btn key={ex} variant={ex === detail.ex ? 'primary' : undefined}
+                  onClick={() => setExerciceDetail(ex)}>{ex}</Btn>
+              ))}
+            </div>
+          }
+        >
+          <div className="overflow-x-auto -mx-4 px-4">
+            <table data-table="tresoprev:mensuel" className="sheet text-sm border-collapse w-full">
+              <thead>
+                <tr className="text-left text-[#5c5280]">
+                  <th className="min-w-56">Catégories (TTC)</th>
+                  {detail.lignes.map((l, i) => (
+                    <th key={l.mois} className="text-right whitespace-nowrap">
+                      {labelMois(l.mois)}
+                      <div className="text-[10px] font-normal" style={{ color: '#9a92b5' }}>
+                        {i < detail.nReels ? 'réel' : 'prévu'}
+                      </div>
+                    </th>
+                  ))}
+                  <th className="text-right">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                <RowM label="Workshops et autres produits" get={l => l.autresProduits} d={detail} />
+                <RowM label="Ventes de jeux" get={l => l.ventesJeux} d={detail} />
+                <RowM label="Produits financiers (intérêts)" get={l => l.produitsFinanciers} d={detail} />
+                <RowM label="Entrées totales" get={l => l.entrees} d={detail} strong />
+                <RowM label="Charges externes" get={l => l.charges} d={detail} />
+                <RowM label="Personnel et rémunérations" get={l => l.personnel} d={detail} />
+                <RowM label="Investissements (immobilisations)" get={l => l.immos} d={detail} />
+                <RowM label="Tirages de jeux" get={l => l.tirages} d={detail} />
+                <RowM label="Droits d'auteur" get={l => l.droits} d={detail} />
+                <RowM label="Dépenses jeux" get={l => l.depensesJeux} d={detail} />
+                {/* La ligne qui répond à « quel mois fait mal » : le chiffre
+                    reste lu en clair, la barre ne fait que le classer d'un
+                    coup d'œil. */}
+                <RowM label="Sorties d'exploitation" get={l => l.sortiesExploitation} d={detail} strong barre />
+                <RowM label="Placements" get={l => l.placements} d={detail} />
+                <RowM label="Sorties totales" get={l => l.sorties} d={detail} strong />
+                <RowM label="Capital social" get={l => l.capital} d={detail} />
+                <RowM label="Compte courant d'associé" get={l => l.cca} d={detail} />
+                <RowM label="Remboursement de compte courant" get={l => l.remboursementCCA} d={detail} />
+                <RowM label="Solde du mois" get={l => l.solde} d={detail} strong signe />
+                <tr className="bg-[#efeafa] font-bold">
+                  <td title={`Trésorerie disponible à la fin de chaque mois. Départ : ${euros(detail.ouverture)} repris des exercices précédents.`}>
+                    Trésorerie fin de mois (TTC)
+                  </td>
+                  {detail.lignes.map(l => (
+                    <td key={l.mois}
+                      className={`text-right tabular-nums ${l.cumule < 0 ? 'text-[#b7332e]' : ''}`}>
+                      {euros0(l.cumule)}
+                    </td>
+                  ))}
+                  <td className="text-right tabular-nums bg-[#efeafa]"></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs text-[#9a92b5] mt-2">
+            Le même calcul que le tableau du haut, déplié mois par mois : chaque colonne dit si
+            elle vient du <b>journal</b> ou du <b>budget</b>. La barre sous les
+            <b> sorties d'exploitation</b> mesure chaque mois contre le plus lourd de l'exercice
+            — elle ne remplace pas le chiffre, elle le classe, et se mesure <b>hors
+            placements</b> : mettre 80 000 € sur un compte à terme écraserait tous les autres
+            mois alors que rien n'est dépensé. La dernière ligne cumule depuis
+            l'ouverture ({euros(detail.ouverture)}) : <b>si elle passe en rouge, le compte est à
+            découvert ce mois-là</b>, même quand l'année entière tombe juste.
+          </p>
+        </Card>
+      )}
 
       <Card
         title="Mouvements financiers prévus (apports, placements, remboursements à venir)"
@@ -427,11 +577,14 @@ export function TresoPrevPage() {
 
 interface PrevuRow {
   ex: string;
+  moisList: string[];
+  flux: ReturnType<typeof fluxTresorerie>;
+  mouvements: FinanceEntry[];
   /** Combien de mois de cet exercice viennent du journal, et sur combien. */
   nReels: number; nMois: number;
   ventesJeux: number; autresProduits: number; produitsFinanciers: number;
   entrees: number; charges: number; personnel: number; immos: number;
-  tirages: number; depensesJeux: number; sortiesExploitation: number;
+  tirages: number; droits: number; depensesJeux: number; sortiesExploitation: number;
   placements: number; autres: number; sorties: number; exploitation: number;
   capital: number; cca: number; remboursementCCA: number; apports: number; treso: number;
 }
@@ -454,6 +607,53 @@ function RowP({ label, aide, get, lignes, strong, accent }: {
       })}
       <td className={`text-right tabular-nums font-medium bg-[#efeafa] ${total < 0 ? 'text-[#b7332e]' : ''}`}>
         {accent ? '' : (total !== 0 ? euros(total) : '·')}
+      </td>
+    </tr>
+  );
+}
+
+/** Un mois du tableau mensuel : les mêmes postes, dépliés. */
+interface LigneMois {
+  mois: string;
+  autresProduits: number; ventesJeux: number; produitsFinanciers: number; entrees: number;
+  charges: number; personnel: number; immos: number; tirages: number; droits: number;
+  depensesJeux: number; sortiesExploitation: number; placements: number; sorties: number;
+  capital: number; cca: number; remboursementCCA: number;
+  solde: number; cumule: number;
+}
+
+function RowM({ label, get, d, strong, signe, barre }: {
+  label: string;
+  get: (l: LigneMois) => number;
+  d: { lignes: LigneMois[]; pire: number };
+  strong?: boolean; signe?: boolean; barre?: boolean;
+}) {
+  const total = r2(d.lignes.reduce((s, l) => s + get(l), 0));
+  return (
+    <tr className={strong ? 'bg-[#f4f1fb] font-semibold' : ''}>
+      <td>{label}</td>
+      {d.lignes.map(l => {
+        const v = get(l);
+        // Barre de magnitude : une seule teinte, la piste est un pas clair de la
+        // même. Le nombre reste écrit — la barre est un encodage secondaire, pas
+        // le seul moyen de lire la valeur.
+        const part = barre && v ? Math.min(1, Math.abs(v) / d.pire) : 0;
+        return (
+          <td key={l.mois}
+            className={`text-right tabular-nums ${v < 0 ? 'text-[#b7332e]' : signe && v > 0 ? 'text-[#38761d]' : ''}`}>
+            {v ? euros0(v) : '·'}
+            {barre && (
+              <div className="mt-0.5 h-1 rounded-sm w-full overflow-hidden"
+                style={{ backgroundColor: part ? '#f0d5d2' : 'transparent' }}>
+                <div className="h-full rounded-sm ml-auto"
+                  style={{ width: `${part * 100}%`, backgroundColor: '#b7332e' }} />
+              </div>
+            )}
+          </td>
+        );
+      })}
+      <td className={`text-right tabular-nums font-medium bg-[#efeafa] ${total < 0 ? 'text-[#b7332e]' : ''}`}>
+        {total ? euros(total) : '·'}
       </td>
     </tr>
   );

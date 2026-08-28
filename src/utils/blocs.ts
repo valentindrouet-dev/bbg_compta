@@ -59,6 +59,18 @@ export function estChargeFinanciere(categorie: string): boolean {
     || n.includes('agios') || n.includes('frais bancaires');
 }
 
+/**
+ * Droits d'auteur : ce qu'on reverse à un auteur, une illustratrice, un
+ * traducteur — avances comprises, puisqu'une avance est un premier versement de
+ * ces mêmes droits. Ils restent une dépense du jeu, mais on veut pouvoir les
+ * lire à part : ils suivent les ventes au lieu de les précéder.
+ */
+export function estDroitsAuteur(categorie: string): boolean {
+  const n = categorie.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return n.includes('droit d\'auteur') || n.includes('droits d\'auteur')
+    || n.includes('redevance') || n.includes('royalt');
+}
+
 /** Bloc d'affichage d'une écriture du journal. */
 export function blocDeEcriture(e: JournalEntry, refs: Referentiels): BlocCle {
   if (e.type === 'produit') return 'produits';
