@@ -14,7 +14,7 @@ import {
   syntheseExercice, immoInfos, dotationDuMois, dotationsParMois, produitsFinanciersParMois,
   compteResultat, ecrituresDeCellule, type LigneResultat,
 } from '../../utils/calc';
-import { teinteBloc, type BlocCle } from '../../utils/blocs';
+import { estChargeFinanciere, teinteBloc, type BlocCle } from '../../utils/blocs';
 import {
   controlesComptables, dateCalee, libelleEcriture, type PageControle,
 } from '../../utils/controles';
@@ -405,6 +405,22 @@ export function SynthesePage({ onAllerA }: { onAllerA?: (page: Page, ligne: stri
                                       style={{ backgroundColor: meta[cat]?.couleur || t.base }}
                                     />
                                     {cat}
+                                    {/* Une charge financière est saisie ici, mais elle ne
+                                        pèse pas sur l'EBE : elle en est retirée puis reprise
+                                        à sa propre ligne du résultat courant. Sans ce repère,
+                                        elle a tout l'air d'être comptée deux fois. */}
+                                    {estChargeFinanciere(cat) && (
+                                      <span
+                                        className="text-[10px] px-1 py-px rounded-full cursor-help shrink-0"
+                                        style={{ backgroundColor: '#eae5f8', color: '#5c5280' }}
+                                        title={"Charge financière : elle est retirée des charges d'exploitation "
+                                          + "(donc de l'EBE) et reprise plus bas, à sa propre ligne du résultat "
+                                          + "courant. Elle compte une seule fois — le total de ce bloc l'inclut, "
+                                          + "la ligne « Charges d'exploitation » du résultat ne l'inclut pas."}
+                                      >
+                                        hors EBE
+                                      </span>
+                                    )}
                                   </span>
                                 </td>
                                 {syn.moisList.map(m => {

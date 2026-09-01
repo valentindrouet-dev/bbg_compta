@@ -115,6 +115,14 @@ const CHAPITRES: Chapitre[] = [
           + 'dépenses de jeux passées en charges. Les <b>investissements n’en font pas '
           + 'partie</b> : ils s’inscrivent à l’actif et ne pèsent que par leur dotation.',
         formule: 'Charges externes − charges financières + personnel',
+        attention: 'Les **charges financières** semblent comptées deux fois : une fois dans le '
+          + 'bloc Charges, une fois à leur ligne du compte de résultat. Il n’en est rien. Elles se '
+          + 'saisissent dans le bloc Charges — c’est là qu’on les entre — mais elles en sont '
+          + '**retirées** pour calculer les charges d’exploitation, donc l’EBE, puis **reprises** '
+          + 'plus bas au résultat courant. Au total elles ne pèsent qu’une fois. Le repère '
+          + '« hors EBE » à côté de la catégorie le rappelle. Conséquence : le total du bloc '
+          + 'Charges n’est pas égal aux charges d’exploitation — il lui manque justement les '
+          + 'charges financières, et il lui reste à ajouter le personnel.',
         ou: { texte: 'Synthèse annuelle → bloc Charges', page: 'synthese' },
       },
       {
