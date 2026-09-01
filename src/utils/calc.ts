@@ -2,7 +2,9 @@ import type {
   JournalEntry, FinanceEntry, Referentiels, TresoManuel,
 } from '../types';
 import { dureeCategorie, estChargeFinanciere, estImmobilisation, estPersonnel } from './blocs';
-import { compareMois, moisCourant, moisExercice, addYears, PRE_IMMAT } from './dates';
+import {
+  compareMois, moisCourant, moisExercice, addYears, todayISO, PRE_IMMAT,
+} from './dates';
 import { r2 } from './money';
 
 // ----- Sélections de base ------------------------------------------------
@@ -250,6 +252,18 @@ export interface SoldeTresorerie {
   mois: string;
   /** Solde à la fin de ce mois. */
   solde: number;
+  /**
+   * Solde **à la date du jour** : le mois en cours n'est compté que jusqu'à
+   * aujourd'hui.
+   *
+   * Un mois n'arrive pas d'un bloc le 1er. Retenir le solde de fin de mois
+   * faisait bondir la trésorerie au passage d'un mois à l'autre — un virement
+   * daté du 30 était compté dès le 1er — et le chiffre annonçait de l'argent
+   * qui n'était pas encore là.
+   */
+  soldeAujourdhui: number;
+  /** Ce qui reste à encaisser ou à payer d'ici la fin du mois en cours. */
+  aVenirCeMois: number;
   /** Solde une fois passés les mois déjà planifiés au-delà. */
   soldeApres: number;
   /** Combien de mois sont planifiés après le mois en cours. */
@@ -262,13 +276,24 @@ export function soldeTresorerie(
   manuel: Record<string, TresoManuel> = {},
 ): SoldeTresorerie {
   const courant = moisCourant();
+  const aujourdhui = todayISO();
   const lignes = tableauTreso(entries, finances, moisTresorerie(entries, finances, courant), manuel);
   const i = lignes.findIndex(r => r.mois === courant);
   const retenue = lignes[i >= 0 ? i : lignes.length - 1];
   const apres = lignes.length ? lignes[lignes.length - 1].soldeCumule : 0;
+  // Ce qui, dans le mois en cours, porte une date encore à venir : facture à
+  // régler le 25, virement attendu le 30. C'est déjà saisi, mais ce n'est pas
+  // encore en banque.
+  const aVenirCeMois = i < 0 ? 0 : r2(
+    entries.filter(e => e.mois === courant && e.date > aujourdhui)
+      .reduce((s, e) => s + (e.type === 'produit' ? e.ttc : -e.ttc), 0)
+    + finances.filter(f => moisDeFinance(f) === courant && f.date > aujourdhui)
+      .reduce((s, f) => s + f.montant, 0));
   return {
     mois: retenue?.mois ?? courant,
     solde: retenue?.soldeCumule ?? 0,
+    soldeAujourdhui: r2((retenue?.soldeCumule ?? 0) - aVenirCeMois),
+    aVenirCeMois,
     soldeApres: apres,
     moisPlanifies: i >= 0 ? lignes.length - 1 - i : 0,
     lignes,

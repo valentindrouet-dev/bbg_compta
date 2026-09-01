@@ -38,15 +38,21 @@ export function TresoPage() {
       />
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
-        <StatCard label={`Solde à fin ${labelMois(bilan.mois)}`}
-          value={euros(bilan.solde)}
-          tone={bilan.solde >= 0 ? 'good' : 'bad'}
-          sub={bilan.moisPlanifies
-            ? `${euros(bilan.soldeApres)} après les ${bilan.moisPlanifies} mois déjà planifiés`
-            : 'dernier mois du tableau'} />
+        {/* Le solde du jour : le mois en cours n'est compté que jusqu'à
+            aujourd'hui, sinon une facture datée du 30 gonflerait le chiffre
+            dès le 1er. */}
+        <StatCard label="Solde disponible aujourd'hui"
+          value={euros(bilan.soldeAujourdhui)}
+          tone={bilan.soldeAujourdhui >= 0 ? 'good' : 'bad'}
+          sub={bilan.aVenirCeMois
+            ? `${euros(bilan.solde)} à fin ${labelMois(bilan.mois)}`
+            : bilan.moisPlanifies
+              ? `${euros(bilan.soldeApres)} après les ${bilan.moisPlanifies} mois déjà planifiés`
+              : 'dernier mois du tableau'} />
         <StatCard label="Dont placé (comptes à terme)" value={euros(totalPlace)} tone="accent"
           sub="modifiable dans les mouvements financiers" />
-        <StatCard label="Disponible + placé" value={euros(r2(bilan.solde + totalPlace))} />
+        <StatCard label="Disponible + placé"
+          value={euros(r2(bilan.soldeAujourdhui + totalPlace))} />
       </div>
 
       {showFinances && (
@@ -128,7 +134,10 @@ export function TresoPage() {
             </thead>
             <tbody>
               {rows.map(row => (
-                <tr key={row.mois} className={row.mois === moisCourant() ? 'bg-[#efeafa]' : ''}>
+                <tr key={row.mois} className={row.mois === moisCourant() ? 'bg-[#efeafa]' : ''}
+                  title={row.mois === moisCourant() && bilan.aVenirCeMois
+                    ? `Mois en cours : ${euros(bilan.aVenirCeMois)} de ce total portent une date encore à venir. Le solde disponible aujourd'hui est de ${euros(bilan.soldeAujourdhui)}.`
+                    : undefined}>
                   <td className="font-medium">{labelMois(row.mois)}</td>
                   <td className="text-right tabular-nums text-[#6f6690]">{euros(row.soldeInitial)}</td>
                   <td className="text-right tabular-nums text-[#38761d]">

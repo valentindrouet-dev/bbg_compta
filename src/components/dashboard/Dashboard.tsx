@@ -84,13 +84,19 @@ export function Dashboard({ onNavigate }: { onNavigate: (p: Page) => void }) {
           sub={`dont jeux ${euros0(data.totJeux)}`} />
         <StatCard label="Résultat simplifié" value={euros0(resultat)} tone={resultat >= 0 ? 'good' : 'bad'}
           sub="produits − charges − jeux" />
+        {/* Le solde du jour, pas celui de la fin du mois : un virement daté du
+            30 ne doit pas gonfler la trésorerie dès le 1er. Ce qui reste à
+            venir d'ici la clôture du mois est annoncé en dessous. */}
         <StatCard
-          label={`Trésorerie à fin ${labelMois(data.bilanTreso.mois)}`}
-          value={euros0(soldeActuel)}
-          tone={soldeActuel >= 0 ? 'good' : 'bad'}
-          sub={data.bilanTreso.moisPlanifies
-            ? `${euros0(data.bilanTreso.soldeApres)} après les ${data.bilanTreso.moisPlanifies} mois déjà planifiés`
-            : 'ce qui est en banque aujourd\'hui'} />
+          label="Trésorerie disponible"
+          value={euros0(data.bilanTreso.soldeAujourdhui)}
+          tone={data.bilanTreso.soldeAujourdhui >= 0 ? 'good' : 'bad'}
+          sub={data.bilanTreso.aVenirCeMois
+            ? `${euros0(soldeActuel)} à fin ${labelMois(data.bilanTreso.mois)}, `
+              + `${data.bilanTreso.aVenirCeMois > 0 ? '+' : ''}${euros0(data.bilanTreso.aVenirCeMois)} encore datés ce mois-ci`
+            : data.bilanTreso.moisPlanifies
+              ? `${euros0(data.bilanTreso.soldeApres)} après les ${data.bilanTreso.moisPlanifies} mois déjà planifiés`
+              : 'ce qui est en banque aujourd\'hui'} />
         <StatCard label={data.soldeTVA > 0 ? 'TVA à reverser (exercice)' : 'Crédit de TVA (exercice)'}
           value={euros0(Math.abs(data.soldeTVA))} tone={data.soldeTVA > 0 ? 'bad' : 'good'}
           sub={data.soldeTVA > 0 ? 'dû à l\'État' : 'l\'État te le doit'} />

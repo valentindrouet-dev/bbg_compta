@@ -53,10 +53,15 @@ sont recalculés en direct à partir des écritures.
   moyen constaté à celui budgété, et la comparaison au stock prévu. La valeur du
   stock figure **à l'actif** : elle ne pèse au résultat qu'une fois les
   exemplaires vendus
-- **Trésorerie** — le solde affiché est celui de la **fin du mois en cours**, pas
-  celui de la dernière ligne : un remboursement déjà planifié en octobre ne doit
-  pas amputer ce qu'on a en banque aujourd'hui ; ce qu'il en restera après les
-  mois planifiés est donné dessous. Le tableau de bord et cette page lisent le
+- **Trésorerie** — le solde affiché est celui **du jour**, pas celui de la fin du
+  mois : un virement daté du 30 ne doit pas gonfler la trésorerie dès le 1er, ni
+  une facture à régler le 25 l'amputer d'avance. Le mois en cours n'est donc
+  compté que jusqu'à aujourd'hui, et ce qui reste daté d'ici la clôture est
+  annoncé en dessous (« 10 906 € à fin sept. 26, +1 089 € encore datés ce
+  mois-ci »). Les mois plus lointains n'entrent pas non plus dans le chiffre :
+  un remboursement planifié en octobre ne doit pas amputer ce qu'on a en banque
+  aujourd'hui ; ce qu'il en restera après les mois planifiés est donné dessous.
+  Le tableau de bord et cette page lisent le
   **même calcul**, corrections manuelles comprises — deux écrans ne peuvent plus
   annoncer deux soldes. Chaque montant est rattaché à sa source : **encaissements** et
   **décaissements du journal** (retrouvables ligne à ligne), **mouvements
