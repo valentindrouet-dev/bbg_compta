@@ -368,7 +368,11 @@ de sous-total à masquer, ses bandeaux de jeu portant toujours leur chiffre.
 - **Glisser-déposer une facture** : lâche un PDF ou une photo **sur une ligne du
   journal** pour l'y attacher ; lâche-en plusieurs sur la **zone en bas d'un
   tableau** pour créer une ligne par fichier (le nom du fichier sert de libellé,
-  et le fournisseur est reconnu s'il est déjà connu).
+  et le fournisseur est reconnu s'il est déjà connu). Cette zone est **aussi un
+  bouton** : y cliquer — ou l'atteindre au clavier et faire Entrée — ajoute une
+  ligne vide, exactement comme le bouton *Ajouter* du tableau. C'est la plus
+  grande surface disponible juste sous la dernière ligne, là où la main va
+  d'instinct.
 - **Réorganiser les lignes** : dans la synthèse annuelle **et le prévisionnel**,
   attrape une ligne par
   sa **poignée** (à gauche du nom, elle apparaît au survol) et remonte-la ou

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties, type DragEvent } from 'react';
 import {
-  Plus, Copy, Trash2, AlertTriangle, Search, ClipboardPaste, X, CopyPlus, FileDown,
+  Plus, Copy, Trash2, AlertTriangle, Search, ClipboardPaste, X, CopyPlus,
 } from 'lucide-react';
 import { useStore } from '../../store';
 import { useEtatVue } from '../../utils/etatVue';
@@ -377,6 +377,8 @@ function Section({
   const resetColFormat = useStore(s => s.resetColFormat);
   const couleurs = useStore(s => s.blocCouleurs);
   const [survolZone, setSurvolZone] = useState(false);
+  /** Survol souris de la zone : elle est aussi un bouton, elle doit le montrer. */
+  const [survolClic, setSurvolClic] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
   // Le journal, la synthèse et le prévisionnel partagent la teinte de chaque bloc.
   const bloc: BlocCle = kind === 'produits' ? 'produits'
@@ -593,20 +595,31 @@ function Section({
       )}
 
       {/* Dépôt de factures : sur une ligne pour l'y attacher, ici pour créer
-          une ligne par fichier. */}
+          une ligne par fichier. La zone est aussi un bouton : c'est la surface
+          la plus large du tableau, juste sous la dernière ligne — y cliquer
+          pour ajouter une ligne vide est le geste qu'on tente d'instinct. */}
       <div
-        className="mt-2 rounded-md border-2 border-dashed text-center text-xs py-2 px-3 transition-colors"
-        style={survolZone
+        role="button"
+        tabIndex={0}
+        title="Cliquer pour ajouter une ligne vide, ou déposer des fichiers pour créer une ligne par facture"
+        className="mt-2 rounded-md border-2 border-dashed text-center text-xs py-2 px-3 transition-colors cursor-pointer"
+        style={survolZone || survolClic
           ? { borderColor: 'var(--bbg-purple-dark)', backgroundColor: 'var(--bbg-purple-light)', color: 'var(--bbg-purple-darker)' }
           : { borderColor: 'var(--bbg-border)', backgroundColor: 'transparent', color: '#9a92b5' }}
         onDragOver={ev => { if (transporteDesFichiers(ev)) { ev.preventDefault(); ev.dataTransfer.dropEffect = 'copy'; setSurvolZone(true); } }}
         onDragLeave={() => setSurvolZone(false)}
         onDrop={deposerEnNouvellesLignes}
+        onMouseEnter={() => setSurvolClic(true)}
+        onMouseLeave={() => setSurvolClic(false)}
+        onClick={() => nouvelleLigne()}
+        onKeyDown={ev => {
+          if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); nouvelleLigne(); }
+        }}
       >
         <span className="inline-flex items-center gap-1.5">
-          <FileDown size={13} />
-          Glisse des factures (PDF, photos) <b>sur une ligne</b> pour les y attacher,
-          ou <b>ici</b> pour créer une ligne par fichier.
+          <Plus size={13} />
+          <b>Clique</b> pour ajouter une ligne, ou glisse des factures (PDF, photos)
+          <b>sur une ligne</b> pour les y attacher — <b>ici</b> pour créer une ligne par fichier.
         </span>
       </div>
 
