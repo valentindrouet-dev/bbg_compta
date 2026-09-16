@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties, type DragEvent } from 'react';
 import {
-  Plus, Copy, Trash2, AlertTriangle, Search, ClipboardPaste, X, CopyPlus, FileDown,
+  Plus, Copy, Trash2, AlertTriangle, Search, ClipboardPaste, X, CopyPlus, FileDown, Tag,
 } from 'lucide-react';
 import { useStore } from '../../store';
 import { useEtatVue } from '../../utils/etatVue';
@@ -10,7 +10,7 @@ import {
   EXERCICES, moisExercice, labelMois, labelMoisLong, moisCourant, exerciceDuMois, PRE_IMMAT,
 } from '../../utils/dates';
 import { euros, r2, tvaDepuisTTC } from '../../utils/money';
-import { sumTTH, sumParCategorie, partagerSections } from '../../utils/calc';
+import { sumTTH, sumParCategorie, sumParMotCle, partagerSections } from '../../utils/calc';
 import {
   PageHeader, Card, MonthTabs, Btn, useSort, sortBy, ThSort, BlocColorMenu, TotalBloc,
   styleBloc, type SortState,
@@ -404,6 +404,7 @@ function Section({
   );
   const tot = sumTTH(rows);
   const parCat = sumParCategorie(rows);
+  const parMot = sumParMotCle(rows);
   const isProduits = kind === 'produits';
   const cols = isProduits ? COLS_PRODUITS : kind === 'jeux' ? COLS_JEUX : COLS_DEPENSES;
 
@@ -645,6 +646,28 @@ function Section({
               }}
             >
               {cat} : <b className="tabular-nums">{euros(r2(ht))}</b> HT
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Le même décompte, mais par mot clé : ce qu'a coûté un salon, un
+          festival, un client. En bleu — aucun des quatre blocs du journal ne
+          l'emploie, les deux familles de pastilles ne se confondent donc
+          jamais, quelle que soit la couleur de la carte. */}
+      {parMot.size > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+          <Tag size={12} style={{ color: 'var(--bbg-blue-dark)' }} />
+          {[...parMot.entries()].sort((a, b) => b[1] - a[1]).map(([mot, ht]) => (
+            <span
+              key={mot} className="text-xs rounded-full px-2.5 py-1"
+              title={`Total HT des lignes de ce tableau portant le mot clé « ${mot} »`}
+              style={{
+                backgroundColor: 'var(--bbg-blue-light)',
+                color: 'var(--bbg-blue-dark)',
+              }}
+            >
+              {mot} : <b className="tabular-nums">{euros(r2(ht))}</b> HT
             </span>
           ))}
         </div>

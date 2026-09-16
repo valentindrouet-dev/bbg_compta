@@ -10,7 +10,7 @@ import {
 import { r2 } from './money';
 import {
   syntheseExercice, immoInfos, tableauTVA, tableauTreso, moisTresorerie,
-  resultatDeSynthese, bilanJeux, sectionsDuMois, sumTTH, sumParCategorie,
+  resultatDeSynthese, bilanJeux, sectionsDuMois, sumTTH, sumParCategorie, sumParMotCle,
   dotationsParMois, type BaseMontant, type SyntheseExercice,
 } from './calc';
 import { exporterFichiers, importerFichiers, listFiles, type FichierSerialise } from './files';
@@ -820,19 +820,24 @@ function documentPDFMois(state: AppState, mois: string): jsPDF {
   tableauSection('Produits (revenus)', sections.produits, 'produits', false);
 
   // Le même mois vu par catégorie : le contrôle rapide avant de clore.
-  const recap = (titre: string, rows: JournalEntry[], cle: BlocCle) => {
-    const parCat = sumParCategorie(rows);
-    if (!parCat.size) return;
+  const recap = (
+    titre: string, groupes: Map<string, number>, cle: BlocCle, entete = '% du bloc',
+  ) => {
+
+    if (!groupes.size) return;
     const t = teinte(cle);
-    const tot = r2([...parCat.values()].reduce((s, x) => s + x, 0));
+    // Un en-tête seul en bas de page, son tableau à la page suivante : on
+    // préfère changer de page tout de suite.
+    if (y > 170) { doc.addPage(); y = 16; }
+    const tot = r2([...groupes.values()].reduce((s, x) => s + x, 0));
     const part = (v: number) => tot
       ? `${r2(v / tot * 100).toLocaleString('fr-FR', { minimumFractionDigits: 1 })} %` : '·';
     autoT(doc, {
       startY: y,
-      head: [[titre, 'HT', '% du bloc']],
-      body: [...parCat.entries()]
+      head: [[titre, 'HT', entete]],
+      body: [...groupes.entries()]
         .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
-        .map(([cat, v]) => [cat, eurosPDF(r2(v)), part(v)]),
+        .map(([nom, v]) => [nom, eurosPDF(r2(v)), part(v)]),
       foot: [['TOTAL', eurosPDF(tot), tot ? '100,0 %' : '·']],
       showFoot: 'lastPage',
       styles: { fontSize: 8, halign: 'right' },
@@ -844,13 +849,22 @@ function documentPDFMois(state: AppState, mois: string): jsPDF {
     });
     y = finYDe(doc) + 6;
   };
-  if (sections.charges.length || sections.immos.length || sections.jeux.length
-    || sections.produits.length) {
+  const toutes = [...sections.charges, ...sections.immos, ...sections.jeux,
+    ...sections.produits];
+  if (toutes.length) {
+    const depenses = [...sections.charges, ...sections.immos, ...sections.jeux];
     doc.addPage();
-    y = enTetePDF(doc, `Récapitulatif par catégorie — ${labelMoisLong(mois)}`,
-      'Montants HT, le mois seul');
-    recap('Dépenses par catégorie', [...sections.charges, ...sections.immos, ...sections.jeux], 'charges');
-    recap('Produits par catégorie', sections.produits, 'produits');
+    y = enTetePDF(doc, `Récapitulatif — ${labelMoisLong(mois)}`,
+      'Par catégorie puis par mot clé, montants HT, le mois seul');
+    recap('Dépenses par catégorie', sumParCategorie(depenses), 'charges');
+    recap('Produits par catégorie', sumParCategorie(sections.produits), 'produits');
+    // Les mots clés rattachent une écriture à un événement (un salon, un
+    // festival) : ce décompte-là répond à « combien m'a coûté Cannes ». Il ne
+    // couvre que les lignes qui en portent un, d'où son pourcentage à part.
+    recap('Dépenses par mot clé (lignes sans mot clé exclues)',
+      sumParMotCle(depenses), 'personnel', '%');
+    recap('Produits par mot clé (lignes sans mot clé exclues)',
+      sumParMotCle(sections.produits), 'personnel', '%');
   }
 
   paginer(doc, `Big Budi Games — journal de ${labelMoisLong(mois)}`);

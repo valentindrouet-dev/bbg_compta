@@ -19,10 +19,18 @@ sont recalculés en direct à partir des écritures.
   catégories, plan comptable, mots clés, factures, alerte si la date sort du mois)
 - **Le mois en trois chiffres** — en haut du journal : dépenses (charges,
   immobilisations et jeux), recettes, solde ; TTC en gros, HT rappelé dessous
+- **Deux rangées de pastilles sous chaque tableau** — le total HT **par
+  catégorie**, dans la couleur du bloc, puis le total HT **par mot clé**, en bleu
+  et précédé d'une étiquette. Le bleu n'est employé par aucun des quatre blocs du
+  journal : les deux familles ne se confondent jamais, quelle que soit la couleur
+  de la carte. Le mot clé rattache une écriture à un événement (« ARTFX »,
+  « CANNES 26 ») — ces pastilles répondent donc à « combien m'a coûté ce salon ».
+  Les lignes sans mot clé en sont exclues, elles ne sont pas versées dans un
+  « autres » fourre-tout
 - **PDF du mois** — le bouton en haut du journal enregistre le mois affiché tel
   qu'il est à l'écran : le résumé, les quatre tableaux ligne à ligne avec leurs
-  totaux et leurs couleurs, puis le récapitulatif par catégorie. C'est la trace
-  d'un mois clos, sans envoyer tout l'exercice
+  totaux et leurs couleurs, puis le récapitulatif **par catégorie et par mot
+  clé**. C'est la trace d'un mois clos, sans envoyer tout l'exercice
 - **Synthèse totale** — la même lecture, mais **une colonne par exercice** au
   lieu d'une par mois : catégories, blocs, ventilation par jeu, compte de
   résultat et cumul sur les cinq ans. Le bouton **Prévisionnels** complète les
@@ -288,9 +296,9 @@ sont recalculés en direct à partir des écritures.
   - **PDF d'un mois** — le Journal du mois tel qu'il est à l'écran : résumé
     (dépenses / recettes / solde, TTC et HT), puis les quatre tableaux — charges,
     immobilisations, dépenses jeux, produits — ligne à ligne avec leurs totaux
-    et la palette de chaque bloc, plus un récapitulatif par catégorie. Le bouton
-    **PDF du mois** est aussi en haut de la page *Journal du mois* : un clic, la
-    trace du mois qu'on vient de clore
+    et la palette de chaque bloc, plus un récapitulatif **par catégorie et par mot
+    clé**. Le bouton **PDF du mois** est aussi en haut de la page *Journal du
+    mois* : un clic, la trace du mois qu'on vient de clore
   - **PDF des synthèses** — la **synthèse annuelle** (compte de résultat mois par
     mois, chaque bloc avec sa carte *fonctionnement* et sa carte *jeux*,
     immobilisations, dotations, TVA et récapitulatif) ou la **synthèse totale

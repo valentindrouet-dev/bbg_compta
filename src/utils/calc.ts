@@ -61,6 +61,23 @@ export function sumParCategorie(list: JournalEntry[]): Map<string, number> {
   return m;
 }
 
+/**
+ * Somme HT par mot clé. Une écriture porte un mot clé ou pas : c'est l'événement
+ * auquel elle se rattache (« ARTFX », « CANNES 26 »), pas une liste de
+ * étiquettes. Les lignes sans mot clé ne sont pas regroupées sous un « autres »
+ * fourre-tout : elles sortent du décompte, qui ne répond qu'à une question —
+ * combien a coûté ce salon.
+ */
+export function sumParMotCle(list: JournalEntry[]): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const e of list) {
+    const mot = (e.motsCles ?? '').trim();
+    if (!mot) continue;
+    m.set(mot, (m.get(mot) ?? 0) + e.ht);
+  }
+  return m;
+}
+
 /** Tous les mois comptables présents dans le journal, triés. */
 export function moisPresents(entries: JournalEntry[]): string[] {
   return [...new Set(entries.map(e => e.mois))].sort(compareMois);
