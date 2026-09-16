@@ -1,16 +1,28 @@
 import { useState } from 'react';
-import { FileSpreadsheet, FileText, FileJson, Table, FileArchive, Loader2, Share2, Lock } from 'lucide-react';
+import {
+  FileSpreadsheet, FileText, FileJson, Table, FileArchive, Loader2, Share2, Lock, CalendarDays,
+} from 'lucide-react';
 import { useStore } from '../../store';
-import { EXERCICES } from '../../utils/dates';
-import { exportExcel, exportCSV, exportPDF, exportBackup, exportTout, exportPartage } from '../../utils/export';
+import { EXERCICES, labelMoisLong, moisExercice, moisCourant, exerciceDuMois } from '../../utils/dates';
+import {
+  exportExcel, exportCSV, exportPDF, exportBackup, exportTout, exportPartage,
+  exportPDFMois, exportPDFSynthese, exportPDFSyntheseTotale,
+} from '../../utils/export';
 import { formatTaille } from '../../utils/files';
 import { PageHeader, ExerciceTabs, Card, Btn } from '../ui';
 import { useEtatVue } from '../../utils/etatVue';
+import { useBaseMontant } from '../../utils/reglagesVue';
 
 export function ExportsPage() {
   const state = useStore();
   const [exercice, setExercice] = useEtatVue('exports.exercice', '2025-26',
     v => (EXERCICES as readonly string[]).includes(v));
+  const [base] = useBaseMontant();
+  const moisList = moisExercice(exercice);
+  // Le mois en cours s'il appartient à l'exercice choisi, sinon son premier mois.
+  const [moisPDF, setMoisPDF] = useState(
+    () => exerciceDuMois(moisCourant()) === exercice ? moisCourant() : moisList[0]);
+  const moisChoisi = moisList.includes(moisPDF) ? moisPDF : moisList[0];
   const [avecFactures, setAvecFactures] = useState(true);
   const [enCours, setEnCours] = useState(false);
   const [resultat, setResultat] = useState<string | null>(null);
@@ -134,6 +146,43 @@ export function ExportsPage() {
             Rapport de l'exercice {exercice} : synthèse par catégorie, journal détaillé, TVA et trésorerie.
           </p>
           <Btn onClick={() => exportPDF(state, exercice)}>Générer le PDF</Btn>
+        </Card>
+
+        <Card title={<span className="inline-flex items-center gap-2"><CalendarDays size={18} className="text-[#b7332e]" /> PDF d'un mois</span>}>
+          <p className="text-sm text-[#5c5280] mb-3">
+            Le <b>Journal du mois</b> tel qu'il est à l'écran : charges, immobilisations, dépenses
+            jeux et produits, ligne à ligne, chacun avec son total, plus un récapitulatif par
+            catégorie. De quoi garder la trace d'un mois clos sans envoyer tout l'exercice.
+            Le même bouton se trouve en haut de la page <i>Journal du mois</i>.
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              className="border rounded-md px-2 py-1.5 text-sm bg-white"
+              style={{ borderColor: 'var(--bbg-border)' }}
+              value={moisChoisi}
+              onChange={ev => setMoisPDF(ev.target.value)}
+            >
+              {moisList.map(m => <option key={m} value={m}>{labelMoisLong(m)}</option>)}
+            </select>
+            <Btn onClick={() => exportPDFMois(state, moisChoisi)}>Générer le PDF du mois</Btn>
+          </div>
+        </Card>
+
+        <Card title={<span className="inline-flex items-center gap-2"><FileText size={18} className="text-[#b7332e]" /> PDF des synthèses</span>}>
+          <p className="text-sm text-[#5c5280] mb-3">
+            La <b>synthèse annuelle</b> de l'exercice {exercice} — compte de résultat, blocs mois
+            par mois (fonctionnement et jeux séparés), immobilisations, TVA et récapitulatif —
+            ou la <b>synthèse totale 2025-30</b>, une colonne par exercice. Les deux suivent le
+            réglage {base === 'ttc' ? 'TTC' : 'HT'} ; le compte de résultat reste en HT.
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Btn onClick={() => exportPDFSynthese(state, exercice, base)}>
+              Synthèse {exercice}
+            </Btn>
+            <Btn onClick={() => exportPDFSyntheseTotale(state, base)}>
+              Synthèse totale 2025-30
+            </Btn>
+          </div>
         </Card>
 
         <Card title={<span className="inline-flex items-center gap-2"><FileJson size={18} className="text-amber-600" /> Sauvegarde complète</span>}>

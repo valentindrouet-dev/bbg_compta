@@ -19,12 +19,16 @@ sont recalculés en direct à partir des écritures.
   catégories, plan comptable, mots clés, factures, alerte si la date sort du mois)
 - **Le mois en trois chiffres** — en haut du journal : dépenses (charges,
   immobilisations et jeux), recettes, solde ; TTC en gros, HT rappelé dessous
+- **PDF du mois** — le bouton en haut du journal enregistre le mois affiché tel
+  qu'il est à l'écran : le résumé, les quatre tableaux ligne à ligne avec leurs
+  totaux et leurs couleurs, puis le récapitulatif par catégorie. C'est la trace
+  d'un mois clos, sans envoyer tout l'exercice
 - **Synthèse totale** — la même lecture, mais **une colonne par exercice** au
   lieu d'une par mois : catégories, blocs, ventilation par jeu, compte de
   résultat et cumul sur les cinq ans. Le bouton **Prévisionnels** complète les
   exercices sans écriture avec ce qui est budgété, **en gris et en italique** :
   la trajectoire complète se lit d'un coup, sans jamais confondre le réalisé et
-  le prévu
+  le prévu. Le bouton **PDF** en fige la version chiffrée, une colonne par exercice
 - **Synthèse annuelle** — les blocs dans l'ordre de lecture : **Produits, Charges,
   Personnel, Jeux** (un sous-bloc par jeu, toutes ses catégories listées),
   **Immobilisations**, puis le **compte de résultat** (EBE → REX → RC → IS → RN,
@@ -39,7 +43,8 @@ sont recalculés en direct à partir des écritures.
   en italique** — et les **ajoute aux calculs** : totaux, TTC, compte de résultat
   et résultat net tiennent alors compte de la fin d'exercice prévue. La date du
   jour, affichée sous « BBG Compta », décide de la frontière ; elle se remet à
-  jour toute seule à minuit.
+  jour toute seule à minuit. Le bouton **PDF** enregistre la synthèse complète —
+  mêmes chiffres, mêmes couleurs de blocs, HT ou TTC selon le réglage.
 - **Immobilisations** — **en lecture seule** : c'est un compte rendu de ce qui est
   saisi au Journal du mois, qui fait foi. Durées, dotations, VNC et fin
   d'amortissement calculées ; un clic sur une ligne l'ouvre dans son mois, là où
@@ -280,6 +285,18 @@ sont recalculés en direct à partir des écritures.
   - **Rapport PDF** — compte de résultat, synthèse mensuelle, journal détaillé,
     immobilisations et dépenses par jeu, TVA, trésorerie, mouvements financiers,
     stocks et prévisionnel de l'exercice
+  - **PDF d'un mois** — le Journal du mois tel qu'il est à l'écran : résumé
+    (dépenses / recettes / solde, TTC et HT), puis les quatre tableaux — charges,
+    immobilisations, dépenses jeux, produits — ligne à ligne avec leurs totaux
+    et la palette de chaque bloc, plus un récapitulatif par catégorie. Le bouton
+    **PDF du mois** est aussi en haut de la page *Journal du mois* : un clic, la
+    trace du mois qu'on vient de clore
+  - **PDF des synthèses** — la **synthèse annuelle** (compte de résultat mois par
+    mois, chaque bloc avec sa carte *fonctionnement* et sa carte *jeux*,
+    immobilisations, dotations, TVA et récapitulatif) ou la **synthèse totale
+    2025-30**, une colonne par exercice. Le bouton **PDF** est sur les deux pages,
+    et il suit le réglage HT / TTC — le compte de résultat, lui, reste toujours
+    en HT. Les chiffres sont ceux de l'écran, au centime
   - **CSV du journal** (format français), **sauvegarde JSON intégrale**
     (elle emporte aussi les corrections de trésorerie, les couleurs des blocs
     et tout le stock)

@@ -1,6 +1,6 @@
 import { Fragment, useMemo } from 'react';
 import {
-  CheckSquare, Gamepad2, Square,
+  CheckSquare, Gamepad2, Square, FileDown,
 } from 'lucide-react';
 import { useStore } from '../../store';
 import { EXERCICES, moisExercice } from '../../utils/dates';
@@ -17,8 +17,9 @@ import type { PrevSection } from '../../types';
 import { useEtatVue } from '../../utils/etatVue';
 import { useBaseMontant, useSousTotaux, useVueSimplifiee } from '../../utils/reglagesVue';
 import { couleurJeu, encreSur } from '../../utils/jeux';
-import { PageHeader, Card, TotalBloc, BlocColorMenu, styleBloc, ReglagesVue,
+import { PageHeader, Card, Btn, TotalBloc, BlocColorMenu, styleBloc, ReglagesVue,
 } from '../ui';
+import { exportPDFSyntheseTotale } from '../../utils/export';
 
 /** Un bloc de la synthèse, mais avec une colonne par exercice. */
 interface BlocTotal {
@@ -262,6 +263,13 @@ export function SyntheseTotalePage() {
         actions={
           <>
             <ReglagesVue />
+            {/* Les cinq exercices sur une page : la trajectoire, figée. */}
+            <Btn
+              onClick={() => exportPDFSyntheseTotale(useStore.getState(), base)}
+              title={`Enregistrer la synthèse totale 2025-30 en PDF (${base === 'ttc' ? 'TTC' : 'HT'}) — une colonne par exercice`}
+            >
+              <span className="inline-flex items-center gap-1"><FileDown size={14} /> PDF</span>
+            </Btn>
             {/* Les exercices sans écriture se remplissent avec ce qui est budgété,
                 en gris : la trajectoire complète se lit d'un coup. */}
             <button

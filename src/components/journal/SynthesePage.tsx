@@ -1,6 +1,6 @@
 import { Fragment, useMemo, useState } from 'react';
 import {
-  Eye, EyeOff, Gamepad2, Info, CheckCircle2, AlertTriangle, AlertCircle, Wrench, ArrowRight, GripVertical, CheckSquare, Square,
+  Eye, EyeOff, Gamepad2, Info, CheckCircle2, AlertTriangle, AlertCircle, Wrench, ArrowRight, GripVertical, CheckSquare, Square, FileDown,
 } from 'lucide-react';
 import { useStore } from '../../store';
 import { useReorganisation } from '../../utils/glisser';
@@ -26,6 +26,7 @@ import {
 import type { JournalEntry } from '../../types';
 import { useEtatVue } from '../../utils/etatVue';
 import { useBaseMontant, useSousTotaux, useVueSimplifiee } from '../../utils/reglagesVue';
+import { exportPDFSynthese } from '../../utils/export';
 
 /** Référence stable : un `?? []` dans un sélecteur reboucle à l'infini. */
 const AUCUN_JEU: string[] = [];
@@ -250,6 +251,13 @@ export function SynthesePage({ onAllerA }: { onAllerA?: (page: Page, ligne: stri
             >
               {avecPrev ? <CheckSquare size={14} /> : <Square size={14} />} Prévisionnel
             </button>
+            {/* La synthèse figée sur le papier : le PDF suit le bouton HT / TTC. */}
+            <Btn
+              onClick={() => exportPDFSynthese(useStore.getState(), exercice, base)}
+              title={`Enregistrer la synthèse ${exercice} en PDF (${base === 'ttc' ? 'TTC' : 'HT'}) — compte de résultat, blocs mois par mois, TVA et récapitulatif`}
+            >
+              <span className="inline-flex items-center gap-1"><FileDown size={14} /> PDF</span>
+            </Btn>
             <Btn onClick={basculerApercu} title="Afficher le détail des opérations au survol d'une case">
               <span className="inline-flex items-center gap-1">
                 {apercuActif ? <Eye size={14} /> : <EyeOff size={14} />}

@@ -17,6 +17,33 @@ export function isJeux(e: JournalEntry, categoriesJeux: string[]): boolean {
   return e.type !== 'produit' && categoriesJeux.includes(e.categorie);
 }
 
+/**
+ * Les quatre tableaux du Journal du mois, découpés une seule fois pour toute
+ * l'app : l'écran et l'export PDF lisent le même partage, sinon la trace
+ * papier finit par ne plus ressembler à ce qui est affiché.
+ */
+export interface SectionsDuMois {
+  charges: JournalEntry[]; immos: JournalEntry[];
+  jeux: JournalEntry[]; produits: JournalEntry[];
+}
+
+/** Partage une liste déjà restreinte (mois, recherche) en quatre tableaux. */
+export function partagerSections(duMois: JournalEntry[], refs: Referentiels): SectionsDuMois {
+  const horsJeux = duMois.filter(e => e.type !== 'produit' && !refs.categoriesJeux.includes(e.categorie));
+  return {
+    charges: horsJeux.filter(e => !estImmobilisation(e, refs)),
+    immos: horsJeux.filter(e => estImmobilisation(e, refs)),
+    jeux: duMois.filter(e => isJeux(e, refs.categoriesJeux)),
+    produits: duMois.filter(e => e.type === 'produit'),
+  };
+}
+
+export function sectionsDuMois(
+  entries: JournalEntry[], mois: string, refs: Referentiels,
+): SectionsDuMois {
+  return partagerSections(entriesDuMois(entries, mois), refs);
+}
+
 // ----- Agrégats mensuels -------------------------------------------------
 
 export interface TotalTTH { ttc: number; tva: number; ht: number }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties, type DragEvent } from 'react';
 import {
-  Plus, Copy, Trash2, AlertTriangle, Search, ClipboardPaste, X, CopyPlus,
+  Plus, Copy, Trash2, AlertTriangle, Search, ClipboardPaste, X, CopyPlus, FileDown,
 } from 'lucide-react';
 import { useStore } from '../../store';
 import { useEtatVue } from '../../utils/etatVue';
@@ -10,17 +10,18 @@ import {
   EXERCICES, moisExercice, labelMois, labelMoisLong, moisCourant, exerciceDuMois, PRE_IMMAT,
 } from '../../utils/dates';
 import { euros, r2, tvaDepuisTTC } from '../../utils/money';
-import { sumTTH, sumParCategorie } from '../../utils/calc';
+import { sumTTH, sumParCategorie, partagerSections } from '../../utils/calc';
 import {
   PageHeader, Card, MonthTabs, Btn, useSort, sortBy, ThSort, BlocColorMenu, TotalBloc,
   styleBloc, type SortState,
 } from '../ui';
-import { estImmobilisation, teinteBloc, type BlocCle } from '../../utils/blocs';
+import { teinteBloc, type BlocCle } from '../../utils/blocs';
 import { DateCell, MoneyCell, AutoCompleteCell, FactureCell, ColFormatMenu, colStyle } from './cells';
 import type { ColFormat } from '../../store';
 import { saveFile, deleteFile } from '../../utils/files';
 import { fichiersDeposes, transporteDesFichiers, libelleDepuisNom, fournisseurDepuisNom } from '../../utils/depot';
 import { useCibleLigne, type Cible } from '../../utils/cible';
+import { exportPDFMois } from '../../utils/export';
 
 /** Référence stable : un `?? []` dans un sélecteur reboucle à l'infini. */
 const AUCUN_JEU: string[] = [];
@@ -118,11 +119,12 @@ export function JournalPage({ cible }: { cible?: Cible }) {
     jeu: e => e.jeu ?? '',
   });
 
-  const horsJeux = duMois.filter(e => e.type !== 'produit' && !refs.categoriesJeux.includes(e.categorie));
-  const charges = tri(horsJeux.filter(e => !estImmobilisation(e, refs)));
-  const immos = tri(horsJeux.filter(e => estImmobilisation(e, refs)));
-  const jeux = tri(duMois.filter(e => e.type !== 'produit' && refs.categoriesJeux.includes(e.categorie)));
-  const produits = tri(duMois.filter(e => e.type === 'produit'));
+  // Le même partage que l'export PDF du mois : un seul découpage pour les deux.
+  const sections = partagerSections(duMois, refs);
+  const charges = tri(sections.charges);
+  const immos = tri(sections.immos);
+  const jeux = tri(sections.jeux);
+  const produits = tri(sections.produits);
 
   // Tous les fournisseurs déjà saisis, dédoublonnés et triés — sert à la complétion.
   const fournisseurs = useMemo(() => {
@@ -188,6 +190,15 @@ export function JournalPage({ cible }: { cible?: Cible }) {
             >
               {EXERCICES.map(ex => <option key={ex} value={ex}>Exercice {ex}</option>)}
             </select>
+            {/* La trace papier du mois : les quatre tableaux tels qu'ils sont ici. */}
+            <Btn
+              onClick={() => exportPDFMois(useStore.getState(), mois)}
+              title={`Enregistrer le journal de ${labelMoisLong(mois)} en PDF — les quatre tableaux, leurs totaux et le récapitulatif par catégorie`}
+            >
+              <span className="inline-flex items-center gap-1">
+                <FileDown size={14} /> PDF du mois
+              </span>
+            </Btn>
           </>
         }
         tabs={
