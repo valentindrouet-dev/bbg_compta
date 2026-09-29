@@ -23,6 +23,7 @@ import { fichiersDeposes, transporteDesFichiers, libelleDepuisNom, fournisseurDe
 import { useCibleLigne, type Cible } from '../../utils/cible';
 import { exportPDFMois } from '../../utils/export';
 import { toast } from '../../utils/toast';
+import { BarreFlottante } from '../layout/DockBas';
 
 /** Référence stable : un `?? []` dans un sélecteur reboucle à l'infini. */
 const AUCUN_JEU: string[] = [];
@@ -167,7 +168,9 @@ export function JournalPage({ cible }: { cible?: Cible }) {
   const selectedIds = [...selected];
 
   return (
-    <div className={`p-4 w-full ${clip ? 'paste-mode' : ''}`}>
+    // Le bas de page réserve la hauteur des barres flottantes : la dernière ligne
+    // du dernier tableau peut toujours remonter au-dessus d'elles.
+    <div className={`p-4 pb-28 w-full ${clip ? 'paste-mode' : ''}`}>
       <PageHeader
         title="Journal du mois"
         subtitle={labelMoisLong(mois)}
@@ -216,10 +219,13 @@ export function JournalPage({ cible }: { cible?: Cible }) {
 
       <ResumeMois depenses={[...charges, ...immos]} jeux={jeux} produits={produits} />
 
-      {/* Bandeau mode collage */}
+      {/* Bandeau mode collage — il flotte en bas de l'écran : inséré au-dessus des
+          tableaux, il ferait glisser la ligne sur laquelle on s'apprête à coller. */}
       {clip && (
+        <BarreFlottante>
         <div
-          className="mt-3 px-4 py-2 rounded-md border flex flex-wrap items-center gap-3 text-sm"
+          className="barre-flottante pointer-events-auto max-w-full px-4 py-2 rounded-2xl border shadow-lg
+            flex flex-wrap items-center justify-center gap-3 text-sm"
           style={{ backgroundColor: 'var(--bbg-yellow-light)', borderColor: 'var(--bbg-yellow)', color: 'var(--bbg-yellow-dark)' }}
         >
           <ClipboardPaste size={16} />
@@ -231,16 +237,20 @@ export function JournalPage({ cible }: { cible?: Cible }) {
             <span className="inline-flex items-center gap-1"><X size={13} /> Terminer (Échap)</span>
           </Btn>
         </div>
+        </BarreFlottante>
       )}
 
-      {/* Barre d'actions groupées */}
+      {/* Barre d'actions groupées — flottante elle aussi : cocher une ligne ne
+          doit pas faire descendre le tableau d'un cran. */}
       {selectedIds.length > 0 && (
+        <BarreFlottante>
         <div
-          className="mt-3 px-4 py-2 rounded-md border flex flex-wrap items-center gap-2 text-sm sticky top-2 z-20 shadow-sm"
+          className="barre-flottante pointer-events-auto max-w-full px-4 py-2 rounded-2xl border shadow-lg
+            flex flex-wrap items-center justify-center gap-2 text-sm"
           style={{ backgroundColor: 'var(--bbg-purple-light)', borderColor: 'var(--bbg-purple)', color: 'var(--bbg-purple-darker)' }}
         >
           <b>{selectedIds.length} ligne{selectedIds.length > 1 ? 's' : ''} sélectionnée{selectedIds.length > 1 ? 's' : ''}</b>
-          <span style={{ color: '#7a6fa5' }}>— modifier d'un coup :</span>
+          <span className="w-px h-5 mx-1" style={{ backgroundColor: 'var(--bbg-purple)', opacity: 0.4 }} />
 
           <BatchSelect label="Catégorie" options={[...refs.categoriesDepenses, ...refs.categoriesJeux, ...refs.categoriesProduits]}
             onPick={v => updateEntries(selectedIds, { categorie: v })} />
@@ -261,8 +271,18 @@ export function JournalPage({ cible }: { cible?: Cible }) {
           }}>
             <span className="inline-flex items-center gap-1"><Trash2 size={13} /> Supprimer</span>
           </Btn>
-          <Btn variant="ghost" onClick={() => setSelected(new Set())}>Désélectionner</Btn>
+          <button
+            type="button"
+            onClick={() => setSelected(new Set())}
+            title="Désélectionner (Échap)"
+            aria-label="Désélectionner"
+            className="p-1.5 rounded-full hover:bg-white/70"
+            style={{ color: 'var(--bbg-purple-darker)' }}
+          >
+            <X size={15} />
+          </button>
         </div>
+        </BarreFlottante>
       )}
 
       <div className="space-y-5 mt-4">
@@ -283,13 +303,20 @@ export function JournalPage({ cible }: { cible?: Cible }) {
   );
 }
 
-/** Petit menu d'action groupée : choisir une valeur l'applique à la sélection. */
+/**
+ * Petit menu d'action groupée : choisir une valeur l'applique à la sélection.
+ * Sa largeur est plafonnée : fermé, il n'affiche que son intitulé — sans cela
+ * « Compte… » s'étirerait à la taille du plus long libellé du plan comptable
+ * et la barre flottante déborderait sur deux lignes. Ouvert, la liste montre
+ * les libellés en entier.
+ */
 function BatchSelect({ label, options, labelOf, onPick }: {
   label: string; options: string[]; labelOf?: (v: string) => string; onPick: (v: string) => void;
 }) {
   return (
     <select
-      className="border rounded px-1.5 py-1 text-sm bg-white"
+      className="border rounded px-1.5 py-1 text-sm bg-white max-w-[8rem]"
+      title={`${label} — appliqué à toutes les lignes sélectionnées`}
       style={{ borderColor: 'var(--bbg-purple)', color: 'var(--bbg-purple-darker)' }}
       value=""
       onChange={ev => { if (ev.target.value) { onPick(ev.target.value); ev.target.value = ''; } }}

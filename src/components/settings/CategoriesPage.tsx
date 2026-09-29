@@ -4,6 +4,7 @@ import { useStore, type CatKind } from '../../store';
 import { natureCategorie } from '../../utils/blocs';
 import { euros, r2 } from '../../utils/money';
 import { PageHeader, Card, Btn, StatCard, useSort, sortBy, ThSort } from '../ui';
+import { BarreFlottante } from '../layout/DockBas';
 
 /** Palette pastel (celle des tableurs) proposée pour colorer les catégories. */
 export const COULEURS_PASTEL = [
@@ -99,7 +100,7 @@ export function CategoriesPage() {
   }
 
   return (
-    <div className="p-4 w-full max-w-[1400px]">
+    <div className="p-4 pb-28 w-full max-w-[1400px]">
       <PageHeader
         title="Catégories"
         subtitle="Renommer, colorer, regrouper — les écritures suivent automatiquement"
@@ -112,10 +113,13 @@ export function CategoriesPage() {
         <StatCard label="Produits" value={String(refs.categoriesProduits.length)} tone="good" />
       </div>
 
-      {/* Barre d'actions groupées */}
+      {/* Barre d'actions groupées — flottante, comme au journal : cocher une
+          catégorie ne fait pas descendre la liste. */}
       {sel.length > 0 && (
+        <BarreFlottante>
         <div
-          className="mb-4 px-4 py-2.5 rounded-md border flex flex-wrap items-center gap-2 text-sm sticky top-2 z-20 shadow-sm"
+          className="barre-flottante pointer-events-auto max-w-full px-4 py-2.5 rounded-2xl border shadow-lg
+            flex flex-wrap items-center justify-center gap-2 text-sm"
           style={{ backgroundColor: 'var(--bbg-purple-light)', borderColor: 'var(--bbg-purple)', color: 'var(--bbg-purple-darker)' }}
         >
           <b>{sel.length} catégorie{sel.length > 1 ? 's' : ''} sélectionnée{sel.length > 1 ? 's' : ''}</b>
@@ -194,6 +198,7 @@ export function CategoriesPage() {
           </Btn>
           <Btn variant="ghost" onClick={() => setSelection(new Set())}>Désélectionner</Btn>
         </div>
+        </BarreFlottante>
       )}
 
       <div className="grid lg:grid-cols-[1fr_320px] gap-4 items-start">

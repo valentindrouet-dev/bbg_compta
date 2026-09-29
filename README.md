@@ -401,6 +401,15 @@ de sous-total à masquer, ses bandeaux de jeu portant toujours leur chiffre.
   **pastille flottante au bas de l'écran** : le tableau ne bouge pas d'un
   pixel, on garde l'œil sur la ligne qu'on vient de remplir. Elle s'efface
   toute seule au bout de cinq secondes, ou d'un clic
+- **Modifier plusieurs lignes d'un coup** : coche des lignes du journal — une
+  **barre flottante** apparaît en bas de l'écran, par-dessus la page : catégorie,
+  paiement, type, compte ou mois, appliqués à toute la sélection, plus
+  *Dupliquer*, *Supprimer* et ✕ (ou **Échap**) pour tout décocher. Le tableau
+  ne bouge pas quand elle apparaît : la ligne suivante qu'on voulait cocher
+  reste sous la souris. Même chose pour le **mode collage** (icône copier d'une
+  ligne) et pour la sélection de l'onglet **Catégories**. Les confirmations
+  s'empilent au-dessus de la barre, et la barre d'annulation reste visible
+  en bas à droite
 - **Réorganiser les lignes** : dans la synthèse annuelle **et le prévisionnel**,
   attrape une ligne par
   sa **poignée** (à gauche du nom, elle apparaît au survol) et remonte-la ou

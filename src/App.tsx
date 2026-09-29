@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Sidebar } from './components/layout/Sidebar';
 import { BandeauCoffre } from './components/layout/BarreCoffre';
 import { UndoBar } from './components/layout/UndoBar';
-import { Toasts } from './components/layout/Toasts';
+import { DockBas } from './components/layout/DockBas';
 import { useStore } from './store';
 import { appliquerLargeurs, installerResize } from './utils/colresize';
 import type { Cible } from './utils/cible';
@@ -144,8 +144,9 @@ export default function App() {
         {page === 'settings' && <SettingsPage />}
         {page === 'wiki' && <WikiPage onAllerA={setPage} />}
       </main>
-      {/* Les confirmations flottent au-dessus de tout : aucune ne décale la page. */}
-      <Toasts />
+      {/* Barres de sélection et confirmations flottent au-dessus de tout :
+          aucune ne décale la page. */}
+      <DockBas />
     </div>
   );
 }
