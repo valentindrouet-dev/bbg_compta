@@ -248,3 +248,13 @@ input[type="number"]::-webkit-outer-spin-button { opacity: 0.5; }
   padding-left: 2px;
 }
 .sheet th:hover .th-tools { opacity: 1; }
+
+/* Confirmations flottantes : elles montent en place sans pousser la page.
+   Un tableau qui se décale d'une ligne à chaque facture déposée, c'est perdre
+   des yeux celle qu'on vient de remplir. */
+@keyframes toast-entree {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+.toast { animation: toast-entree 160ms ease-out; }
+@media (prefers-reduced-motion: reduce) { .toast { animation: none; } }

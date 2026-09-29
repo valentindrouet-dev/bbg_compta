@@ -22,6 +22,7 @@ import { saveFile, deleteFile } from '../../utils/files';
 import { fichiersDeposes, transporteDesFichiers, libelleDepuisNom, fournisseurDepuisNom } from '../../utils/depot';
 import { useCibleLigne, type Cible } from '../../utils/cible';
 import { exportPDFMois } from '../../utils/export';
+import { toast } from '../../utils/toast';
 
 /** Référence stable : un `?? []` dans un sélecteur reboucle à l'infini. */
 const AUCUN_JEU: string[] = [];
@@ -390,7 +391,6 @@ function Section({
   const [survolZone, setSurvolZone] = useState(false);
   /** Survol souris de la zone : elle est aussi un bouton, elle doit le montrer. */
   const [survolClic, setSurvolClic] = useState(false);
-  const [flash, setFlash] = useState<string | null>(null);
   // Le journal, la synthèse et le prévisionnel partagent la teinte de chaque bloc.
   const bloc: BlocCle = kind === 'produits' ? 'produits'
     : kind === 'jeux' ? 'jeux' : kind === 'immos' ? 'immos' : 'charges';
@@ -439,10 +439,6 @@ function Section({
   }
 
 
-  function annoncer(msg: string) {
-    setFlash(msg);
-    setTimeout(() => setFlash(f => (f === msg ? null : f)), 6000);
-  }
 
   /** Crée une écriture par fichier déposé, avec le justificatif déjà attaché. */
   async function creerDepuisFichiers(files: File[]): Promise<number> {
@@ -476,9 +472,9 @@ function Section({
     });
     if (suite.length) {
       await creerDepuisFichiers(suite);
-      annoncer(`« ${premier.name} » attaché à la ligne ; ${suite.length} autre(s) fichier(s) ont créé autant de lignes.`);
+      toast(`« ${premier.name} » attaché à la ligne ; ${suite.length} autre(s) fichier(s) ont créé autant de lignes.`);
     } else {
-      annoncer(`« ${premier.name} » attaché à la ligne.`);
+      toast(`« ${premier.name} » attaché à la ligne.`);
     }
   }
 
@@ -486,9 +482,9 @@ function Section({
     ev.preventDefault();
     setSurvolZone(false);
     const files = fichiersDeposes(ev);
-    if (!files.length) { annoncer('Aucun PDF ni image dans ce qui a été déposé.'); return; }
+    if (!files.length) { toast('Aucun PDF ni image dans ce qui a été déposé.', 'info'); return; }
     const n = await creerDepuisFichiers(files);
-    annoncer(`${n} ligne(s) créée(s) avec leur justificatif.`);
+    toast(`${n} ligne(s) créée(s) avec leur justificatif.`);
   }
 
   return (
@@ -515,15 +511,6 @@ function Section({
         </>
       }
     >
-      {flash && (
-        <div
-          className="mb-2 px-3 py-1.5 rounded-md text-sm border"
-          style={{ backgroundColor: 'var(--bbg-green-light)', borderColor: 'var(--bbg-green)', color: '#1c5236' }}
-        >
-          {flash}
-        </div>
-      )}
-
       {rows.length === 0 ? (
         <p className="text-sm italic mb-2" style={{ color: '#9a92b5' }}>Aucune écriture ce mois-ci.</p>
       ) : (

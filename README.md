@@ -397,7 +397,10 @@ de sous-total à masquer, ses bandeaux de jeu portant toujours leur chiffre.
   bouton** : y cliquer — ou l'atteindre au clavier et faire Entrée — ajoute une
   ligne vide, exactement comme le bouton *Ajouter* du tableau. C'est la plus
   grande surface disponible juste sous la dernière ligne, là où la main va
-  d'instinct.
+  d'instinct. La confirmation (« facture attachée à la ligne ») s'affiche en
+  **pastille flottante au bas de l'écran** : le tableau ne bouge pas d'un
+  pixel, on garde l'œil sur la ligne qu'on vient de remplir. Elle s'efface
+  toute seule au bout de cinq secondes, ou d'un clic
 - **Réorganiser les lignes** : dans la synthèse annuelle **et le prévisionnel**,
   attrape une ligne par
   sa **poignée** (à gauche du nom, elle apparaît au survol) et remonte-la ou
