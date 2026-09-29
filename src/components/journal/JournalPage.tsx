@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties, type DragEvent } from 'react';
 import {
-  Plus, Copy, Trash2, AlertTriangle, Search, ClipboardPaste, X, CopyPlus, FileDown, Tag,
+  Plus, Copy, Trash2, AlertTriangle, Search, ClipboardPaste, X, CopyPlus, FileDown, FileStack, Tag,
 } from 'lucide-react';
 import { useStore } from '../../store';
 import { useEtatVue } from '../../utils/etatVue';
@@ -21,7 +21,7 @@ import type { ColFormat } from '../../store';
 import { saveFile, deleteFile } from '../../utils/files';
 import { fichiersDeposes, transporteDesFichiers, libelleDepuisNom, fournisseurDepuisNom } from '../../utils/depot';
 import { useCibleLigne, type Cible } from '../../utils/cible';
-import { exportPDFMois } from '../../utils/export';
+import { exportPDFMois, exportPDFJournalExercice } from '../../utils/export';
 import { toast } from '../../utils/toast';
 import { BarreFlottante } from '../layout/DockBas';
 
@@ -143,6 +143,8 @@ export function JournalPage({ cible }: { cible?: Cible }) {
     for (const e of entries) m.set(e.mois, (m.get(e.mois) ?? 0) + 1);
     return m;
   }, [entries]);
+  /** Un exercice sans écriture n'a pas de journal à imprimer. */
+  const nbExercice = moisList.reduce((s, m) => s + (nbParMois.get(m) ?? 0), 0);
 
   function changeExercice(ex: string) {
     setExercice(ex);
@@ -201,6 +203,18 @@ export function JournalPage({ cible }: { cible?: Cible }) {
             >
               <span className="inline-flex items-center gap-1">
                 <FileDown size={14} /> PDF du mois
+              </span>
+            </Btn>
+            {/* Tous les mois de l'exercice dans un seul fichier, derrière un sommaire. */}
+            <Btn
+              onClick={() => exportPDFJournalExercice(useStore.getState(), exercice)}
+              disabled={!nbExercice}
+              title={nbExercice
+                ? `Enregistrer tout le journal ${exercice} en un seul PDF — un sommaire, puis chaque mois tel que le donne « PDF du mois »`
+                : `Aucune écriture sur l'exercice ${exercice}`}
+            >
+              <span className="inline-flex items-center gap-1">
+                <FileStack size={14} /> PDF de l'exercice
               </span>
             </Btn>
           </>

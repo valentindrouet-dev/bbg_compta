@@ -11,7 +11,7 @@ import { r2 } from './money';
 import {
   syntheseExercice, immoInfos, tableauTVA, tableauTreso, moisTresorerie,
   resultatDeSynthese, bilanJeux, sectionsDuMois, sumTTH, sumParCategorie, sumParMotCle,
-  dotationsParMois, type BaseMontant, type SyntheseExercice,
+  dotationsParMois, type BaseMontant, type SyntheseExercice, type SectionsDuMois,
 } from './calc';
 import { exporterFichiers, importerFichiers, listFiles, type FichierSerialise } from './files';
 import { creerZip, nomSur, type FichierZip } from './zip';
@@ -399,6 +399,7 @@ export function exportCSV(entries: JournalEntry[]) {
 const REMPLACEMENTS_PDF: [RegExp, string][] = [
   [/[\u00a0\u202f\u2007\u2009\u2060]/g, ' '],   // espaces insécables et fines
   [/[\u2010\u2011\u2012\u2212]/g, '-'],         // tirets et signe moins
+  [/\u2192/g, '\u2013'],                          // « mai → août » : un intervalle
   [/[\u25b8\u25b6\u2023\u27a4]/g, '\u00bb'],      // puces triangulaires
   [/[\u2713\u2714]/g, 'oui'],
 ];
@@ -694,15 +695,19 @@ function enTetePDF(doc: jsPDF, titre: string, sousTitre: string): number {
   return 31;
 }
 
-/** Pied de page : la mention à gauche, la pagination à droite. */
-function paginer(doc: jsPDF, mention: string) {
+/**
+ * Pied de page : la mention à gauche, la pagination à droite. La mention peut
+ * changer d'une page à l'autre — dans le journal d'un exercice, chaque page
+ * rappelle le mois auquel elle appartient.
+ */
+function paginer(doc: jsPDF, mention: string | ((page: number) => string)) {
   const total = doc.getNumberOfPages();
   const { width, height } = doc.internal.pageSize;
   for (let i = 1; i <= total; i++) {
     doc.setPage(i);
     doc.setFontSize(7.5);
     doc.setTextColor(150);
-    texte(doc, mention, 14, height - 6);
+    texte(doc, typeof mention === 'string' ? mention : mention(i), 14, height - 6);
     texte(doc, `${i} / ${total}`, width - 14, height - 6, { align: 'right' });
   }
   doc.setTextColor(0);
@@ -719,38 +724,61 @@ const COLS_JOURNAL = ['Date', 'Fournisseur', 'Description', 'Catégorie',
   'TTC', 'TVA', 'HT', 'Paiement', 'Compte', 'Mots clés', 'Facture'];
 
 /**
- * Le Journal du mois en PDF : les quatre tableaux de l'écran, ligne à ligne,
- * chacun avec son total — de quoi garder la trace d'un mois clos, ou la
- * transmettre au comptable sans lui envoyer tout l'exercice.
+ * Le mois en quatre chiffres : ce qui est sorti, ce qui est rentré, ce qu'il en
+ * reste — le même calcul que les tuiles de l'écran. Le PDF d'un mois et le
+ * sommaire de l'exercice le lisent tous deux ici : les deux ne peuvent pas
+ * diverger d'un centime.
  */
-function documentPDFMois(state: AppState, mois: string): jsPDF {
-  const { entries, referentiels: refs, blocCouleurs } = state;
-  const doc = new jsPDF({ orientation: 'landscape' });
-  const sections = sectionsDuMois(entries, mois, refs);
-  const teinte = (cle: BlocCle) => teinteBloc(cle, blocCouleurs ?? {});
-
-  let y = enTetePDF(doc, `Journal comptable — ${labelMoisLong(mois)}`,
-    `Big Budi Games · exercice ${exerciceDuMois(mois)} · écritures réelles du journal`);
-
-  // Le mois en quatre chiffres, avant le détail : ce qui est sorti, ce qui est
-  // rentré, ce qu'il en reste — le même résumé que les tuiles de l'écran.
+function resumeDuMois(sections: SectionsDuMois) {
   const depenses = sumTTH([...sections.charges, ...sections.immos]);
   const jeux = sumTTH(sections.jeux);
   const produits = sumTTH(sections.produits);
   const sortiesTTC = r2(depenses.ttc + jeux.ttc);
   const sortiesHT = r2(depenses.ht + jeux.ht);
-  const nb = sections.charges.length + sections.immos.length
-    + sections.jeux.length + sections.produits.length;
+  const nbDepenses = sections.charges.length + sections.immos.length + sections.jeux.length;
+  return {
+    nbDepenses, nbProduits: sections.produits.length,
+    nb: nbDepenses + sections.produits.length,
+    sortiesTTC, sortiesHT, jeux, produits,
+    soldeTTC: r2(produits.ttc - sortiesTTC), soldeHT: r2(produits.ht - sortiesHT),
+  };
+}
+
+/**
+ * Le Journal du mois en PDF : les quatre tableaux de l'écran, ligne à ligne,
+ * chacun avec son total — de quoi garder la trace d'un mois clos, ou la
+ * transmettre au comptable sans lui envoyer tout l'exercice.
+ */
+function documentPDFMois(state: AppState, mois: string): jsPDF {
+  const doc = new jsPDF({ orientation: 'landscape' });
+  ecrireMois(doc, state, mois, sectionsDuMois(state.entries, mois, state.referentiels));
+  paginer(doc, `Big Budi Games — journal de ${labelMoisLong(mois)}`);
+  return doc;
+}
+
+/**
+ * Écrit un mois du journal dans `doc`, à partir de la page courante : résumé,
+ * quatre tableaux, puis le récapitulatif par catégorie et par mot clé. Le PDF
+ * d'un mois et celui de l'exercice passent tous deux par ici.
+ */
+function ecrireMois(doc: jsPDF, state: AppState, mois: string, sections: SectionsDuMois) {
+  const { blocCouleurs } = state;
+  const teinte = (cle: BlocCle) => teinteBloc(cle, blocCouleurs ?? {});
+
+  let y = enTetePDF(doc, `Journal comptable — ${labelMoisLong(mois)}`,
+    `Big Budi Games · exercice ${exerciceDuMois(mois)} · écritures réelles du journal`);
+
+  // Le mois en quatre chiffres, avant le détail.
+  const r = resumeDuMois(sections);
   autoT(doc, {
     startY: y,
     head: [['Résumé du mois', 'TTC', 'HT', 'Lignes']],
     body: [
-      ['Dépenses (charges, immobilisations et jeux)', eurosPDF(sortiesTTC), eurosPDF(sortiesHT),
-        String(sections.charges.length + sections.immos.length + sections.jeux.length)],
-      ['dont dépenses jeux', eurosPDF(jeux.ttc), eurosPDF(jeux.ht), String(sections.jeux.length)],
-      ['Recettes', eurosPDF(produits.ttc), eurosPDF(produits.ht), String(sections.produits.length)],
-      ['Solde du mois', eurosPDF(r2(produits.ttc - sortiesTTC)), eurosPDF(r2(produits.ht - sortiesHT)),
-        String(nb)],
+      ['Dépenses (charges, immobilisations et jeux)', eurosPDF(r.sortiesTTC), eurosPDF(r.sortiesHT),
+        String(r.nbDepenses)],
+      ['dont dépenses jeux', eurosPDF(r.jeux.ttc), eurosPDF(r.jeux.ht), String(sections.jeux.length)],
+      ['Recettes', eurosPDF(r.produits.ttc), eurosPDF(r.produits.ht), String(r.nbProduits)],
+      ['Solde du mois', eurosPDF(r.soldeTTC), eurosPDF(r.soldeHT), String(r.nb)],
     ],
     styles: { fontSize: 9, halign: 'right' },
     headStyles: { fillColor: rgb(teinte('resultat').base), textColor: 20 },
@@ -823,7 +851,6 @@ function documentPDFMois(state: AppState, mois: string): jsPDF {
   const recap = (
     titre: string, groupes: Map<string, number>, cle: BlocCle, entete = '% du bloc',
   ) => {
-
     if (!groupes.size) return;
     const t = teinte(cle);
     // Un en-tête seul en bas de page, son tableau à la page suivante : on
@@ -866,9 +893,6 @@ function documentPDFMois(state: AppState, mois: string): jsPDF {
     recap('Produits par mot clé (lignes sans mot clé exclues)',
       sumParMotCle(sections.produits), 'personnel', '%');
   }
-
-  paginer(doc, `Big Budi Games — journal de ${labelMoisLong(mois)}`);
-  return doc;
 }
 
 export function blobPDFMois(state: AppState, mois: string): Blob {
@@ -877,6 +901,111 @@ export function blobPDFMois(state: AppState, mois: string): Blob {
 
 export function exportPDFMois(state: AppState, mois: string) {
   documentPDFMois(state, mois).save(`BBG_Journal_${mois}_${today()}.pdf`);
+}
+
+/**
+ * Le journal de tout un exercice en un seul PDF : un sommaire, puis chaque mois
+ * exactement comme le donne le bouton « PDF du mois » — mêmes pages, mêmes
+ * tableaux, mêmes totaux, puisque c'est la même fonction qui les écrit.
+ *
+ * Les mois sans écriture n'ont pas de pages : douze pages « aucune écriture »
+ * ne diraient rien. Le sommaire les nomme quand même — leur absence se voit,
+ * elle ne se cache pas. Chaque ligne du sommaire mène à son mois d'un clic, et
+ * les signets du lecteur PDF font de même.
+ */
+function documentPDFJournalExercice(state: AppState, exercice: string): jsPDF {
+  const { entries, referentiels: refs, blocCouleurs } = state;
+  const doc = new jsPDF({ orientation: 'landscape' });
+  const teinte = (cle: BlocCle) => teinteBloc(cle, blocCouleurs ?? {});
+  const tousLesMois = moisExercice(exercice).map(mois => {
+    const sections = sectionsDuMois(entries, mois, refs);
+    return { mois, sections, resume: resumeDuMois(sections) };
+  });
+  const pleins = tousLesMois.filter(x => x.resume.nb > 0);
+
+  // La page 1 est réservée au sommaire. Il s'écrit en dernier, quand chaque
+  // mois connaît sa première page.
+  const mentions = new Map<number, string>([[1, `Big Budi Games — journal ${exercice} · sommaire`]]);
+  const premierePage = new Map<string, number>();
+  doc.outline.add(null, `Sommaire ${exercice}`, { pageNumber: 1 });
+  for (const x of pleins) {
+    doc.addPage();
+    const premiere = doc.getNumberOfPages();
+    premierePage.set(x.mois, premiere);
+    ecrireMois(doc, state, x.mois, x.sections);
+    for (let p = premiere; p <= doc.getNumberOfPages(); p++) {
+      mentions.set(p, `Big Budi Games — journal ${exercice} · ${labelMoisLong(x.mois)}`);
+    }
+    doc.outline.add(null, labelMoisLong(x.mois), { pageNumber: premiere });
+  }
+
+  doc.setPage(1);
+  const y = enTetePDF(doc, `Journal comptable — exercice ${exercice}`,
+    `Big Budi Games · ${pleins.length} mois avec des écritures sur ${tousLesMois.length}`
+    + ' · écritures réelles du journal');
+  // Le total se calcule sur les montants exacts de l'exercice, arrondis une
+  // seule fois — comme la Synthèse. Les écritures importées portent jusqu'à
+  // quatre décimales de HT (31,6667 €) : additionner des mois déjà arrondis
+  // ferait dériver le total d'un centime, et deux onglets afficheraient deux
+  // chiffres pour la même chose.
+  const depensesExercice = sumTTH(tousLesMois.flatMap(x =>
+    [...x.sections.charges, ...x.sections.immos, ...x.sections.jeux]));
+  const recettesExercice = sumTTH(tousLesMois.flatMap(x => x.sections.produits));
+  const tR = teinte('resultat');
+  autoT(doc, {
+    startY: y,
+    head: [['Mois', 'Lignes', 'Dépenses TTC', 'Dépenses HT', 'Recettes TTC', 'Recettes HT',
+      'Solde TTC', 'Solde HT', 'Page']],
+    body: tousLesMois.map(({ mois, resume: r }) => {
+      const page = premierePage.get(mois);
+      if (!page) return [labelMoisLong(mois), '0', '·', '·', '·', '·', '·', '·', 'aucune écriture'];
+      return [labelMoisLong(mois), String(r.nb), eurosPDF(r.sortiesTTC), eurosPDF(r.sortiesHT),
+        eurosPDF(r.produits.ttc), eurosPDF(r.produits.ht), eurosPDF(r.soldeTTC), eurosPDF(r.soldeHT),
+        String(page)];
+    }),
+    foot: [['TOTAL DE L\'EXERCICE', String(tousLesMois.reduce((s, x) => s + x.resume.nb, 0)),
+      eurosPDF(depensesExercice.ttc), eurosPDF(depensesExercice.ht),
+      eurosPDF(recettesExercice.ttc), eurosPDF(recettesExercice.ht),
+      eurosPDF(r2(recettesExercice.ttc - depensesExercice.ttc)),
+      eurosPDF(r2(recettesExercice.ht - depensesExercice.ht)), '']],
+    styles: { fontSize: 8.5, halign: 'right', cellPadding: 1.8 },
+    headStyles: { fillColor: rgb(tR.base), textColor: rgb(tR.fonce) },
+    footStyles: { fillColor: rgb(tR.total), textColor: rgb(tR.fonce), fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: rgb(tR.tresClair) },
+    columnStyles: { 0: { halign: 'left', cellWidth: 68 }, 8: { cellWidth: 26 } },
+    didParseCell: (d) => {
+      if (d.section !== 'body') return;
+      const vide = !premierePage.has(tousLesMois[d.row.index]?.mois);
+      if (vide) { d.cell.styles.textColor = 150; d.cell.styles.fontStyle = 'italic'; }
+      else if (d.column.index === 0 || d.column.index === 8) d.cell.styles.textColor = rgb(tR.fonce);
+    },
+    // Toute la ligne d'un mois est un lien vers sa première page.
+    didDrawCell: (d) => {
+      if (d.section !== 'body') return;
+      const page = premierePage.get(tousLesMois[d.row.index]?.mois);
+      if (page) doc.link(d.cell.x, d.cell.y, d.cell.width, d.cell.height, { pageNumber: page });
+    },
+  });
+  doc.setFontSize(8);
+  doc.setTextColor(120);
+  const sous = finYDe(doc) + 7;
+  texte(doc, 'Un clic sur un mois ouvre sa page ; les signets du lecteur PDF y mènent aussi. '
+    + 'Chaque mois reprend le PDF du mois : résumé, quatre tableaux, récapitulatif.', 14, sous);
+  texte(doc, 'Le total est calculé sur les montants exacts de l\'exercice, comme la Synthèse annuelle : '
+    + 'il peut différer d\'un centime de la somme des mois, chacun arrondi.', 14, sous + 4.5);
+  doc.setTextColor(0);
+
+  paginer(doc, page => mentions.get(page) ?? '');
+  return doc;
+}
+
+export function blobPDFJournalExercice(state: AppState, exercice: string): Blob {
+  return documentPDFJournalExercice(state, exercice).output('blob');
+}
+
+export function exportPDFJournalExercice(state: AppState, exercice: string) {
+  documentPDFJournalExercice(state, exercice)
+    .save(`BBG_Journal_exercice_${exercice}_${today()}.pdf`);
 }
 
 // ----------------------------------------------------- PDF : les synthèses -

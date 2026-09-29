@@ -6,7 +6,7 @@ import { useStore } from '../../store';
 import { EXERCICES, labelMoisLong, moisExercice, moisCourant, exerciceDuMois } from '../../utils/dates';
 import {
   exportExcel, exportCSV, exportPDF, exportBackup, exportTout, exportPartage,
-  exportPDFMois, exportPDFSynthese, exportPDFSyntheseTotale,
+  exportPDFMois, exportPDFSynthese, exportPDFSyntheseTotale, exportPDFJournalExercice,
 } from '../../utils/export';
 import { formatTaille } from '../../utils/files';
 import { PageHeader, ExerciceTabs, Card, Btn } from '../ui';
@@ -153,7 +153,8 @@ export function ExportsPage() {
             Le <b>Journal du mois</b> tel qu'il est à l'écran : charges, immobilisations, dépenses
             jeux et produits, ligne à ligne, chacun avec son total, plus un récapitulatif par
             catégorie. De quoi garder la trace d'un mois clos sans envoyer tout l'exercice.
-            Le même bouton se trouve en haut de la page <i>Journal du mois</i>.
+            Ou tout l'exercice d'un coup : un sommaire cliquable, puis chaque mois à la suite.
+            Les deux boutons se trouvent aussi en haut de la page <i>Journal du mois</i>.
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <select
@@ -165,6 +166,10 @@ export function ExportsPage() {
               {moisList.map(m => <option key={m} value={m}>{labelMoisLong(m)}</option>)}
             </select>
             <Btn onClick={() => exportPDFMois(state, moisChoisi)}>Générer le PDF du mois</Btn>
+            <span className="text-xs text-[#9a92b5]">ou</span>
+            <Btn onClick={() => exportPDFJournalExercice(state, exercice)}>
+              Tous les mois de {exercice} en un PDF
+            </Btn>
           </div>
         </Card>
 

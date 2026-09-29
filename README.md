@@ -31,6 +31,16 @@ sont recalculés en direct à partir des écritures.
   qu'il est à l'écran : le résumé, les quatre tableaux ligne à ligne avec leurs
   totaux et leurs couleurs, puis le récapitulatif **par catégorie et par mot
   clé**. C'est la trace d'un mois clos, sans envoyer tout l'exercice
+- **PDF de l'exercice** — juste à côté : tous les mois de l'exercice affiché
+  dans un seul fichier. Une page de **sommaire** d'abord — chaque mois avec ses
+  lignes, ses dépenses, ses recettes et son solde (TTC et HT), sa page, et le
+  total de l'exercice —, puis chaque mois exactement comme le donne *PDF du
+  mois* (c'est la même fonction qui l'écrit). **Un clic sur un mois du sommaire
+  ouvre sa page**, et les **signets** du lecteur PDF y mènent aussi. Les mois
+  sans écriture n'ont pas de pages, mais le sommaire les nomme. Le total est
+  calculé sur les montants exacts, comme la Synthèse annuelle : il tombe sur le
+  même chiffre au centime (les écritures importées portent jusqu'à quatre
+  décimales de HT)
 - **Synthèse totale** — la même lecture, mais **une colonne par exercice** au
   lieu d'une par mois : catégories, blocs, ventilation par jeu, compte de
   résultat et cumul sur les cinq ans. Le bouton **Prévisionnels** complète les
@@ -298,7 +308,8 @@ sont recalculés en direct à partir des écritures.
     immobilisations, dépenses jeux, produits — ligne à ligne avec leurs totaux
     et la palette de chaque bloc, plus un récapitulatif **par catégorie et par mot
     clé**. Le bouton **PDF du mois** est aussi en haut de la page *Journal du
-    mois* : un clic, la trace du mois qu'on vient de clore
+    mois* : un clic, la trace du mois qu'on vient de clore. Ou **tous les mois de
+    l'exercice en un PDF**, derrière un sommaire cliquable
   - **PDF des synthèses** — la **synthèse annuelle** (compte de résultat mois par
     mois, chaque bloc avec sa carte *fonctionnement* et sa carte *jeux*,
     immobilisations, dotations, TVA et récapitulatif) ou la **synthèse totale
