@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties, type DragEvent } from 'react';
 import {
   Plus, Copy, Trash2, AlertTriangle, Search, ClipboardPaste, X, CopyPlus, FileDown, FileStack, Tag,
+  CalendarCheck,
 } from 'lucide-react';
 import { useStore } from '../../store';
 import { useEtatVue } from '../../utils/etatVue';
@@ -152,6 +153,12 @@ export function JournalPage({ cible }: { cible?: Cible }) {
     setMois(list.includes(courant) ? courant : list[0]);
   }
 
+  // Le raccourci « Mois en cours » : il n'apparaît que si l'on regarde un autre
+  // mois, et seulement si l'exercice du mois en cours existe dans l'app.
+  const exerciceCourant = exerciceDuMois(courant);
+  const allerAuMoisCourant = mois !== courant
+    && (EXERCICES as readonly string[]).includes(exerciceCourant);
+
   function toggleRow(id: string) {
     setSelected(prev => {
       const next = new Set(prev);
@@ -175,6 +182,19 @@ export function JournalPage({ cible }: { cible?: Cible }) {
     <div className={`p-4 pb-28 w-full ${clip ? 'paste-mode' : ''}`}>
       <PageHeader
         title="Journal du mois"
+        aCoteDuTitre={allerAuMoisCourant ? (
+          // Compact : plus bas que la ligne du titre, il apparaît et disparaît sans
+          // changer la hauteur de l'en-tête — le tableau ne bouge pas.
+          <button
+            type="button"
+            onClick={() => changeExercice(exerciceCourant)}
+            title={`Revenir au mois en cours — ${labelMoisLong(courant)}`}
+            className="px-2.5 py-1 rounded-md text-xs font-medium inline-flex items-center gap-1
+              bg-white border border-[#c9c0e4] text-[#3f3268] hover:bg-[#f4f1fb] transition-colors"
+          >
+            <CalendarCheck size={13} /> Mois en cours
+          </button>
+        ) : undefined}
         subtitle={labelMoisLong(mois)}
         actions={
           <>

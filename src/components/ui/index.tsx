@@ -19,10 +19,12 @@ import { encreSur } from '../../utils/jeux';
  * synthèse. Les marges négatives lui font couvrir toute la largeur, y compris
  * le rembourrage de la page.
  */
-export function PageHeader({ title, subtitle, actions, tabs }: {
+export function PageHeader({ title, subtitle, actions, tabs, aCoteDuTitre }: {
   title: string; subtitle?: string; actions?: ReactNode;
   /** Onglets (mois, exercices) : ils restent collés avec le titre. */
   tabs?: ReactNode;
+  /** Un petit bouton posé juste après le titre, sur la même ligne. */
+  aCoteDuTitre?: ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   // La hauteur de l'en-tête est publiée en variable CSS : les frises et les
@@ -47,7 +49,14 @@ export function PageHeader({ title, subtitle, actions, tabs }: {
     >
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: 'var(--bbg-purple-darker)' }}>{title}</h1>
+          {aCoteDuTitre ? (
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold" style={{ color: 'var(--bbg-purple-darker)' }}>{title}</h1>
+              {aCoteDuTitre}
+            </div>
+          ) : (
+            <h1 className="text-2xl font-bold" style={{ color: 'var(--bbg-purple-darker)' }}>{title}</h1>
+          )}
           {subtitle && <p className="text-sm mt-0.5" style={{ color: '#6f6690' }}>{subtitle}</p>}
         </div>
         {actions && <div className="flex items-center gap-2">{actions}</div>}

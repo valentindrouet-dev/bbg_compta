@@ -17,6 +17,9 @@ sont recalculés en direct à partir des écritures.
   en est une d'office. Saisie mois par mois
   (TVA automatique par taux 20 / 10 / 5,5 / 0 % ou saisie manuelle, HT calculé,
   catégories, plan comptable, mots clés, factures, alerte si la date sort du mois)
+- **Mois en cours** — à côté du titre du journal, dès qu'on regarde un autre
+  mois : un clic ramène au mois d'aujourd'hui, exercice compris. Il disparaît
+  quand on y est
 - **Le mois en trois chiffres** — en haut du journal : dépenses (charges,
   immobilisations et jeux), recettes, solde ; TTC en gros, HT rappelé dessous
 - **Deux rangées de pastilles sous chaque tableau** — le total HT **par
