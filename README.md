@@ -20,6 +20,10 @@ sont recalculés en direct à partir des écritures.
 - **Mois en cours** — à côté du titre du journal, dès qu'on regarde un autre
   mois : un clic ramène au mois d'aujourd'hui, exercice compris. Il disparaît
   quand on y est
+- **Tri par date** — le jour, puis l'ordre de saisie. **Date ↓ est l'inverse
+  exact de Date ↑**, journées comprises : la dernière ligne saisie d'un jour
+  passe en haut — l'ordre de Qonto, qui liste les opérations les plus récentes
+  en premier, quand on saisit le mois dans l'ordre chronologique
 - **Le mois en trois chiffres** — en haut du journal : dépenses (charges,
   immobilisations et jeux), recettes, solde ; TTC en gros, HT rappelé dessous
 - **Deux rangées de pastilles sous chaque tableau** — le total HT **par

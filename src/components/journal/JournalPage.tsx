@@ -106,7 +106,26 @@ export function JournalPage({ cible }: { cible?: Cible }) {
         .some(v => v?.toLowerCase().includes(filtre)));
   }, [entries, mois, search]);
 
-  const tri = (list: JournalEntry[]) => sortBy(list, sort, {
+  /**
+   * Rang de saisie de chaque ligne : sa place dans le journal, où toute
+   * nouvelle ligne s'ajoute à la fin.
+   */
+  const rangDeSaisie = useMemo(() => new Map(entries.map((e, i) => [e.id, i])), [entries]);
+
+  const tri = (list: JournalEntry[]) => {
+    // Par date : le jour, puis l'ordre de saisie. Date ↓ est l'inverse exact
+    // de Date ↑, journées comprises : la dernière ligne saisie d'un jour
+    // passe en haut — l'ordre de Qonto, qui liste les opérations les plus
+    // récentes en premier, quand on saisit le mois dans l'ordre chronologique.
+    if (sort.key === 'date') {
+      const sens = sort.dir === 'asc' ? 1 : -1;
+      return [...list].sort((a, b) => sens * (
+        (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)
+        || (rangDeSaisie.get(a.id) ?? 0) - (rangDeSaisie.get(b.id) ?? 0)));
+    }
+    return trierAutrement(list);
+  };
+  const trierAutrement = (list: JournalEntry[]) => sortBy(list, sort, {
     date: e => e.date,
     fournisseur: e => e.fournisseur,
     description: e => e.description,
