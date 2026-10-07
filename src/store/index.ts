@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import type {
   JournalEntry, FinanceEntry, BudgetExercice, ChronoEvent, TresoPrevLine, Referentiels, CategorieMeta,
+  Placement,
   CanalVente, FormulePrev, JeuMeta, LigneDroits, LigneStock, MouvementStock, PrevLigne,
   PrevSection,
   TresoManuel,
@@ -166,7 +167,7 @@ export type CatKind = 'categoriesDepenses' | 'categoriesJeux' | 'categoriesProdu
 export type ColWidths = Record<string, number[]>;
 
 /** Clés dont la modification est enregistrée dans l'historique d'annulation. */
-const DATA_KEYS = ['entries', 'finances', 'mouvementsPrev', 'referentiels', 'budgets', 'previsionnels', 'stocks', 'mouvementsStock', 'chronologie', 'tresoPrev', 'tresoManuel', 'journalFormats', 'blocCouleurs'] as const;
+const DATA_KEYS = ['entries', 'finances', 'mouvementsPrev', 'placements', 'referentiels', 'budgets', 'previsionnels', 'stocks', 'mouvementsStock', 'chronologie', 'tresoPrev', 'tresoManuel', 'journalFormats', 'blocCouleurs'] as const;
 type DataKey = typeof DATA_KEYS[number];
 type Snapshot = Pick<AppState, DataKey>;
 
@@ -181,6 +182,11 @@ export interface AppState {
    * prévisionnelle les prend, et seulement sur les mois pas encore écoulés.
    */
   mouvementsPrev: FinanceEntry[];
+  /**
+   * Le registre des placements. Absent des données enregistrées avant lui :
+   * l'état initial le fournit vide, sans migration ni réécriture des données.
+   */
+  placements: Placement[];
   referentiels: Referentiels;
   budgets: Record<string, BudgetExercice>;
   /** Prévisionnel par exercice, aligné sur les catégories de la synthèse. */
@@ -238,6 +244,10 @@ export interface AppState {
    * prévisions, en une seule opération — un seul Cmd+Z le défait.
    */
   passerMouvementEnReel: (id: string) => void;
+
+  addPlacement: (p: Omit<Placement, 'id'>) => void;
+  updatePlacement: (id: string, patch: Partial<Placement>) => void;
+  removePlacement: (id: string) => void;
 
   updateBudgetCell: (exercice: string, ligneId: string, moisIdx: number, value: number | null) => void;
   updateBudgetLine: (exercice: string, ligneId: string, patch: Partial<BudgetExercice['lignes'][number]>) => void;
@@ -356,7 +366,7 @@ export interface AppState {
   updateMouvementStock: (id: string, patch: Partial<MouvementStock>) => void;
   removeMouvementStock: (id: string) => void;
 
-  restoreAll: (data: Partial<Pick<AppState, 'entries' | 'finances' | 'mouvementsPrev' | 'referentiels' | 'budgets' | 'previsionnels' | 'stocks' | 'mouvementsStock' | 'chronologie' | 'tresoPrev' | 'journalFormats' | 'colWidths' | 'blocCouleurs'>>) => void;
+  restoreAll: (data: Partial<Pick<AppState, 'entries' | 'finances' | 'mouvementsPrev' | 'placements' | 'referentiels' | 'budgets' | 'previsionnels' | 'stocks' | 'mouvementsStock' | 'chronologie' | 'tresoPrev' | 'journalFormats' | 'colWidths' | 'blocCouleurs'>>) => void;
   resetToSeed: () => void;
 }
 
@@ -414,6 +424,7 @@ function seedState() {
     entries,
     finances: structuredClone(seedTresorerie.mouvementsFinanciers) as FinanceEntry[],
     mouvementsPrev: [],
+    placements: [] as Placement[],
     referentiels: refs,
     budgets: structuredClone(seedBudgets) as unknown as Record<string, BudgetExercice>,
     // Seul l'exercice en cours est repris du tableur ; les quatre suivants
@@ -519,6 +530,7 @@ let suspendHistory = false;
 function snapshot(s: AppState): Snapshot {
   return {
     entries: s.entries, finances: s.finances, mouvementsPrev: s.mouvementsPrev,
+    placements: s.placements,
     referentiels: s.referentiels,
     budgets: s.budgets, previsionnels: s.previsionnels,
     chronologie: s.chronologie, tresoPrev: s.tresoPrev, tresoManuel: s.tresoManuel,
@@ -670,6 +682,15 @@ export const useStore = create<AppState>()(
       })),
       removeMouvementPrev: (id) => set(s => ({
         mouvementsPrev: (s.mouvementsPrev ?? []).filter(f => f.id !== id),
+      })),
+      addPlacement: (p) => set(s => ({
+        placements: [...(s.placements ?? []), { ...p, id: uid() }],
+      })),
+      updatePlacement: (id, patch) => set(s => ({
+        placements: (s.placements ?? []).map(p => p.id === id ? { ...p, ...patch } : p),
+      })),
+      removePlacement: (id) => set(s => ({
+        placements: (s.placements ?? []).filter(p => p.id !== id),
       })),
       passerMouvementEnReel: (id) => set(s => {
         const m = (s.mouvementsPrev ?? []).find(f => f.id === id);
@@ -1355,6 +1376,7 @@ export const useStore = create<AppState>()(
       // à chaque ouverture, et les actions ne sont jamais sérialisées.
       partialize: (s) => ({
         entries: s.entries, finances: s.finances, mouvementsPrev: s.mouvementsPrev,
+        placements: s.placements,
         referentiels: s.referentiels,
         budgets: s.budgets, previsionnels: s.previsionnels,
         chronologie: s.chronologie, tresoPrev: s.tresoPrev, tresoManuel: s.tresoManuel,

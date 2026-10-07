@@ -100,6 +100,19 @@ sont recalculés en direct à partir des écritures.
   saisi à la main quand un paiement tombe un autre mois. Une colonne **relevé
   bancaire** permet de pointer : l'écart s'affiche. Rembourser un compte courant sort de la trésorerie sans
   être une charge — c'est une dette qu'on éteint, elle ne touche pas le résultat
+- **Placements** — le registre des placements de la société : la banque ou la
+  plateforme, le produit (compte à terme, livret, compte rémunéré, fonds…), le
+  montant, la date de placement, la durée et l'**échéance** qui s'en déduit, le
+  **taux** et la **rémunération attendue** — calculée en intérêts simples
+  (montant × taux × durée ; par an pour un livret), ou saisie quand le contrat
+  prévoit autre chose —, **ce qui est sûr** (tout, le capital seul, rien), puis
+  la date et le montant **récupérés**, d'où le gain réel. Chaque placement a
+  son statut (à venir, en cours, **échu — à récupérer**, récupéré), et quatre
+  cartes résument l'encours placé, la rémunération attendue (dont la part sûre),
+  le taux moyen pondéré et la prochaine échéance. Le registre ne pèse encore sur
+  aucun autre écran : les versements et les retours d'argent restent des
+  mouvements financiers saisis en Trésorerie. Il est dans la sauvegarde (format
+  v6) et dans le classeur Excel
 - **TVA** — collectée / déductible / solde par mois, calculée écriture par écriture ;
   rouge = dû à l'État, vert = crédit de TVA en ta faveur
 - **Jeux** — bilan comptable par jeu, comparaison au prévisionnel, lien vers la

@@ -20,6 +20,10 @@ import { ordreAffichage, valeursDe, SECTIONS } from './previsionnel';
 import { natureCategorie, dureeCategorie, teinteBloc, type BlocCle } from './blocs';
 import { couleurJeu } from './jeux';
 import { APP_VERSION } from '../version';
+import {
+  GARANTIES_PLACEMENT, LIBELLE_STATUT, PRODUITS_PLACEMENT, echeancePlacement, gainReel,
+  remunerationAttendue, statutPlacement,
+} from './placements';
 import { positionsStock, stocksExercice } from './stock';
 
 function download(name: string, blob: Blob) {
@@ -179,10 +183,33 @@ export function blobExcel(state: AppState, exercice: string): Blob {
     .map(f => ({ 'Date': f.date, 'Libellé': f.label, 'Type': f.type, 'Montant': r2(f.montant) })));
 
   // Les mêmes, mais seulement prévus : ils ne comptent que dans la trésorerie
-  // prévisionnelle, sur les mois pas encore écoulés.
+  // prévisionnelle, jusqu'à leur date.
   feuille('Mouvements financiers prévus', [...(state.mouvementsPrev ?? [])]
     .sort((a, b) => a.date.localeCompare(b.date))
     .map(f => ({ 'Date': f.date, 'Libellé': f.label, 'Type': f.type, 'Montant': r2(f.montant) })));
+
+  // Le registre des placements, tel qu'à l'écran : statut et rémunération du jour.
+  const jour = today();
+  feuille('Placements', [...(state.placements ?? [])]
+    .sort((a, b) => a.debut.localeCompare(b.debut))
+    .map(p => ({
+      'Établissement': p.etablissement,
+      'Produit': PRODUITS_PLACEMENT.find(x => x.value === p.produit)?.label ?? p.produit,
+      'Libellé': p.libelle,
+      'Placé le': p.debut,
+      'Montant': r2(p.montant),
+      'Durée (mois)': p.dureeMois ?? '',
+      'Échéance': echeancePlacement(p) ?? 'sans échéance',
+      'Taux annuel (%)': p.taux,
+      'Rémunération attendue': remunerationAttendue(p),
+      'Rémunération': p.remunerationSaisie == null ? 'calculée' : 'saisie',
+      'Ce qui est sûr': GARANTIES_PLACEMENT.find(g => g.value === p.garantie)?.label ?? p.garantie,
+      'Statut': LIBELLE_STATUT[statutPlacement(p, jour)],
+      'Récupéré le': p.recupereLe ?? '',
+      'Montant récupéré': p.montantRecupere ?? '',
+      'Gain réel': gainReel(p) ?? '',
+      'Notes': p.notes ?? '',
+    })));
 
   // TVA
   feuille('TVA', tableauTVA(entries, moisExercice(exercice)).map(x => ({
@@ -1433,15 +1460,17 @@ export async function blobBackup(state: AppState, avecFichiers = true): Promise<
   const fichiers = avecFichiers ? await exporterFichiers() : [];
   const data = {
     format: 'bbg-compta-backup',
+    // v6 : le registre des placements rejoint la sauvegarde.
     // v5 : les mouvements financiers seulement prévus rejoignent la sauvegarde.
     // v4 y avait fait entrer le stock — prévisionnel et mouvements réels — et
     // v3 les corrections manuelles de trésorerie et les couleurs des blocs,
     // qu'une restauration perdait.
-    version: 5,
+    version: 6,
     exportedAt: new Date().toISOString(),
     entries: state.entries,
     finances: state.finances,
     mouvementsPrev: state.mouvementsPrev,
+    placements: state.placements ?? [],
     referentiels: state.referentiels,
     budgets: state.budgets,
     previsionnels: state.previsionnels,
@@ -1615,6 +1644,7 @@ export async function importBackup(file: File): Promise<{
       tresoPrev: data.tresoPrev ?? [],
       // Absents des sauvegardes plus anciennes : on ne remplace alors rien.
       ...(data.mouvementsPrev ? { mouvementsPrev: data.mouvementsPrev } : {}),
+      ...(data.placements ? { placements: data.placements } : {}),
       ...(data.tresoManuel ? { tresoManuel: data.tresoManuel } : {}),
       ...(data.stocks ? { stocks: data.stocks } : {}),
       ...(data.mouvementsStock ? { mouvementsStock: data.mouvementsStock } : {}),

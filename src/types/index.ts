@@ -58,6 +58,52 @@ export interface FinanceEntry {
   montant: number;
 }
 
+// ----- Placements --------------------------------------------------------
+
+/** La nature d'un placement de trésorerie. */
+export type ProduitPlacement =
+  | 'compte_a_terme' | 'livret' | 'compte_remunere' | 'fonds' | 'obligations' | 'autre';
+
+/**
+ * Ce qui est sûr dans un placement : tout (capital et rémunération, un compte
+ * à terme à taux fixe), le capital seulement (un livret dont le taux peut
+ * bouger), ou rien (un fonds qui peut perdre de la valeur).
+ */
+export type GarantiePlacement = 'tout' | 'capital' | 'rien';
+
+/**
+ * Un placement de trésorerie, noté dans le registre des placements. Les
+ * mouvements d'argent eux-mêmes — le versement, le retour — restent des
+ * mouvements financiers saisis en Trésorerie : ce registre dit où l'argent est
+ * placé, pour combien de temps et ce qu'il doit rapporter.
+ */
+export interface Placement {
+  id: string;
+  /** Banque ou plateforme où l'argent est placé. */
+  etablissement: string;
+  produit: ProduitPlacement;
+  /** Libellé libre : « CAT 12 mois », référence du contrat… */
+  libelle: string;
+  /** Montant placé, en euros. */
+  montant: number;
+  /** Date de placement (ISO). */
+  debut: string;
+  /** Durée en mois ; vide pour un placement sans échéance (livret). */
+  dureeMois: number | null;
+  /** Taux annuel brut, en %. */
+  taux: number;
+  /**
+   * Rémunération attendue quand elle diffère du calcul (taux progressif,
+   * prime…). Vide : calculée depuis le taux et la durée.
+   */
+  remunerationSaisie: number | null;
+  garantie: GarantiePlacement;
+  /** Une fois l'argent revenu : la date et le montant réellement récupéré. */
+  recupereLe?: string;
+  montantRecupere?: number | null;
+  notes?: string;
+}
+
 // ----- Prévisionnel ------------------------------------------------------
 
 export type BudgetSection = 'ca' | 'couts_dev' | 'charges_externes' | 'personnel' | 'resultat' | 'tva' | 'autres';

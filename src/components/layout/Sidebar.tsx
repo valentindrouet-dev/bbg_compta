@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   Coins, LayoutDashboard, NotebookPen, Table2, Building2, Wallet, Percent,
   UserRound, Target, GitCompareArrows, Landmark, CalendarRange, FileDown, Settings, Store, Tags, Gamepad2,
-  ReceiptText, TrendingUp, Boxes, BookOpen,
+  ReceiptText, TrendingUp, Boxes, BookOpen, PiggyBank,
 } from 'lucide-react';
 import type { Page } from '../../App';
 import { APP_VERSION } from '../../version';
@@ -28,6 +28,7 @@ const NAV: { section: string; items: { page: Page; label: string; icon: typeof C
       { page: 'immos', label: 'Immobilisations', icon: Building2 },
       { page: 'stocks', label: 'Stocks', icon: Boxes },
       { page: 'treso', label: 'Trésorerie', icon: Wallet },
+      { page: 'placements', label: 'Placements', icon: PiggyBank },
       { page: 'tva', label: 'TVA', icon: Percent },
       { page: 'jeux', label: 'Jeux', icon: Gamepad2 },
       { page: 'fournisseurs', label: 'Fournisseurs', icon: Store },
