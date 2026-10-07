@@ -4,7 +4,7 @@ import {
   LayoutGrid, List, FileArchive, TriangleAlert, Loader2,
 } from 'lucide-react';
 import { useStore } from '../../store';
-import type { JournalEntry } from '../../types';
+import type { JournalEntry, Placement } from '../../types';
 import { labelMois, formatDateFR, compareMois } from '../../utils/dates';
 import { euros } from '../../utils/money';
 import {
@@ -25,8 +25,12 @@ interface LigneFacture {
   estImage: boolean;
 }
 
+/** Référence stable : un `?? []` dans un sélecteur reboucle à l'infini. */
+const AUCUN_PLACEMENT: Placement[] = [];
+
 export function FacturesPage() {
   const entries = useStore(s => s.entries);
+  const placements = useStore(s => s.placements) ?? AUCUN_PLACEMENT;
   const updateEntry = useStore(s => s.updateEntry);
 
   const [fichiers, setFichiers] = useState<StoredFile[]>([]);
@@ -49,13 +53,22 @@ export function FacturesPage() {
     return surChangementFichiers(charger);
   }, []);
 
+  // Les contrats de placement vivent dans la même base de fichiers, mais ce ne
+  // sont pas des factures : ils restent sur la page Placements. Sans ce tri,
+  // ils s'afficheraient ici comme des factures « non rattachées » — et on les
+  // supprimerait en croyant faire le ménage.
+  const contrats = useMemo(
+    () => new Set(placements.map(p => p.contratFileId).filter((id): id is string => !!id)),
+    [placements]);
+  const justificatifs = useMemo(() => fichiers.filter(f => !contrats.has(f.id)), [fichiers, contrats]);
+
   const parFileId = useMemo(() => {
     const m = new Map<string, JournalEntry>();
     for (const e of entries) if (e.factureFileId) m.set(e.factureFileId, e);
     return m;
   }, [entries]);
 
-  const lignes: LigneFacture[] = useMemo(() => fichiers.map(f => {
+  const lignes: LigneFacture[] = useMemo(() => justificatifs.map(f => {
     const ecriture = parFileId.get(f.id);
     return {
       fichier: f,
@@ -63,7 +76,7 @@ export function FacturesPage() {
       mois: ecriture?.mois ?? '',
       estImage: f.type.startsWith('image/') || /\.(png|jpe?g|webp|heic|gif|avif)$/i.test(f.name),
     };
-  }), [fichiers, parFileId]);
+  }), [justificatifs, parFileId]);
 
   // Écritures qui pointent vers un fichier absent de la base (fichier effacé).
   const liensCasses = useMemo(() => {
@@ -138,7 +151,7 @@ export function FacturesPage() {
 
   async function toutTelecharger() {
     setZipEnCours(true);
-    try { await exportFactures(entries); } finally { setZipEnCours(false); }
+    try { await exportFactures(entries, placements); } finally { setZipEnCours(false); }
   }
 
   return (
@@ -183,7 +196,7 @@ export function FacturesPage() {
       />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-        <StatCard label="Justificatifs stockés" value={String(fichiers.length)} />
+        <StatCard label="Justificatifs stockés" value={String(justificatifs.length)} />
         <StatCard
           label="Place occupée"
           value={formatTaille(octets)}

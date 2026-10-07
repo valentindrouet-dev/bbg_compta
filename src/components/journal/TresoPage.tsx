@@ -49,7 +49,7 @@ export function TresoPage() {
             : bilan.moisPlanifies
               ? `${euros(bilan.soldeApres)} après les ${bilan.moisPlanifies} mois déjà planifiés`
               : 'dernier mois du tableau'} />
-        <StatCard label="Dont placé (comptes à terme)" value={euros(totalPlace)} tone="accent"
+        <StatCard label="Dont placé (dépôts à terme)" value={euros(totalPlace)} tone="accent"
           sub="modifiable dans les mouvements financiers" />
         <StatCard label="Disponible + placé"
           value={euros(r2(bilan.soldeAujourdhui + totalPlace))} />

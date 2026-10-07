@@ -6,7 +6,9 @@ import type { GarantiePlacement, Placement, ProduitPlacement } from '../types';
 import { r2 } from './money';
 
 export const PRODUITS_PLACEMENT: { value: ProduitPlacement; label: string }[] = [
-  { value: 'compte_a_terme', label: 'Compte à terme' },
+  // La clé reste « compte_a_terme » : seul le libellé change, les placements
+  // déjà notés n'ont rien à réécrire.
+  { value: 'compte_a_terme', label: 'Dépôt à terme' },
   { value: 'livret', label: 'Livret' },
   { value: 'compte_remunere', label: 'Compte rémunéré' },
   { value: 'fonds', label: 'Fonds / SICAV' },
@@ -17,7 +19,7 @@ export const PRODUITS_PLACEMENT: { value: ProduitPlacement; label: string }[] = 
 export const GARANTIES_PLACEMENT: { value: GarantiePlacement; label: string; aide: string }[] = [
   {
     value: 'tout', label: 'Tout est sûr',
-    aide: 'Le montant placé et les intérêts sont connus d\'avance — un compte à terme à taux fixe.',
+    aide: 'Le montant placé et les intérêts sont connus d\'avance — un dépôt à terme à taux fixe.',
   },
   {
     value: 'capital', label: 'Capital seul sûr',
@@ -49,7 +51,7 @@ export function echeancePlacement(p: Placement): string | null {
 }
 
 /**
- * Rémunération calculée, en intérêts simples — le cas des comptes à terme :
+ * Rémunération calculée, en intérêts simples — le cas des dépôts à terme :
  * montant × taux annuel × durée en années. Sans échéance, c'est ce que le
  * placement rapporte sur un an.
  */

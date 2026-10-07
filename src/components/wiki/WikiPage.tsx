@@ -386,9 +386,9 @@ const CHAPITRES: Chapitre[] = [
       },
       {
         mot: 'Placement',
-        aussi: ['compte à terme'],
+        aussi: ['dépôt à terme', 'compte à terme'],
         court: 'De l’argent déplacé, pas dépensé.',
-        detail: 'Un virement vers un compte à terme sort de la trésorerie disponible mais reste à '
+        detail: 'Un virement vers un dépôt à terme sort de la trésorerie disponible mais reste à '
           + 'toi : c’est un transfert d’actif. Seuls les intérêts qu’il rapporte sont '
           + 'un produit (financier).',
       },

@@ -2,7 +2,7 @@ import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import autoTable, { type UserOptions, type HAlignType as Halign } from 'jspdf-autotable';
 import type { AppState } from '../store';
-import type { JournalEntry, PrevLigne, Referentiels } from '../types';
+import type { JournalEntry, Placement, PrevLigne, Referentiels } from '../types';
 import {
   labelMois, labelMoisLong, formatDateFR, compareMois, moisCourant, moisExercice,
   exerciceDuMois, EXERCICES,
@@ -208,6 +208,7 @@ export function blobExcel(state: AppState, exercice: string): Blob {
       'Récupéré le': p.recupereLe ?? '',
       'Montant récupéré': p.montantRecupere ?? '',
       'Gain réel': gainReel(p) ?? '',
+      'Contrat joint': p.contratFileId ? (p.contrat || 'oui') : '',
       'Notes': p.notes ?? '',
     })));
 
@@ -1535,11 +1536,17 @@ export async function exportTout(state: AppState, exercice: string,
   });
 
   let nbFactures = 0;
+  let nbContrats = 0;
   if (options.avecFactures) {
-    for (const f of await fichiersFactures(state.entries)) { pieces.push(f); nbFactures++; }
+    // La sauvegarde de l'archive n'embarque alors pas les fichiers : les
+    // contrats de placement doivent y être aussi, dans leur propre dossier.
+    for (const f of await fichiersFactures(state.entries, state.placements ?? [], true)) {
+      pieces.push(f);
+      if (f.nom.startsWith('Placements/')) nbContrats++; else nbFactures++;
+    }
   }
 
-  pieces.push({ nom: 'Lisez-moi.txt', data: lisezMoi(exercice, jour, nbFactures) });
+  pieces.push({ nom: 'Lisez-moi.txt', data: lisezMoi(exercice, jour, nbFactures, nbContrats) });
 
   const zip = await creerZip(pieces);
   const nom = `BBG_Compta_${exercice}_${jour}.zip`;
@@ -1547,7 +1554,7 @@ export async function exportTout(state: AppState, exercice: string,
   return { nom, taille: zip.size, fichiers: pieces.map(p => p.nom) };
 }
 
-function lisezMoi(exercice: string, jour: string, nbFactures: number): string {
+function lisezMoi(exercice: string, jour: string, nbFactures: number, nbContrats = 0): string {
   const pieces: [string, string[]][] = [
     [`BBG_Compta_${exercice}.xlsx`, [
       'Classeur complet : journal, synthèse par bloc (HT et TTC),',
@@ -1577,6 +1584,9 @@ function lisezMoi(exercice: string, jour: string, nbFactures: number): string {
       '(Paramètres > Restaurer une sauvegarde).',
     ]],
   ];
+  if (nbContrats) {
+    pieces.push(['Placements/', [`${nbContrats} contrat(s) de placement, nommés par établissement.`]]);
+  }
   if (nbFactures) {
     pieces.push(['Factures/', [`${nbFactures} justificatif(s), rangés par mois comptable.`]]);
   }
@@ -1594,31 +1604,54 @@ function lisezMoi(exercice: string, jour: string, nbFactures: number): string {
   ].join('\n');
 }
 
-/** Les justificatifs stockés, rangés « Factures/<mois>/<fournisseur> — <libellé>.pdf ». */
-export async function fichiersFactures(entries: JournalEntry[]): Promise<FichierZip[]> {
+/**
+ * Les justificatifs stockés, rangés « Factures/<mois>/<fournisseur> — <libellé>.pdf ».
+ * Les contrats de placement partagent la base de fichiers mais ne sont pas des
+ * factures : avec `avecContrats`, ils vont dans « Placements/ » ; sans, ils
+ * restent hors de l'archive (celle de la page Factures).
+ */
+export async function fichiersFactures(
+  entries: JournalEntry[], placements: Placement[] = [], avecContrats = false,
+): Promise<FichierZip[]> {
   const stockes = await listFiles();
   const parId = new Map(entries.filter(e => e.factureFileId).map(e => [e.factureFileId!, e]));
+  const contratDe = new Map(placements.filter(p => p.contratFileId).map(p => [p.contratFileId!, p]));
   const utilises = new Set<string>();
-  return stockes.map(f => {
+  const unique = (dossier: string, base: string, ext: string) => {
+    // Deux fichiers du même nom dans un dossier : on suffixe pour ne pas
+    // écraser l'un par l'autre dans l'archive.
+    let nom = `${dossier}/${base}${ext}`;
+    let n = 2;
+    while (utilises.has(nom.toLowerCase())) nom = `${dossier}/${base} (${n++})${ext}`;
+    utilises.add(nom.toLowerCase());
+    return nom;
+  };
+  const contrats = stockes.filter(f => contratDe.has(f.id));
+  const pieces = stockes.filter(f => !contratDe.has(f.id)).map(f => {
     const e = parId.get(f.id);
     const ext = (f.name.match(/\.[a-z0-9]+$/i)?.[0] ?? '').toLowerCase();
     const base = e
       ? nomSur([e.fournisseur, e.description].filter(Boolean).join(' - ')) || nomSur(f.name)
       : nomSur(f.name.replace(/\.[a-z0-9]+$/i, ''));
     const dossier = e ? `Factures/${nomSur(labelMois(e.mois))}` : 'Factures/Non rattachees';
-    // Deux factures du même fournisseur le même mois : on suffixe pour ne pas
-    // écraser l'une par l'autre dans l'archive.
-    let nom = `${dossier}/${base}${ext}`;
-    let n = 2;
-    while (utilises.has(nom.toLowerCase())) nom = `${dossier}/${base} (${n++})${ext}`;
-    utilises.add(nom.toLowerCase());
-    return { nom, data: f.blob };
+    return { nom: unique(dossier, base, ext), data: f.blob };
   });
+  if (!avecContrats) return pieces;
+  return [...pieces, ...contrats.map(f => {
+    const p = contratDe.get(f.id)!;
+    const ext = (f.name.match(/\.[a-z0-9]+$/i)?.[0] ?? '').toLowerCase();
+    const base = nomSur([p.etablissement, p.libelle].filter(Boolean).join(' - '))
+      || nomSur(f.name.replace(/\.[a-z0-9]+$/i, ''));
+    return { nom: unique('Placements', base, ext), data: f.blob };
+  })];
 }
 
 /** Toutes les factures dans une archive, pour la page Factures. */
-export async function exportFactures(entries: JournalEntry[]): Promise<ResultatZip> {
-  const pieces = await fichiersFactures(entries);
+export async function exportFactures(
+  entries: JournalEntry[], placements: Placement[] = [],
+): Promise<ResultatZip> {
+  // Les factures seules : les contrats de placement n'y ont pas leur place.
+  const pieces = await fichiersFactures(entries, placements, false);
   const zip = await creerZip(pieces);
   const nom = `BBG_Factures_${today()}.zip`;
   download(nom, zip);

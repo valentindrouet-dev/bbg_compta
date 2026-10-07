@@ -248,6 +248,11 @@ export interface AppState {
   addPlacement: (p: Omit<Placement, 'id'>) => void;
   updatePlacement: (id: string, patch: Partial<Placement>) => void;
   removePlacement: (id: string) => void;
+  /**
+   * Recopie un placement, sans son contrat ni sa récupération : la copie est un
+   * nouveau placement, qui aura son propre contrat et son propre retour.
+   */
+  duplicatePlacement: (id: string) => void;
 
   updateBudgetCell: (exercice: string, ligneId: string, moisIdx: number, value: number | null) => void;
   updateBudgetLine: (exercice: string, ligneId: string, patch: Partial<BudgetExercice['lignes'][number]>) => void;
@@ -692,6 +697,17 @@ export const useStore = create<AppState>()(
       removePlacement: (id) => set(s => ({
         placements: (s.placements ?? []).filter(p => p.id !== id),
       })),
+      duplicatePlacement: (id) => set(s => {
+        const source = (s.placements ?? []).find(p => p.id === id);
+        if (!source) return s;
+        const copie: Placement = {
+          ...source, id: uid(),
+          libelle: source.libelle ? `${source.libelle} (copie)` : '',
+          contratFileId: undefined, contrat: undefined,
+          recupereLe: undefined, montantRecupere: undefined,
+        };
+        return { placements: [...(s.placements ?? []), copie] };
+      }),
       passerMouvementEnReel: (id) => set(s => {
         const m = (s.mouvementsPrev ?? []).find(f => f.id === id);
         if (!m) return s;

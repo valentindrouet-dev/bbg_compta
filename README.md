@@ -101,7 +101,7 @@ sont recalculés en direct à partir des écritures.
   bancaire** permet de pointer : l'écart s'affiche. Rembourser un compte courant sort de la trésorerie sans
   être une charge — c'est une dette qu'on éteint, elle ne touche pas le résultat
 - **Placements** — le registre des placements de la société : la banque ou la
-  plateforme, le produit (compte à terme, livret, compte rémunéré, fonds…), le
+  plateforme, le produit (dépôt à terme, livret, compte rémunéré, fonds…), le
   montant, la date de placement, la durée et l'**échéance** qui s'en déduit, le
   **taux** et la **rémunération attendue** — calculée en intérêts simples
   (montant × taux × durée ; par an pour un livret), ou saisie quand le contrat
@@ -112,7 +112,16 @@ sont recalculés en direct à partir des écritures.
   le taux moyen pondéré et la prochaine échéance. Le registre ne pèse encore sur
   aucun autre écran : les versements et les retours d'argent restent des
   mouvements financiers saisis en Trésorerie. Il est dans la sauvegarde (format
-  v6) et dans le classeur Excel
+  v6) et dans le classeur Excel. **Le contrat** de chaque placement s'y joint
+  comme une facture au journal : on glisse le PDF sur la ligne (ou on clique sur
+  le trombone), un clic sur l'icône verte l'ouvre ; un second dépôt demande
+  avant de remplacer. Les contrats ne sont pas des factures : la page Factures
+  ne les liste pas (on ne les supprime donc pas en croyant faire le ménage),
+  et l'archive complète les range dans un dossier **Placements/**, nommés par
+  établissement ; la sauvegarde JSON les embarque comme les factures.
+  **Dupliquer** (l'icône à droite de chaque ligne) recopie un placement — la
+  copie prend « (copie) » dans son libellé, et ni le contrat ni la
+  récupération, qui appartiennent à l'original
 - **TVA** — collectée / déductible / solde par mois, calculée écriture par écriture ;
   rouge = dû à l'État, vert = crédit de TVA en ta faveur
 - **Jeux** — bilan comptable par jeu, comparaison au prévisionnel, lien vers la
@@ -275,7 +284,7 @@ sont recalculés en direct à partir des écritures.
   elle vient du journal ou du budget, plus un solde du mois et une trésorerie
   cumulée. Sous les **sorties d'exploitation**, une barre mesure chaque mois
   contre le plus lourd de l'exercice — hors placements, puisque mettre 80 000 €
-  sur un compte à terme écraserait tous les autres mois alors que rien n'est
+  sur un dépôt à terme écraserait tous les autres mois alors que rien n'est
   dépensé ; le chiffre reste écrit, la barre le classe sans le remplacer. La
   dernière ligne cumule depuis l'ouverture : **si elle passe en rouge, le compte
   est à découvert ce mois-là**, même quand l'année entière tombe juste. Entre les

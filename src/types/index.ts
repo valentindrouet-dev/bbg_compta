@@ -102,6 +102,12 @@ export interface Placement {
   recupereLe?: string;
   montantRecupere?: number | null;
   notes?: string;
+  /**
+   * Le contrat joint : son identifiant dans la base des fichiers (la même que
+   * les factures du journal) et le nom affiché.
+   */
+  contratFileId?: string;
+  contrat?: string;
 }
 
 // ----- Prévisionnel ------------------------------------------------------

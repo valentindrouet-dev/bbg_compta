@@ -299,7 +299,7 @@ export function TresoPrevPage() {
                 get={x => x.depensesJeux} lignes={prevuCumule} />
               <RowP label="Sorties d'exploitation" get={x => x.sortiesExploitation} lignes={prevuCumule} strong />
               <RowP label="Placements"
-                aide="Un placement n'est pas une dépense : l'argent va sur un compte à terme, il ne quitte pas l'entreprise. Il est sous le sous-total pour cette raison."
+                aide="Un placement n'est pas une dépense : l'argent va sur un dépôt à terme, il ne quitte pas l'entreprise. Il est sous le sous-total pour cette raison."
                 get={x => x.placements} lignes={prevuCumule} />
               <RowP label="Sorties totales" get={x => x.sorties} lignes={prevuCumule} strong />
               <RowP label="Cumulé exploitation (TTC)" get={x => x.exploitation} lignes={prevuCumule} strong />
@@ -392,7 +392,7 @@ export function TresoPrevPage() {
             elle vient du <b>journal</b> ou du <b>budget</b>. La barre sous les
             <b> sorties d'exploitation</b> mesure chaque mois contre le plus lourd de l'exercice
             — elle ne remplace pas le chiffre, elle le classe, et se mesure <b>hors
-            placements</b> : mettre 80 000 € sur un compte à terme écraserait tous les autres
+            placements</b> : mettre 80 000 € sur un dépôt à terme écraserait tous les autres
             mois alors que rien n'est dépensé. La dernière ligne cumule depuis
             l'ouverture ({euros(detail.ouverture)}) : <b>si elle passe en rouge, le compte est à
             découvert ce mois-là</b>, même quand l'année entière tombe juste.
@@ -574,7 +574,7 @@ export function TresoPrevPage() {
         </div>
         <p className="text-xs text-[#9a92b5] mt-2">
           La trésorerie fin d'exercice cumule les exercices précédents. Les placements y figurent en sortie :
-          la trésorerie affichée est la trésorerie disponible (hors comptes à terme).
+          la trésorerie affichée est la trésorerie disponible (hors dépôts à terme).
         </p>
       </Card>
 
