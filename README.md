@@ -109,7 +109,10 @@ sont recalculés en direct à partir des écritures.
   la date et le montant **récupérés**, d'où le gain réel. Chaque placement a
   son statut (à venir, en cours, **échu — à récupérer**, récupéré), et quatre
   cartes résument l'encours placé, la rémunération attendue (dont la part sûre),
-  le taux moyen pondéré et la prochaine échéance. Le registre ne pèse encore sur
+  le taux moyen pondéré et la prochaine échéance — toutes sur les placements
+  pas encore récupérés, **à venir compris** : un dépôt signé qui démarre dans
+  cinq jours est déjà de l'argent engagé, et l'encours dit à part combien reste
+  à placer, et à quelle date. Le registre ne pèse encore sur
   aucun autre écran : les versements et les retours d'argent restent des
   mouvements financiers saisis en Trésorerie. Il est dans la sauvegarde (format
   v6) et dans le classeur Excel. **Le contrat** de chaque placement s'y joint

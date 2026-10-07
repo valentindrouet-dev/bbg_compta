@@ -97,13 +97,20 @@ export function gainReel(p: Placement): number | null {
  * prochaine date à surveiller.
  */
 export function resumePlacements(placements: Placement[], aujourdhui: string) {
+  // Les quatre cartes lisent le même ensemble : tout ce qui n'est pas revenu,
+  // placements à venir compris. Un dépôt signé qui démarre dans cinq jours est
+  // de l'argent engagé ; l'encours l'ignorait alors que la rémunération, le
+  // taux moyen et la prochaine échéance le comptaient déjà. La part encore à
+  // placer est donnée à part, avec sa date.
   const actifs = placements.filter(p => statutPlacement(p, aujourdhui) !== 'recupere');
-  const places = actifs.filter(p => statutPlacement(p, aujourdhui) !== 'a_venir');
-  const encours = r2(places.reduce((s, p) => s + p.montant, 0));
+  const aVenir = actifs.filter(p => statutPlacement(p, aujourdhui) === 'a_venir');
+  const encours = r2(actifs.reduce((s, p) => s + p.montant, 0));
+  const aPlacer = r2(aVenir.reduce((s, p) => s + p.montant, 0));
+  const departs = [...new Set(aVenir.map(p => p.debut))].sort();
   const remuneration = r2(actifs.reduce((s, p) => s + remunerationAttendue(p), 0));
   const remunerationSure = r2(actifs.filter(p => p.garantie === 'tout')
     .reduce((s, p) => s + remunerationAttendue(p), 0));
-  const capitalSur = r2(places.filter(p => p.garantie !== 'rien').reduce((s, p) => s + p.montant, 0));
+  const capitalSur = r2(actifs.filter(p => p.garantie !== 'rien').reduce((s, p) => s + p.montant, 0));
   const base = actifs.reduce((s, p) => s + p.montant, 0);
   const tauxMoyen = base ? r2(actifs.reduce((s, p) => s + p.montant * p.taux, 0) / base) : 0;
   const echus = actifs.filter(p => statutPlacement(p, aujourdhui) === 'echu');
@@ -113,7 +120,10 @@ export function resumePlacements(placements: Placement[], aujourdhui: string) {
     .sort((a, b) => a.fin.localeCompare(b.fin))[0] ?? null;
   const gains = placements.map(gainReel).filter((g): g is number => g != null);
   return {
-    nbActifs: actifs.length, nbPlaces: places.length, encours, remuneration,
+    nbActifs: actifs.length, encours, remuneration,
+    /** Ce qui reste à placer, et quand : la première date de départ, et s'il y en a d'autres. */
+    aPlacer, nbAVenir: aVenir.length, premierDepart: departs[0] ?? null,
+    departsMultiples: departs.length > 1,
     remunerationSure, capitalSur, tauxMoyen, echus, prochaine,
     gainsRealises: gains.length ? r2(gains.reduce((s, g) => s + g, 0)) : null,
   };

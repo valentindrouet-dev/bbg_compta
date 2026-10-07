@@ -123,8 +123,13 @@ export function PlacementsPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
         <StatCard
           label="Encours placé" value={euros(resume.encours)}
-          sub={`${resume.nbPlaces} placement${resume.nbPlaces > 1 ? 's' : ''}${resume.echus.length
-            ? `, dont ${resume.echus.length} échu${resume.echus.length > 1 ? 's' : ''}` : ''} · capital sûr ${euros(resume.capitalSur)}`}
+          sub={[
+            `${resume.nbActifs} placement${resume.nbActifs > 1 ? 's' : ''}`,
+            resume.premierDepart && `dont ${euros(resume.aPlacer)} à placer ${
+              resume.departsMultiples ? 'à partir du' : 'le'} ${formatDateFR(resume.premierDepart)}`,
+            resume.echus.length > 0 && `${resume.echus.length} échu${resume.echus.length > 1 ? 's' : ''}`,
+            `capital sûr ${euros(resume.capitalSur)}`,
+          ].filter(Boolean).join(' · ')}
         />
         <StatCard
           label="Rémunération attendue" value={euros(resume.remuneration)} tone="good"
