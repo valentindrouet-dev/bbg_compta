@@ -8,13 +8,14 @@
  * financiers. Les deux se lisent l'un sous l'autre, avec le même découpage.
  */
 import { useMemo } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, CheckCircle2 } from 'lucide-react';
 import { useStore } from '../../store';
 import type { FinanceEntry } from '../../types';
 import { EXERCICES, labelMois, moisExercice, todayISO } from '../../utils/dates';
 import { FINANCE_TYPES } from '../../utils/finance';
 import { euros, euros0, r2 } from '../../utils/money';
 import { useEtatVue } from '../../utils/etatVue';
+import { toast } from '../../utils/toast';
 import { ordreAffichage } from '../../utils/previsionnel';
 import { fluxTresorerie, moisEcoules, sommeMap } from '../../utils/prevCalc';
 import { PageHeader, Card, Btn, MoneyInput, StatCard } from '../ui';
@@ -32,6 +33,9 @@ export function TresoPrevPage() {
   const addMouvementPrev = useStore(s => s.addMouvementPrev);
   const updateMouvementPrev = useStore(s => s.updateMouvementPrev);
   const removeMouvementPrev = useStore(s => s.removeMouvementPrev);
+  const passerMouvementEnReel = useStore(s => s.passerMouvementEnReel);
+  /** La frontière entre ce qui a eu lieu et ce qui est encore attendu. */
+  const aujourdhui = todayISO();
   const previsionnels = useStore(s => s.previsionnels);
   const stocks = useStore(s => s.stocks);
   const refs = useStore(s => s.referentiels);
@@ -47,14 +51,15 @@ export function TresoPrevPage() {
     const f = fluxTresorerie(lignes, moisList, stocks, ex, refs, entries, reels);
     const moisDe = (d: string) => (d < '2025-09-01' ? 'pre-immat' : d.slice(0, 7));
     // Les mouvements enregistrés valent toujours ; ceux qui ne sont que prévus
-    // ne comptent que sur les mois pas encore écoulés — sur un mois passé, le
-    // relevé de banque a déjà tranché.
+    // comptent tant que leur date n'est pas passée. Le mois en cours n'est pas
+    // écoulé : ce qui y reste à venir se compte, comme les mois suivants. Une
+    // fois la date passée, c'est le relevé qui tranche — le mouvement est
+    // signalé dans la liste des mouvements prévus, à passer en réel ou à décaler.
+    const prevusComptes = (mouvementsPrev ?? []).filter(x =>
+      moisList.includes(moisDe(x.date)) && x.date >= aujourdhui);
     const mouvements = [
       ...finances.filter(x => moisList.includes(moisDe(x.date))),
-      ...(mouvementsPrev ?? []).filter(x => {
-        const m = moisDe(x.date);
-        return moisList.includes(m) && !reels.includes(m);
-      }),
+      ...prevusComptes,
     ];
     const part = (t: string) => r2(mouvements.filter(x => x.type === t)
       .reduce((s, x) => s + x.montant, 0));
@@ -74,6 +79,8 @@ export function TresoPrevPage() {
       ex,
       // Gardés pour la vue mensuelle : c'est le même calcul, pas un second.
       moisList, flux: f, mouvements,
+      /** Ce que les mouvements financiers prévus ajoutent encore d'ici la clôture. */
+      mouvementsPrevus: r2(prevusComptes.reduce((s, x) => s + x.montant, 0)),
       nReels: reels.length,
       nMois: moisList.length,
       ventesJeux: sommeMap(f.ventesJeux),
@@ -93,7 +100,7 @@ export function TresoPrevPage() {
       capital, cca, remboursementCCA,
       apports: r2(capital + cca + remboursementCCA),
     };
-  }), [previsionnels, stocks, refs, finances, mouvementsPrev, entries]);
+  }), [previsionnels, stocks, refs, finances, mouvementsPrev, entries, aujourdhui]);
 
   const prevuCumule = useMemo(() => {
     let t = 0;
@@ -151,7 +158,10 @@ export function TresoPrevPage() {
       ex: p.ex,
       restants: p.nMois - p.nReels,
       journal: r.treso,
-      budget: r2(p.treso - r.treso),
+      // L'écart se décompose : le budget des mois à venir, et les mouvements
+      // financiers prévus d'ici la clôture — chacun sur sa ligne.
+      mouvements: p.mouvementsPrevus,
+      budget: r2(p.treso - r.treso - p.mouvementsPrevus),
       prevue: p.treso,
     };
   }, [prevuCumule, realise]);
@@ -305,8 +315,9 @@ export function TresoPrevPage() {
           et payé est connu, le budget n'a plus rien à en dire ; les mois à venir viennent du
           prévisionnel, chaque ligne convertie en TTC avec son propre taux de TVA. Les tirages
           d'usine et les ventes de jeux à venir viennent de l'onglet <b>Stock</b>. Les apports en
-          capital, le compte courant d'associé et les placements restent des
-          <b> mouvements financiers</b>, saisis en Trésorerie.
+          capital, le compte courant d'associé et les placements sont des <b>mouvements
+          financiers</b> : ceux qui ont eu lieu viennent de la page Trésorerie, ceux qui sont
+          attendus de la liste <b>Mouvements financiers prévus</b> plus bas — jusqu'à leur date.
         </p>
       </Card>
 
@@ -332,7 +343,8 @@ export function TresoPrevPage() {
                     <th key={l.mois} className="text-right whitespace-nowrap">
                       {labelMois(l.mois)}
                       <div className="text-[10px] font-normal" style={{ color: '#9a92b5' }}>
-                        {i < detail.nReels ? 'réel' : 'prévu'}
+                        {l.mois === aujourdhui.slice(0, 7) ? 'en cours'
+                          : i < detail.nReels ? 'réel' : 'prévu'}
                       </div>
                     </th>
                   ))}
@@ -407,12 +419,22 @@ export function TresoPrevPage() {
               </tr>
             </thead>
             <tbody>
-              {[...(mouvementsPrev ?? [])].sort((a, b) => a.date.localeCompare(b.date)).map(f => (
+              {[...(mouvementsPrev ?? [])].sort((a, b) => a.date.localeCompare(b.date)).map(f => {
+                // Date passée : le mouvement ne compte plus, le relevé tranche. On le
+                // dit, au lieu de le laisser disparaître des calculs sans un mot.
+                const passe = f.date < aujourdhui;
+                return (
                 <tr key={f.id} className="group">
                   <td>
                     <input type="date" className="border border-[#ddd6ef] rounded px-1 py-0.5 text-sm"
                       value={f.date}
                       onChange={ev => ev.target.value && updateMouvementPrev(f.id, { date: ev.target.value })} />
+                    {passe && (
+                      <div className="text-[10px] font-semibold mt-0.5" style={{ color: '#b45f06' }}
+                        title="Sa date est passée : il ne compte plus dans la trésorerie prévisionnelle. S'il a eu lieu, passe-le en réel ; sinon, décale sa date.">
+                        date passée · plus compté
+                      </div>
+                    )}
                   </td>
                   <td>
                     <input className="border border-[#ddd6ef] rounded px-1.5 py-1 text-sm w-72"
@@ -432,7 +454,23 @@ export function TresoPrevPage() {
                     <MoneyInput value={f.montant}
                       onCommit={v => updateMouvementPrev(f.id, { montant: v ?? 0 })} className="w-32" />
                   </td>
-                  <td>
+                  <td className="whitespace-nowrap">
+                    {/* Le mouvement a eu lieu : il passe en Trésorerie, à la même date et
+                        pour le même montant. Toujours visible quand la date est passée. */}
+                    <button
+                      className={`mr-2 px-2 py-0.5 rounded text-xs font-medium inline-flex items-center gap-1 border ${
+                        passe ? '' : 'opacity-0 group-hover:opacity-100'}`}
+                      style={passe
+                        ? { backgroundColor: '#fce5cd', borderColor: '#f9cb9c', color: '#b45f06' }
+                        : { backgroundColor: '#fff', borderColor: 'var(--bbg-border)', color: 'var(--bbg-purple-darker)' }}
+                      title="Il a eu lieu : l'enregistrer en Trésorerie (réel), même date et même montant — tu pourras les corriger là-bas. Cmd+Z pour annuler."
+                      onClick={() => {
+                        passerMouvementEnReel(f.id);
+                        toast(`« ${f.label || 'Mouvement'} » enregistré en Trésorerie (réel). Cmd+Z pour annuler.`);
+                      }}
+                    >
+                      <CheckCircle2 size={12} /> Passer en réel
+                    </button>
                     <button className="text-[#d98b86] hover:text-[#b7332e] opacity-0 group-hover:opacity-100"
                       onClick={() => {
                         if (confirm(`Supprimer « ${f.label || 'ce mouvement'} » ?`)) removeMouvementPrev(f.id);
@@ -441,7 +479,8 @@ export function TresoPrevPage() {
                     </button>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         ) : (
@@ -452,11 +491,13 @@ export function TresoPrevPage() {
           </p>
         )}
         <p className="text-xs text-[#9a92b5] mt-2">
-          Ces mouvements ne comptent que dans le tableau du haut, et seulement sur les
-          <b> mois pas encore écoulés</b> : sur un mois passé, c'est le relevé qui fait foi. Ils
-          n'entrent pas dans la page <b>Trésorerie</b> ni dans le tableau <b>Réalisé</b>, qui ne
-          disent que ce qui a eu lieu. Quand le mouvement se produit vraiment, enregistre-le en
-          Trésorerie et supprime-le d'ici.
+          Un mouvement prévu compte dans la trésorerie prévisionnelle — le tableau de
+          l'exercice et la vue mois par mois — <b>tant que sa date n'est pas passée</b>, mois
+          en cours compris. Une fois la date passée, c'est le relevé qui fait foi : il ne compte
+          plus et il est signalé ici. S'il a eu lieu, <b>Passer en réel</b> l'enregistre en
+          Trésorerie d'un clic ; s'il a glissé, décale sa date. Tant qu'il n'est que prévu, il
+          n'entre ni dans la page <b>Trésorerie</b> ni dans le tableau <b>Réalisé</b>, qui ne
+          disent que ce qui a eu lieu.
         </p>
       </Card>
 
@@ -480,6 +521,14 @@ export function TresoPrevPage() {
                   {rapprochement.budget > 0 ? '+' : ''}{euros(rapprochement.budget)}
                 </td>
               </tr>
+              {rapprochement.mouvements !== 0 && (
+                <tr>
+                  <td>Mouvements financiers prévus d'ici la clôture</td>
+                  <td className={`text-right tabular-nums ${rapprochement.mouvements < 0 ? 'text-[#b7332e]' : ''}`}>
+                    {rapprochement.mouvements > 0 ? '+' : ''}{euros(rapprochement.mouvements)}
+                  </td>
+                </tr>
+              )}
               <tr className="bg-[#efeafa] font-bold">
                 <td>Trésorerie fin d'exercice prévue</td>
                 <td className={`text-right tabular-nums ${rapprochement.prevue < 0 ? 'text-[#b7332e]' : ''}`}>

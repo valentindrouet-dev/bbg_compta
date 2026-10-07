@@ -233,6 +233,11 @@ export interface AppState {
   addMouvementPrev: (f: Omit<FinanceEntry, 'id'>) => void;
   updateMouvementPrev: (id: string, patch: Partial<FinanceEntry>) => void;
   removeMouvementPrev: (id: string) => void;
+  /**
+   * Le mouvement prévu a eu lieu : il passe en Trésorerie (réel) et quitte les
+   * prévisions, en une seule opération — un seul Cmd+Z le défait.
+   */
+  passerMouvementEnReel: (id: string) => void;
 
   updateBudgetCell: (exercice: string, ligneId: string, moisIdx: number, value: number | null) => void;
   updateBudgetLine: (exercice: string, ligneId: string, patch: Partial<BudgetExercice['lignes'][number]>) => void;
@@ -666,6 +671,14 @@ export const useStore = create<AppState>()(
       removeMouvementPrev: (id) => set(s => ({
         mouvementsPrev: (s.mouvementsPrev ?? []).filter(f => f.id !== id),
       })),
+      passerMouvementEnReel: (id) => set(s => {
+        const m = (s.mouvementsPrev ?? []).find(f => f.id === id);
+        if (!m) return s;
+        return {
+          finances: [...s.finances, { ...m, id: uid() }],
+          mouvementsPrev: (s.mouvementsPrev ?? []).filter(f => f.id !== id),
+        };
+      }),
 
       updateBudgetCell: (exercice, ligneId, moisIdx, value) => set(s => {
         const b = s.budgets[exercice];

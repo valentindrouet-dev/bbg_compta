@@ -246,10 +246,18 @@ sont recalculés en direct à partir des écritures.
   ventes, longtemps après. Une dépense de jeu **portée à l'actif** n'est ni
   dans l'une ni dans l'autre : elle compte une seule fois, à la ligne des
   immobilisations. On peut enfin saisir des **mouvements financiers prévus** —
-  un apport en compte courant attendu, un placement, un remboursement
-  programmé : ils ne pèsent que sur les mois pas encore écoulés, et n'entrent
-  ni dans la page Trésorerie ni dans le tableau Réalisé, qui ne disent que ce
-  qui a eu lieu. Une **vue mois par mois** déplie l'exercice choisi, sous le
+  un apport en compte courant attendu, un placement qui revient, un
+  remboursement programmé : chacun compte **tant que sa date n'est pas
+  passée, mois en cours compris** (un placement attendu le 20 du mois compte
+  dès aujourd'hui), dans le tableau de l'exercice comme dans la vue mois par
+  mois — dont la colonne du mois courant s'intitule « en cours ». Une fois sa
+  date passée, c'est le relevé qui fait foi : le mouvement ne compte plus et il
+  est **signalé** dans la liste (« date passée · plus compté »), avec un bouton
+  **Passer en réel** qui l'enregistre en Trésorerie d'un clic, même date et même
+  montant (un seul Cmd+Z le défait) ; s'il a glissé, on décale sa date. Tant
+  qu'ils ne sont que prévus, ils n'entrent ni dans la page Trésorerie ni dans
+  le tableau Réalisé, qui ne disent que ce qui a eu lieu ; le rapprochement
+  des deux tableaux les montre sur une ligne à part. Une **vue mois par mois** déplie l'exercice choisi, sous le
   tableau annuel : les mêmes postes, une colonne par mois, chacune indiquant si
   elle vient du journal ou du budget, plus un solde du mois et une trésorerie
   cumulée. Sous les **sorties d'exploitation**, une barre mesure chaque mois
