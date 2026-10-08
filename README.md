@@ -129,7 +129,10 @@ sont recalculés en direct à partir des écritures.
   rouge = dû à l'État, vert = crédit de TVA en ta faveur
 - **Jeux** — bilan comptable par jeu, comparaison au prévisionnel, lien vers la
   fiche du jeu dans le Production Calculator
-- **Fournisseurs** — totaux signés, nombre de transactions, historique
+- **Fournisseurs** — totaux signés, nombre de transactions, historique. Un clic
+  sur la ligne d'un fournisseur **déplie juste dessous toutes ses écritures**
+  du journal, dans l'ordre du temps et sans découpage par mois (date,
+  description, catégorie, paiement, TTC, HT, TVA) ; un second clic la replie
 - **Factures** — tous les justificatifs déposés, groupés par mois comptable,
   en liste ou en vignettes, avec rattachement des pièces orphelines et
   téléchargement groupé (.zip)
