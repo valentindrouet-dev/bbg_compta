@@ -71,7 +71,10 @@ export function ExportsPage() {
               checked={avecFactures}
               onChange={ev => setAvecFactures(ev.target.checked)}
             />
-            Ajouter un dossier <b>Factures/</b> avec les justificatifs, rangés par mois
+            <span>
+              Ajouter un dossier <b>Factures/</b> avec les justificatifs, rangés par mois
+              — et les documents des jeux (<b>Jeux/</b>) et contrats de placement (<b>Placements/</b>)
+            </span>
           </label>
           <div className="flex items-center gap-3">
             <Btn variant="primary" onClick={toutExporter} disabled={enCours}>

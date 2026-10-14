@@ -2,8 +2,9 @@ import { useMemo, useState } from 'react';
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, LabelList,
 } from 'recharts';
-import { Plus, Trash2, Gamepad2, ExternalLink, Link2 } from 'lucide-react';
+import { Plus, Trash2, Gamepad2, ExternalLink, Link2, Paperclip } from 'lucide-react';
 import { useStore } from '../../store';
+import { deleteFile } from '../../utils/files';
 import { COULEURS_JEUX, couleurJeu, encreSur, voileSur } from '../../utils/jeux';
 import { labelMois, formatDateFR, compareMois, EXERCICES } from '../../utils/dates';
 import { euros, euros0, r2, pourcent } from '../../utils/money';
@@ -11,6 +12,10 @@ import { bilanJeux } from '../../utils/calc';
 import { totalDeLigne } from '../../utils/previsionnel';
 
 import { PageHeader, Card, StatCard, Btn, useSort, sortBy, ThSort } from '../ui';
+import { DocumentsJeu } from './DocumentsJeu';
+
+/** Les écritures jeux sans jeu : une ligne du bilan, pas un jeu du catalogue. */
+const NON_RATTACHE = '— non rattaché —';
 
 const C_REEL = '#e69138';
 const C_PREVU = '#674ea7';
@@ -36,6 +41,7 @@ export function JeuxPage() {
   const jeux = refs.jeux ?? [];
   const jeuxMeta = refs.jeuxMeta ?? {};
   const lienDe = (jeu: string) => jeuxMeta[jeu]?.lienProd?.trim() || '';
+  const nbDocs = (jeu: string) => jeuxMeta[jeu]?.documents?.length ?? 0;
   const [nouveau, setNouveau] = useState('');
   const [actif, setActif] = useState<string | null>(null);
   const { sort, toggle } = useSort({ key: 'date', dir: 'asc' }, 'jeux');
@@ -73,10 +79,35 @@ export function JeuxPage() {
   const totalImmo = r2(bilans.reduce((s, b) => s + b.immo, 0));
   const jeuActif = actif ? bilans.find(b => b.jeu === actif) : null;
 
+  /**
+   * Ouvre la fiche d'un jeu depuis le catalogue, y compris un jeu sans
+   * dépense encore : ses documents s'affichent sous la vue d'ensemble, et la
+   * page y descend.
+   */
+  function ouvrirDocuments(jeu: string) {
+    setActif(jeu);
+    requestAnimationFrame(() => {
+      document.getElementById('documents-jeu')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
+
+  function retirerJeu(jeu: string) {
+    const docs = jeuxMeta[jeu]?.documents ?? [];
+    const message = docs.length
+      ? `Retirer « ${jeu} » du catalogue ? ${docs.length === 1
+        ? 'Son document (contrat, devis…) sera effacé'
+        : `Ses ${docs.length} documents (contrats, devis…) seront effacés`} de ce navigateur.`
+      : `Retirer « ${jeu} » du catalogue ?`;
+    if (!confirm(message)) return;
+    removeJeu(jeu);
+    for (const d of docs) void deleteFile(d.fileId);
+    if (actif === jeu) setActif(null);
+  }
+
   const ecrituresJeu = useMemo(() => {
     if (!actif) return [];
     return entries.filter(e =>
-      refs.categoriesJeux.includes(e.categorie) && (e.jeu || '— non rattaché —') === actif);
+      refs.categoriesJeux.includes(e.categorie) && (e.jeu || NON_RATTACHE) === actif);
   }, [entries, refs.categoriesJeux, actif]);
 
   const rowsEcritures = sortBy(ecrituresJeu, sort, {
@@ -154,6 +185,13 @@ export function JeuxPage() {
                                 <ExternalLink size={13} />
                               </a>
                             )}
+                            {nbDocs(b.jeu) > 0 && (
+                              <span className="inline-flex items-center gap-0.5 text-[11px] font-normal"
+                                style={{ color: '#6f6690' }}
+                                title={`${nbDocs(b.jeu)} document(s) : contrats, devis… — ouvre le jeu pour les voir`}>
+                                <Paperclip size={12} />{nbDocs(b.jeu)}
+                              </span>
+                            )}
                           </span>
                         </td>
                         <td className="text-right tabular-nums">{b.nb}</td>
@@ -226,6 +264,8 @@ export function JeuxPage() {
               </p>
             </Card>
           )}
+
+          {actif && actif !== NON_RATTACHE && <DocumentsJeu jeu={actif} />}
 
           {jeuActif && (
             <>
@@ -353,7 +393,13 @@ export function JeuxPage() {
                       className="flex-1 border rounded px-2 py-1 text-sm font-medium bg-white"
                       style={{ borderColor: 'var(--bbg-border-soft)' }}
                       defaultValue={j}
-                      onBlur={ev => { const v = ev.target.value.trim(); if (v && v !== j) renameJeu(j, v); }}
+                      onBlur={ev => {
+                        const v = ev.target.value.trim();
+                        if (!v || v === j) return;
+                        renameJeu(j, v);
+                        // La fiche ouverte suit le jeu sous son nouveau nom.
+                        if (actif === j) setActif(v);
+                      }}
                       onKeyDown={ev => { if (ev.key === 'Enter') (ev.target as HTMLInputElement).blur(); }}
                     />
                     {lienDe(j) && (
@@ -366,9 +412,22 @@ export function JeuxPage() {
                       </a>
                     )}
                     <button
+                      className="shrink-0 inline-flex items-center gap-0.5 text-[11px] rounded px-1 py-0.5"
+                      style={{
+                        color: 'var(--bbg-purple-darker)',
+                        backgroundColor: actif === j ? 'rgba(255,255,255,0.85)' : 'transparent',
+                      }}
+                      title={nbDocs(j)
+                        ? `Voir les ${nbDocs(j)} document(s) de ${j} (contrats, devis…)`
+                        : `Ranger les documents de ${j} : contrat signé, devis…`}
+                      onClick={() => ouvrirDocuments(j)}
+                    >
+                      <Paperclip size={13} />{nbDocs(j) || ''}
+                    </button>
+                    <button
                       className="opacity-0 group-hover:opacity-100 shrink-0" style={{ color: '#d98b86' }}
                       title="Retirer du catalogue (les écritures sont conservées, sans rattachement)"
-                      onClick={() => { if (confirm(`Retirer « ${j} » du catalogue ?`)) removeJeu(j); }}
+                      onClick={() => retirerJeu(j)}
                     >
                       <Trash2 size={13} />
                     </button>
@@ -445,6 +504,11 @@ export function JeuxPage() {
               composants, transport) restent dans le Production Calculator : colle son adresse dans le
               champ « lien » de chaque jeu, et la flèche <ExternalLink size={11} className="inline" />{' '}
               t'y emmène directement depuis le tableau.
+              <br /><br />
+              <b>Les documents</b> du jeu — contrat signé, devis… — se rangent dans sa fiche : clique
+              sur le trombone <Paperclip size={11} className="inline" /> du catalogue (ou sur la ligne
+              du jeu), puis glisse les fichiers sur le bloc « documents ». Ils partent dans l'archive
+              complète, dans un dossier par jeu.
             </p>
           </Card>
         </div>

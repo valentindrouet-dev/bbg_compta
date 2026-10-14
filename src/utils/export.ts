@@ -2,7 +2,7 @@ import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import autoTable, { type UserOptions, type HAlignType as Halign } from 'jspdf-autotable';
 import type { AppState } from '../store';
-import type { JournalEntry, Placement, PrevLigne, Referentiels } from '../types';
+import type { JeuMeta, JournalEntry, Placement, PrevLigne, Referentiels } from '../types';
 import {
   labelMois, labelMoisLong, formatDateFR, compareMois, moisCourant, moisExercice,
   exerciceDuMois, EXERCICES,
@@ -19,6 +19,9 @@ import { pageLectureSeule } from './partage';
 import { ordreAffichage, valeursDe, SECTIONS } from './previsionnel';
 import { natureCategorie, dureeCategorie, teinteBloc, type BlocCle } from './blocs';
 import { couleurJeu } from './jeux';
+import {
+  documentsDuJeu, fichiersDesJeux, LIBELLE_TYPE_DOCUMENT, nomDeRangement,
+} from './documentsJeux';
 import { APP_VERSION } from '../version';
 import {
   GARANTIES_PLACEMENT, LIBELLE_STATUT, PRODUITS_PLACEMENT, echeancePlacement, gainReel,
@@ -287,6 +290,9 @@ export function blobExcel(state: AppState, exercice: string): Blob {
     'Couleur': couleurJeu(j, refs),
     'Lien Production Calculator': refs.jeuxMeta?.[j]?.lienProd ?? '',
     'Note': refs.jeuxMeta?.[j]?.note ?? '',
+    // Les fichiers eux-mêmes sont dans l'archive complète, dossier Jeux/.
+    'Documents': documentsDuJeu(refs.jeuxMeta?.[j])
+      .map(d => `${LIBELLE_TYPE_DOCUMENT[d.type]} : ${d.libelle || d.nom}`).join(' · '),
   })));
 
   // Stock prévu : une ligne par jeu et par exercice, avec ce qui en découle.
@@ -1537,16 +1543,25 @@ export async function exportTout(state: AppState, exercice: string,
 
   let nbFactures = 0;
   let nbContrats = 0;
+  let nbDocumentsJeux = 0;
   if (options.avecFactures) {
     // La sauvegarde de l'archive n'embarque alors pas les fichiers : les
-    // contrats de placement doivent y être aussi, dans leur propre dossier.
-    for (const f of await fichiersFactures(state.entries, state.placements ?? [], true)) {
+    // contrats de placement et les documents des jeux doivent y être aussi,
+    // chacun dans son propre dossier.
+    const fichiers = await fichiersFactures(
+      state.entries, state.placements ?? [], true, state.referentiels.jeuxMeta);
+    for (const f of fichiers) {
       pieces.push(f);
-      if (f.nom.startsWith('Placements/')) nbContrats++; else nbFactures++;
+      if (f.nom.startsWith('Placements/')) nbContrats++;
+      else if (f.nom.startsWith('Jeux/')) nbDocumentsJeux++;
+      else nbFactures++;
     }
   }
 
-  pieces.push({ nom: 'Lisez-moi.txt', data: lisezMoi(exercice, jour, nbFactures, nbContrats) });
+  pieces.push({
+    nom: 'Lisez-moi.txt',
+    data: lisezMoi(exercice, jour, nbFactures, nbContrats, nbDocumentsJeux),
+  });
 
   const zip = await creerZip(pieces);
   const nom = `BBG_Compta_${exercice}_${jour}.zip`;
@@ -1554,7 +1569,9 @@ export async function exportTout(state: AppState, exercice: string,
   return { nom, taille: zip.size, fichiers: pieces.map(p => p.nom) };
 }
 
-function lisezMoi(exercice: string, jour: string, nbFactures: number, nbContrats = 0): string {
+function lisezMoi(
+  exercice: string, jour: string, nbFactures: number, nbContrats = 0, nbDocumentsJeux = 0,
+): string {
   const pieces: [string, string[]][] = [
     [`BBG_Compta_${exercice}.xlsx`, [
       'Classeur complet : journal, synthèse par bloc (HT et TTC),',
@@ -1584,6 +1601,10 @@ function lisezMoi(exercice: string, jour: string, nbFactures: number, nbContrats
       '(Paramètres > Restaurer une sauvegarde).',
     ]],
   ];
+  if (nbDocumentsJeux) {
+    pieces.push(['Jeux/', [`${nbDocumentsJeux} document(s) des jeux (contrats signés, devis…),`,
+      'un dossier par jeu.']]);
+  }
   if (nbContrats) {
     pieces.push(['Placements/', [`${nbContrats} contrat(s) de placement, nommés par établissement.`]]);
   }
@@ -1606,16 +1627,19 @@ function lisezMoi(exercice: string, jour: string, nbFactures: number, nbContrats
 
 /**
  * Les justificatifs stockés, rangés « Factures/<mois>/<fournisseur> — <libellé>.pdf ».
- * Les contrats de placement partagent la base de fichiers mais ne sont pas des
- * factures : avec `avecContrats`, ils vont dans « Placements/ » ; sans, ils
- * restent hors de l'archive (celle de la page Factures).
+ * Les contrats de placement et les documents des jeux partagent la base de
+ * fichiers mais ne sont pas des factures : avec `avecContrats`, ils vont dans
+ * « Placements/ » et « Jeux/<jeu>/ » ; sans, ils restent hors de l'archive
+ * (celle de la page Factures).
  */
 export async function fichiersFactures(
   entries: JournalEntry[], placements: Placement[] = [], avecContrats = false,
+  jeuxMeta: Record<string, JeuMeta> = {},
 ): Promise<FichierZip[]> {
   const stockes = await listFiles();
   const parId = new Map(entries.filter(e => e.factureFileId).map(e => [e.factureFileId!, e]));
   const contratDe = new Map(placements.filter(p => p.contratFileId).map(p => [p.contratFileId!, p]));
+  const documentDe = fichiersDesJeux(jeuxMeta);
   const utilises = new Set<string>();
   const unique = (dossier: string, base: string, ext: string) => {
     // Deux fichiers du même nom dans un dossier : on suffixe pour ne pas
@@ -1627,7 +1651,8 @@ export async function fichiersFactures(
     return nom;
   };
   const contrats = stockes.filter(f => contratDe.has(f.id));
-  const pieces = stockes.filter(f => !contratDe.has(f.id)).map(f => {
+  const documents = stockes.filter(f => !contratDe.has(f.id) && documentDe.has(f.id));
+  const pieces = stockes.filter(f => !contratDe.has(f.id) && !documentDe.has(f.id)).map(f => {
     const e = parId.get(f.id);
     const ext = (f.name.match(/\.[a-z0-9]+$/i)?.[0] ?? '').toLowerCase();
     const base = e
@@ -1643,15 +1668,20 @@ export async function fichiersFactures(
     const base = nomSur([p.etablissement, p.libelle].filter(Boolean).join(' - '))
       || nomSur(f.name.replace(/\.[a-z0-9]+$/i, ''));
     return { nom: unique('Placements', base, ext), data: f.blob };
+  }), ...documents.map(f => {
+    const { jeu, doc } = documentDe.get(f.id)!;
+    const ext = (f.name.match(/\.[a-z0-9]+$/i)?.[0] ?? '').toLowerCase();
+    return { nom: unique(`Jeux/${nomSur(jeu)}`, nomSur(nomDeRangement(doc)), ext), data: f.blob };
   })];
 }
 
 /** Toutes les factures dans une archive, pour la page Factures. */
 export async function exportFactures(
-  entries: JournalEntry[], placements: Placement[] = [],
+  entries: JournalEntry[], placements: Placement[] = [], jeuxMeta: Record<string, JeuMeta> = {},
 ): Promise<ResultatZip> {
-  // Les factures seules : les contrats de placement n'y ont pas leur place.
-  const pieces = await fichiersFactures(entries, placements, false);
+  // Les factures seules : les contrats de placement et les documents des jeux
+  // n'y ont pas leur place.
+  const pieces = await fichiersFactures(entries, placements, false, jeuxMeta);
   const zip = await creerZip(pieces);
   const nom = `BBG_Factures_${today()}.zip`;
   download(nom, zip);

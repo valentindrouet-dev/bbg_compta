@@ -399,7 +399,28 @@ export interface CategorieMeta {
   dureeAns?: number;
 }
 
-/** Fiche d'un jeu : lien vers le Production Calculator et note libre. */
+/** La nature d'un document rangé dans la fiche d'un jeu. */
+export type TypeDocumentJeu = 'contrat' | 'devis' | 'autre';
+
+/**
+ * Un document du jeu : contrat signé, devis, cahier des charges… Le fichier
+ * vit dans la même base que les factures du journal ; la fiche n'en garde que
+ * l'identifiant, le nom et ce qu'on en dit.
+ */
+export interface DocumentJeu {
+  id: string;
+  /** Identifiant du fichier dans la base des fichiers. */
+  fileId: string;
+  /** Nom du fichier tel qu'il a été déposé. */
+  nom: string;
+  type: TypeDocumentJeu;
+  /** Libellé libre : « Contrat illustrations », « Devis prototype »… */
+  libelle: string;
+  /** Date d'ajout (ISO). */
+  ajouteLe: string;
+}
+
+/** Fiche d'un jeu : lien vers le Production Calculator, note libre et documents. */
 export interface JeuMeta {
   /** URL du jeu dans le Production Calculator (devis usine, scénarios de vente). */
   lienProd?: string;
@@ -410,6 +431,11 @@ export interface JeuMeta {
    * renomme.
    */
   couleur?: string;
+  /**
+   * Les documents du jeu (contrats signés, devis…). Ils suivent le jeu quand
+   * on le renomme, comme le reste de la fiche.
+   */
+  documents?: DocumentJeu[];
 }
 
 export interface Referentiels {

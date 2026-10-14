@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import type {
   JournalEntry, FinanceEntry, BudgetExercice, ChronoEvent, TresoPrevLine, Referentiels, CategorieMeta,
-  Placement,
+  Placement, DocumentJeu,
   CanalVente, FormulePrev, JeuMeta, LigneDroits, LigneStock, MouvementStock, PrevLigne,
   PrevSection,
   TresoManuel,
@@ -342,6 +342,11 @@ export interface AppState {
   removeJeu: (name: string) => void;
   /** Fiche d'un jeu : lien vers le Production Calculator, notes. */
   setJeuMeta: (jeu: string, patch: JeuMeta) => void;
+  /** Range un document (contrat signé, devis…) dans la fiche d'un jeu. */
+  addDocumentJeu: (jeu: string, doc: Omit<DocumentJeu, 'id'>) => void;
+  updateDocumentJeu: (jeu: string, id: string, patch: Partial<Omit<DocumentJeu, 'id' | 'fileId'>>) => void;
+  /** Retire le document de la fiche ; le fichier lui-même s'efface à part. */
+  removeDocumentJeu: (jeu: string, id: string) => void;
   addPaiement: (name: string) => void;
   addComptePlanComptable: (name: string) => void;
 
@@ -1223,6 +1228,41 @@ export const useStore = create<AppState>()(
           referentiels: {
             ...s.referentiels,
             jeuxMeta: { ...(s.referentiels.jeuxMeta ?? {}), [jeu]: suivant },
+          },
+        };
+      }),
+      addDocumentJeu: (jeu, doc) => set(s => {
+        const metas = s.referentiels.jeuxMeta ?? {};
+        const meta = metas[jeu] ?? {};
+        return {
+          referentiels: {
+            ...s.referentiels,
+            jeuxMeta: { ...metas, [jeu]: { ...meta, documents: [...(meta.documents ?? []), { ...doc, id: uid() }] } },
+          },
+        };
+      }),
+      updateDocumentJeu: (jeu, id, patch) => set(s => {
+        const metas = s.referentiels.jeuxMeta ?? {};
+        const meta = metas[jeu];
+        if (!meta?.documents?.some(d => d.id === id)) return s;
+        return {
+          referentiels: {
+            ...s.referentiels,
+            jeuxMeta: {
+              ...metas,
+              [jeu]: { ...meta, documents: meta.documents.map(d => d.id === id ? { ...d, ...patch } : d) },
+            },
+          },
+        };
+      }),
+      removeDocumentJeu: (jeu, id) => set(s => {
+        const metas = s.referentiels.jeuxMeta ?? {};
+        const meta = metas[jeu];
+        if (!meta?.documents?.some(d => d.id === id)) return s;
+        return {
+          referentiels: {
+            ...s.referentiels,
+            jeuxMeta: { ...metas, [jeu]: { ...meta, documents: meta.documents.filter(d => d.id !== id) } },
           },
         };
       }),

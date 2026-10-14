@@ -128,7 +128,17 @@ sont recalculés en direct à partir des écritures.
 - **TVA** — collectée / déductible / solde par mois, calculée écriture par écriture ;
   rouge = dû à l'État, vert = crédit de TVA en ta faveur
 - **Jeux** — bilan comptable par jeu, comparaison au prévisionnel, lien vers la
-  fiche du jeu dans le Production Calculator
+  fiche du jeu dans le Production Calculator. **Les documents du jeu** (contrat
+  signé, devis…) se rangent dans sa fiche : le trombone du catalogue (ou un clic
+  sur la ligne du jeu) ouvre le bloc « documents », sur lequel on glisse autant
+  de PDF ou d'images qu'on veut, ou qu'on remplit avec « Ajouter un document ».
+  Chaque document a un type (*Contrat signé*, *Devis*, *Autre* — deviné d'après
+  le nom du fichier, corrigible), un libellé libre et sa date d'ajout ; un clic
+  sur le nom l'ouvre. Ils suivent le jeu quand on le renomme, ne sont pas listés
+  sur la page Factures, partent dans l'archive complète dans **Jeux/<jeu>/** et
+  dans la sauvegarde JSON ; la feuille *Jeux* du classeur Excel les énumère.
+  Les chiffres des devis usine restent dans le Production Calculator : ici, on
+  archive le document
 - **Fournisseurs** — totaux signés, nombre de transactions, historique. Un clic
   sur la ligne d'un fournisseur **déplie juste dessous toutes ses écritures**
   du journal, dans l'ordre du temps et sans découpage par mois (date,
