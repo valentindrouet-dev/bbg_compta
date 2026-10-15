@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties, type DragEvent } from 'react';
 import {
   Plus, Copy, Trash2, AlertTriangle, Search, ClipboardPaste, X, CopyPlus, FileDown, FileStack, Tag,
-  CalendarCheck,
+  CalendarCheck, Landmark,
 } from 'lucide-react';
 import { useStore } from '../../store';
 import { useEtatVue } from '../../utils/etatVue';
@@ -11,7 +11,7 @@ import {
   EXERCICES, moisExercice, labelMois, labelMoisLong, moisCourant, exerciceDuMois, PRE_IMMAT,
 } from '../../utils/dates';
 import { euros, r2, tvaDepuisTTC } from '../../utils/money';
-import { sumTTH, sumParCategorie, sumParMotCle, partagerSections } from '../../utils/calc';
+import { sumTTH, sumParCategorie, sumParMotCle, partagerSections, soldeTresorerie } from '../../utils/calc';
 import {
   PageHeader, Card, MonthTabs, Btn, useSort, sortBy, ThSort, BlocColorMenu, TotalBloc,
   styleBloc, type SortState,
@@ -49,8 +49,21 @@ const COLS_JEUX = [2, 6.5, 8.5, 11.5, 9, 6.5, 6.5, 5, 6, 6.5, 5.5, 6.5, 8, 4.5, 
 /** Assez large pour qu'une colonne de montant fasse au moins ~85 px. */
 const LARGEUR_MINI = 1400;
 
-export function JournalPage({ cible }: { cible?: Cible }) {
+export function JournalPage({ cible, onOuvrirTreso }: {
+  cible?: Cible;
+  /** Ouvre l'onglet Trésorerie, d'un clic sur le solde affiché à côté du titre. */
+  onOuvrirTreso?: () => void;
+}) {
   const entries = useStore(s => s.entries);
+  const finances = useStore(s => s.finances);
+  const tresoManuel = useStore(s => s.tresoManuel);
+  // Le solde du compte, toujours sous les yeux : exactement le chiffre de
+  // l'onglet Trésorerie (« Solde disponible aujourd'hui »), recalculé à chaque
+  // saisie — le journal, les mouvements financiers et les ajustements.
+  const treso = useMemo(
+    () => soldeTresorerie(entries, finances, tresoManuel),
+    [entries, finances, tresoManuel],
+  );
   const refs = useStore(s => s.referentiels);
   const updateEntries = useStore(s => s.updateEntries);
   const removeEntries = useStore(s => s.removeEntries);
@@ -201,19 +214,39 @@ export function JournalPage({ cible }: { cible?: Cible }) {
     <div className={`p-4 pb-28 w-full ${clip ? 'paste-mode' : ''}`}>
       <PageHeader
         title="Journal du mois"
-        aCoteDuTitre={allerAuMoisCourant ? (
-          // Compact : plus bas que la ligne du titre, il apparaît et disparaît sans
-          // changer la hauteur de l'en-tête — le tableau ne bouge pas.
-          <button
-            type="button"
-            onClick={() => changeExercice(exerciceCourant)}
-            title={`Revenir au mois en cours — ${labelMoisLong(courant)}`}
-            className="px-2.5 py-1 rounded-md text-xs font-medium inline-flex items-center gap-1
-              bg-white border border-[#c9c0e4] text-[#3f3268] hover:bg-[#f4f1fb] transition-colors"
-          >
-            <CalendarCheck size={13} /> Mois en cours
-          </button>
-        ) : undefined}
+        aCoteDuTitre={
+          <>
+            {/* Le solde vient juste après le titre : il ne bouge pas quand le
+                bouton « Mois en cours » apparaît ou disparaît derrière lui. */}
+            <button
+              type="button"
+              onClick={onOuvrirTreso}
+              title={`Le même chiffre que l'onglet Trésorerie : le solde disponible aujourd'hui, calculé depuis le journal et les mouvements financiers (le mois en cours est compté jusqu'à aujourd'hui).${
+                treso.aVenirCeMois ? ` ${euros(treso.solde)} à fin ${labelMois(treso.mois)}, avec ce qui est daté plus tard dans le mois.` : ''
+              } Clic : ouvrir la Trésorerie.`}
+              className="px-2.5 py-1 rounded-md text-sm inline-flex items-center gap-1.5 border transition-opacity hover:opacity-80"
+              style={treso.soldeAujourdhui >= 0
+                ? { backgroundColor: 'var(--bbg-green-light)', borderColor: '#b6d7a8', color: 'var(--bbg-green-dark)' }
+                : { backgroundColor: '#fbe4e2', borderColor: '#e3b3af', color: '#b7332e' }}
+            >
+              <Landmark size={14} /> Trésorerie Qonto :
+              <b className="tabular-nums">{euros(treso.soldeAujourdhui)}</b>
+            </button>
+            {allerAuMoisCourant && (
+              // Compact : plus bas que la ligne du titre, il apparaît et disparaît sans
+              // changer la hauteur de l'en-tête — le tableau ne bouge pas.
+              <button
+                type="button"
+                onClick={() => changeExercice(exerciceCourant)}
+                title={`Revenir au mois en cours — ${labelMoisLong(courant)}`}
+                className="px-2.5 py-1 rounded-md text-xs font-medium inline-flex items-center gap-1
+                  bg-white border border-[#c9c0e4] text-[#3f3268] hover:bg-[#f4f1fb] transition-colors"
+              >
+                <CalendarCheck size={13} /> Mois en cours
+              </button>
+            )}
+          </>
+        }
         subtitle={labelMoisLong(mois)}
         actions={
           <>

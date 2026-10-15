@@ -124,7 +124,7 @@ export default function App() {
       <main className="flex-1 overflow-auto relative">
         <UndoBar />
         {page === 'dashboard' && <Dashboard onNavigate={setPage} />}
-        {page === 'journal' && <JournalPage cible={cibleDe('journal')} />}
+        {page === 'journal' && <JournalPage cible={cibleDe('journal')} onOuvrirTreso={() => setPage('treso')} />}
         {page === 'synthese' && <SynthesePage onAllerA={allerA} />}
         {page === 'totale' && <SyntheseTotalePage />}
         {page === 'immos' && <ImmosPage cible={cibleDe('immos')} onAllerA={allerA} />}
