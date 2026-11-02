@@ -7,6 +7,7 @@ import { EXERCICES, labelMoisLong, moisExercice, moisCourant, exerciceDuMois } f
 import {
   exportExcel, exportCSV, exportPDF, exportBackup, exportTout, exportPartage,
   exportPDFMois, exportPDFSynthese, exportPDFSyntheseTotale, exportPDFJournalExercice,
+  exportPDFPrevisionnel, exportPDFPrevisionnelComplet,
 } from '../../utils/export';
 import { formatTaille } from '../../utils/files';
 import { PageHeader, ExerciceTabs, Card, Btn } from '../ui';
@@ -189,6 +190,23 @@ export function ExportsPage() {
             </Btn>
             <Btn onClick={() => exportPDFSyntheseTotale(state, base)}>
               Synthèse totale 2025-30
+            </Btn>
+          </div>
+        </Card>
+
+        <Card title={<span className="inline-flex items-center gap-2"><FileText size={18} className="text-[#674ea7]" /> PDF du prévisionnel</span>}>
+          <p className="text-sm text-[#5c5280] mb-3">
+            Le <b>prévisionnel {exercice}</b> — chaque bloc mois par mois, jeux et stock compris,
+            puis le résultat prévisionnel, comme l'onglet Total — ou le <b>prévisionnel complet
+            2025-30</b>, condensé : un exercice par colonne. Les deux suivent le
+            réglage {base === 'ttc' ? 'TTC' : 'HT'} ; le résultat reste en HT.
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Btn onClick={() => exportPDFPrevisionnel(state, exercice, base)}>
+              Prévisionnel {exercice}
+            </Btn>
+            <Btn onClick={() => exportPDFPrevisionnelComplet(state, base)}>
+              Prévisionnel complet 2025-30
             </Btn>
           </div>
         </Card>

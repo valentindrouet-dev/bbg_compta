@@ -154,6 +154,19 @@ sont recalculés en direct à partir des écritures.
 - **Remboursements Val** — dépenses avancées sur carte personnelle
 
 **Prévisionnel 2025-30**
+- **PDF du prévisionnel** — à côté du titre de la page *Prévisionnel*, deux
+  boutons : **PDF 2026-27** (l'exercice regardé) enregistre le prévisionnel de
+  l'année tel que l'onglet Total l'additionne — les grands chiffres, chaque bloc
+  mois par mois (postes généraux, puis un bandeau par jeu avec ventes, tirages et
+  droits d'auteur du stock), la variation de stock, puis le résultat
+  prévisionnel ; **PDF 2025-30** enregistre le prévisionnel complet **condensé**,
+  un exercice par colonne : vue d'ensemble, compte de résultat de chaque
+  exercice, puis chaque bloc ligne par ligne avec son total annuel (deux lignes
+  du même nom dans un exercice s'additionnent ; le PDF de l'année les détaille).
+  Les PDF suivent l'écran : HT dans les onglets de saisie, le réglage HT / TTC
+  dans le Total ; le résultat reste en HT. Le calcul est celui de l'onglet Total
+  (une seule fonction pour l'écran, les PDF et la Vue 5 ans) : les chiffres sont
+  ceux de l'écran, au centime. Aussi dans *Exports → PDF du prévisionnel*
 - **Prévisionnel** — la page se lit maintenant en **cinq onglets**, au-dessus des
   onglets d'exercice :
   - **Charges** — charges externes, personnel et rémunérations
@@ -267,7 +280,8 @@ sont recalculés en direct à partir des écritures.
   pour la première année ou pour corriger.
 - **Vue 5 ans** — les cinq exercices côte à côte : prévu, réel, compte de
   résultat et trajectoire. Le prévu y compte le stock, comme l'onglet Total :
-  les deux pages lisent le même calcul
+  les deux pages lisent le même calcul — **droits d'auteur compris** dans les
+  charges (ils manquaient au bloc Charges, alors que le résultat les comptait)
 - **Réel vs Prévu** — le réalisé vient du journal, sans IMPORTRANGE
 - **Trésorerie prévisionnelle vs réalisée** — par exercice, et **le réel prime**.
   Sur l'exercice en cours, les mois déjà passés viennent du journal — ce qui est

@@ -2,16 +2,17 @@ import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import autoTable, { type UserOptions, type HAlignType as Halign } from 'jspdf-autotable';
 import type { AppState } from '../store';
-import type { JeuMeta, JournalEntry, Placement, PrevLigne, Referentiels } from '../types';
+import type { JeuMeta, JournalEntry, Placement, PrevLigne, PrevSection, Referentiels } from '../types';
 import {
   labelMois, labelMoisLong, formatDateFR, compareMois, moisCourant, moisExercice,
   exerciceDuMois, EXERCICES,
 } from './dates';
-import { r2 } from './money';
+import { r2, euros, euros0 } from './money';
 import {
   syntheseExercice, immoInfos, tableauTVA, tableauTreso, moisTresorerie,
   resultatDeSynthese, bilanJeux, sectionsDuMois, sumTTH, sumParCategorie, sumParMotCle,
   dotationsParMois, type BaseMontant, type SyntheseExercice, type SectionsDuMois,
+  type LigneResultat,
 } from './calc';
 import { exporterFichiers, importerFichiers, listFiles, type FichierSerialise } from './files';
 import { creerZip, nomSur, type FichierZip } from './zip';
@@ -19,6 +20,7 @@ import { pageLectureSeule } from './partage';
 import { ordreAffichage, valeursDe, SECTIONS } from './previsionnel';
 import { natureCategorie, dureeCategorie, teinteBloc, type BlocCle } from './blocs';
 import { couleurJeu } from './jeux';
+import { totalPrevisionnel, type TotalPrevisionnel, type VueTotalPrev } from './totalPrev';
 import {
   documentsDuJeu, fichiersDesJeux, LIBELLE_TYPE_DOCUMENT, nomDeRangement,
 } from './documentsJeux';
@@ -1457,6 +1459,376 @@ export function blobPDFSyntheseTotale(state: AppState, base: BaseMontant = 'ht')
 
 export function exportPDFSyntheseTotale(state: AppState, base: BaseMontant = 'ht') {
   documentPDFSyntheseTotale(state, base).save(`BBG_Synthese_totale_${today()}.pdf`);
+}
+
+// ------------------------------------------------- PDF : le prévisionnel ---
+
+/** Le prévisionnel complet d'un exercice : le calcul de l'onglet Total. */
+function totalDe(state: AppState, exercice: string, base: BaseMontant): TotalPrevisionnel {
+  return totalPrevisionnel({
+    exercice, moisList: moisExercice(exercice),
+    previsionnels: state.previsionnels ?? {}, stocks: state.stocks ?? [],
+    entries: state.entries, finances: state.finances, refs: state.referentiels, base,
+  });
+}
+
+/** Ce que pèse un bloc sur l'exercice, jeux et stock compris. */
+const totalSection = (t: TotalPrevisionnel, section: PrevSection) => t.totaux.get(section) ?? 0;
+
+const resultatNet = (t: TotalPrevisionnel) => t.resultat.find(l => l.cle === 'rn')?.total ?? 0;
+
+/**
+ * L'encre d'un bandeau de jeu : sa couleur, en bien plus foncé — le même
+ * rapport que `encreSur` à l'écran, mais en triplet pour jsPDF.
+ */
+const encreJeu = (couleur: string): [number, number, number] =>
+  rgb(couleur).map(v => Math.round((v || 0) * 0.42)) as [number, number, number];
+
+const VERT = rgb('#38761d');
+const ROUGE = rgb('#b7332e');
+
+/**
+ * Les grands chiffres d'un ou plusieurs exercices, en tête de document :
+ * produits, charges (variation de stock déduite), personnel, investissements,
+ * résultat net.
+ */
+const POSTES_RESUME: { section: PrevSection; label: string }[] = [
+  { section: 'produits', label: 'Produits' },
+  { section: 'charges', label: 'Charges (variation de stock déduite)' },
+  { section: 'personnel', label: 'Personnel' },
+  { section: 'immos', label: 'Immobilisations (investissements)' },
+];
+
+/**
+ * Le prévisionnel d'un exercice en PDF : exactement l'onglet Total — chaque
+ * bloc mois par mois, postes généraux puis jeux, et le compte de résultat
+ * prévisionnel. Les montants suivent HT ou TTC ; le résultat reste en HT.
+ */
+function documentPDFPrevisionnel(state: AppState, exercice: string, base: BaseMontant): jsPDF {
+  const { referentiels: refs, blocCouleurs } = state;
+  const doc = new jsPDF({ orientation: 'landscape' });
+  const teinte = (cle: BlocCle) => teinteBloc(cle, blocCouleurs ?? {});
+  const unite = base === 'ttc' ? 'TTC' : 'HT';
+  const t = totalDe(state, exercice, base);
+  const mois = t.moisList;
+  const mois0 = (v: number) => v ? euros0(v) : '·';
+  // Des colonnes de largeur fixe : les mois tombent les uns sous les autres
+  // d'un tableau à l'autre, comme sur la page.
+  const largeurMois = (269 - 52 - 24) / mois.length;
+  const colonnesMois = Object.fromEntries([
+    [0, { halign: 'left' as const, cellWidth: 52 }],
+    ...mois.map((_, i) => [i + 1, { cellWidth: largeurMois }]),
+    [mois.length + 1, { cellWidth: 24, fontStyle: 'bold' as const }],
+  ]);
+
+  let y = enTetePDF(doc, `Prévisionnel — exercice ${exercice}`,
+    `Big Budi Games · montants ${unite} · le prévisionnel complet de l'exercice, tel que l'onglet Total l'additionne`);
+
+  // Les grands chiffres de l'année, d'un coup d'œil.
+  const tR = teinte('resultat');
+  const rn = resultatNet(t);
+  autoT(doc, {
+    startY: y,
+    head: [[...POSTES_RESUME.map(p => `${p.label} (${unite})`), 'Résultat net prévu (HT)']],
+    body: [[...POSTES_RESUME.map(p => euros(totalSection(t, p.section))), euros(rn)]],
+    styles: { fontSize: 9, halign: 'right', cellPadding: 2 },
+    headStyles: { fillColor: rgb(tR.base), textColor: rgb(tR.fonce), fontSize: 7.5 },
+    didParseCell: (d) => {
+      if (d.section === 'body' && d.column.index === POSTES_RESUME.length) {
+        d.cell.styles.fontStyle = 'bold';
+        if (rn) d.cell.styles.textColor = rn > 0 ? VERT : ROUGE;
+      }
+    },
+  });
+  y = finYDe(doc) + 6;
+
+  /** Une carte de l'onglet Total : un bloc, ou sa part « jeux ». */
+  function carte(vue: VueTotalPrev) {
+    const tb = teinte(vue.bloc);
+    type Rang = { cells: string[]; jeu?: string; variation?: number[]; retrait?: boolean };
+    const rangs: Rang[] = [
+      ...vue.lignes.map(l => ({
+        cells: [l.libelle, ...l.parMois.map(mois0), euros(l.total)],
+        variation: l.variation ? l.parMois : undefined,
+      })),
+      ...vue.groupes.flatMap(g => [
+        { cells: [`» ${g.jeu}`, ...mois.map(() => ''), euros(g.total)], jeu: g.jeu },
+        ...g.lignes.map(l => ({
+          cells: [`    ${l.libelle}`, ...l.parMois.map(mois0), euros(l.total)], retrait: true,
+        })),
+      ]),
+    ];
+    if (y > 170) { doc.addPage(); y = 16; }
+    autoT(doc, {
+      startY: y,
+      head: [
+        [{ content: `${vue.titre} (${unite}) — total ${euros(vue.total)}`, colSpan: mois.length + 2,
+          styles: { halign: 'left' as const, fillColor: rgb(tb.total), textColor: rgb(tb.fonce),
+            fontSize: 10.5, cellPadding: 2 } }],
+        ['Ligne', ...mois.map(m => labelMois(m)), 'Total'],
+      ],
+      body: rangs.map(r => r.cells),
+      foot: [[`TOTAL ${vue.titre.replace(' — jeux', '').toUpperCase()}${vue.jeux ? ' — JEUX' : ''}`,
+        ...vue.piedParMois.map(mois0), euros(vue.piedTotal)]],
+      showFoot: 'lastPage',
+      styles: { fontSize: 6.2, halign: 'right', cellPadding: 1.2 },
+      headStyles: { fillColor: rgb(tb.base), textColor: rgb(tb.fonce), fontSize: 6 },
+      footStyles: { fillColor: rgb(tb.total), textColor: rgb(tb.fonce), fontStyle: 'bold', fontSize: 6.2 },
+      alternateRowStyles: { fillColor: rgb(tb.tresClair) },
+      columnStyles: colonnesMois,
+      didParseCell: (d) => {
+        if (d.section === 'foot' && d.column.index === 0) d.cell.styles.halign = 'left';
+        if (d.section !== 'body') return;
+        const r = rangs[d.row.index];
+        if (r?.jeu) {
+          // Le bandeau du jeu, à sa couleur, comme à l'écran.
+          const c = couleurJeu(r.jeu, refs);
+          d.cell.styles.fillColor = rgb(c);
+          d.cell.styles.textColor = encreJeu(c);
+          d.cell.styles.fontStyle = 'bold';
+        } else if (r?.variation) {
+          d.cell.styles.fontStyle = 'italic';
+          const v = d.column.index >= 1 && d.column.index <= mois.length ? r.variation[d.column.index - 1] : 0;
+          if (v) d.cell.styles.textColor = v < 0 ? VERT : ROUGE;
+        }
+      },
+    });
+    y = finYDe(doc) + 6;
+    if (vue.section === 'immos' && !vue.jeux) {
+      doc.setFontSize(7);
+      doc.setTextColor(120);
+      texte(doc, "Les investissements ne passent pas au compte de résultat : ils s'inscrivent à l'actif et ne pèsent que par leur dotation, étalée sur leur durée.", 14, y - 2);
+      doc.setTextColor(0);
+      y += 4;
+    }
+  }
+  // Une carte sans rien dedans (un bloc dont tout part dans les jeux) n'a
+  // pas sa place sur le papier.
+  const vide = (v: VueTotalPrev) => !v.lignes.length && !v.groupes.length && !v.total
+    && v.piedParMois.every(x => !x);
+  for (const vue of t.vues) if (!vide(vue)) carte(vue);
+
+  // Le compte de résultat prévisionnel, toujours en HT.
+  if (y > 150) { doc.addPage(); y = 16; }
+  autoT(doc, {
+    startY: y,
+    head: [
+      [{ content: `Résultat prévisionnel ${exercice} (HT) — résultat net ${euros(rn)}`, colSpan: mois.length + 2,
+        styles: { halign: 'left' as const, fillColor: rgb(tR.total), textColor: rgb(tR.fonce),
+          fontSize: 10.5, cellPadding: 2 } }],
+      ['Ligne', ...mois.map(m => labelMois(m)), 'Total'],
+    ],
+    body: t.resultat.map(l => [
+      l.label,
+      ...mois.map(m => l.parMois ? mois0(l.parMois.get(m) ?? 0) : ''),
+      euros(l.total),
+    ]),
+    styles: { fontSize: 6.2, halign: 'right', cellPadding: 1.2 },
+    headStyles: { fillColor: rgb(tR.base), textColor: rgb(tR.fonce), fontSize: 6 },
+    columnStyles: colonnesMois,
+    didParseCell: (d) => styleResultat(d, t.resultat, (l, col) =>
+      col === mois.length + 1 ? l.total : col >= 1 ? (l.parMois?.get(mois[col - 1]) ?? 0) : 0),
+  });
+
+  paginer(doc, `Big Budi Games — prévisionnel ${exercice} (${unite})`);
+  return doc;
+}
+
+/**
+ * La mise en forme d'une ligne du compte de résultat : les agrégats en gras,
+ * le résultat net en couleur de bloc, et les soldes en vert ou en rouge selon
+ * leur signe — comme à l'écran.
+ */
+function styleResultat(
+  d: Parameters<NonNullable<UserOptions['didParseCell']>>[0],
+  lignes: LigneResultat[],
+  valeur: (l: LigneResultat, colonne: number) => number,
+) {
+  if (d.section !== 'body') return;
+  const l = lignes[d.row.index];
+  if (!l) return;
+  if (l.niveau !== 'detail') d.cell.styles.fontStyle = 'bold';
+  if (l.niveau === 'agregat') d.cell.styles.fillColor = [244, 241, 251];
+  if (l.signe && d.column.index >= 1) {
+    const v = valeur(l, d.column.index);
+    if (v) d.cell.styles.textColor = v > 0 ? VERT : ROUGE;
+  }
+}
+
+export function exportPDFPrevisionnel(state: AppState, exercice: string, base: BaseMontant = 'ht') {
+  documentPDFPrevisionnel(state, exercice, base)
+    .save(`BBG_Previsionnel_${exercice}${base === 'ttc' ? '_TTC' : ''}_${today()}.pdf`);
+}
+
+/**
+ * Le prévisionnel 2025-30 condensé : un exercice par colonne au lieu des mois.
+ * Les grands chiffres, le compte de résultat, puis chaque bloc ligne par ligne
+ * — chaque case est le total annuel de la ligne dans l'onglet Total de cet
+ * exercice, et le PDF de l'année donne le même chiffre.
+ */
+function documentPDFPrevisionnelComplet(state: AppState, base: BaseMontant): jsPDF {
+  const { referentiels: refs, blocCouleurs } = state;
+  const doc = new jsPDF({ orientation: 'landscape' });
+  const teinte = (cle: BlocCle) => teinteBloc(cle, blocCouleurs ?? {});
+  const unite = base === 'ttc' ? 'TTC' : 'HT';
+  const exercices = [...EXERCICES];
+  const totaux = exercices.map(ex => totalDe(state, ex, base));
+  const n = exercices.length;
+  const cellule = (v: number) => v ? euros(v) : '·';
+  const cumul = (vals: number[]) => r2(vals.reduce((s, v) => s + v, 0));
+  const ligneDe = (label: string, vals: number[]) => [label, ...vals.map(cellule), cellule(cumul(vals))];
+  const enTeteColonnes = (premiere: string) => [premiere, ...exercices, `Cumul ${exercices[0].slice(0, 4)}-${exercices[n - 1].slice(-2)}`];
+  const colonnes = Object.fromEntries([
+    [0, { halign: 'left' as const, cellWidth: 92 }],
+    ...exercices.map((_, i) => [i + 1, { cellWidth: (269 - 92 - 33) / n }]),
+    [n + 1, { cellWidth: 33, fontStyle: 'bold' as const }],
+  ]);
+  const periode = `${exercices[0].slice(0, 4)}-20${exercices[n - 1].slice(-2)}`;
+
+  let y = enTetePDF(doc, `Prévisionnel ${periode} — vue condensée`,
+    `Big Budi Games · montants ${unite} · un exercice par colonne (1er octobre → 30 septembre) · prévisions seules, sans le réel`);
+
+  // Les grands chiffres, exercice par exercice.
+  const tR = teinte('resultat');
+  const rnParEx = totaux.map(resultatNet);
+  const resume = [
+    ...POSTES_RESUME.map(p => ligneDe(`${p.label} (${unite})`, totaux.map(t => totalSection(t, p.section)))),
+    ligneDe('Résultat net prévu (HT)', rnParEx),
+  ];
+  autoT(doc, {
+    startY: y,
+    head: [
+      [{ content: `Vue d'ensemble ${periode}`, colSpan: n + 2,
+        styles: { halign: 'left' as const, fillColor: rgb(tR.total), textColor: rgb(tR.fonce),
+          fontSize: 10.5, cellPadding: 2 } }],
+      enTeteColonnes('Bloc'),
+    ],
+    body: resume,
+    styles: { fontSize: 7.5, halign: 'right', cellPadding: 1.5 },
+    headStyles: { fillColor: rgb(tR.base), textColor: rgb(tR.fonce), fontSize: 7.5 },
+    columnStyles: colonnes,
+    didParseCell: (d) => {
+      if (d.section !== 'body' || d.row.index !== POSTES_RESUME.length) return;
+      d.cell.styles.fontStyle = 'bold';
+      const v = d.column.index >= 1 && d.column.index <= n ? rnParEx[d.column.index - 1]
+        : d.column.index === n + 1 ? cumul(rnParEx) : 0;
+      if (v) d.cell.styles.textColor = v > 0 ? VERT : ROUGE;
+    },
+  });
+  y = finYDe(doc) + 6;
+
+  // Le compte de résultat prévisionnel, exercice par exercice.
+  const lignesRes = totaux[0].resultat;
+  const valeursRes = lignesRes.map(l => totaux.map(t => t.resultat.find(x => x.cle === l.cle)?.total ?? 0));
+  autoT(doc, {
+    startY: y,
+    head: [
+      [{ content: `Compte de résultat prévisionnel ${periode} (HT)`, colSpan: n + 2,
+        styles: { halign: 'left' as const, fillColor: rgb(tR.total), textColor: rgb(tR.fonce),
+          fontSize: 10.5, cellPadding: 2 } }],
+      enTeteColonnes('Solde intermédiaire de gestion'),
+    ],
+    body: lignesRes.map((l, i) => ligneDe(l.label, valeursRes[i])),
+    styles: { fontSize: 7.5, halign: 'right', cellPadding: 1.5 },
+    headStyles: { fillColor: rgb(tR.base), textColor: rgb(tR.fonce), fontSize: 7.5 },
+    columnStyles: colonnes,
+    didParseCell: (d) => styleResultat(d, lignesRes, (_, col) => {
+      const vals = valeursRes[d.row.index];
+      return col === n + 1 ? cumul(vals) : (vals[col - 1] ?? 0);
+    }),
+  });
+  y = finYDe(doc) + 6;
+
+  // Chaque carte de l'onglet Total, une colonne par exercice. Une ligne se
+  // reconnaît d'une année à l'autre à son libellé ; deux lignes du même nom
+  // dans un même exercice s'additionnent.
+  // Toutes les cartes rencontrées sur les cinq exercices, dans l'ordre de
+  // l'onglet Total : chaque bloc, puis sa part « jeux ».
+  const rangSection = (v: VueTotalPrev) => SECTIONS.findIndex(x => x.cle === v.section);
+  const vuesOrdonnees = [...new Map(totaux.flatMap(t => t.vues).map(v => [v.cle, v])).values()]
+    .sort((a, b) => rangSection(a) - rangSection(b) || Number(a.jeux) - Number(b.jeux));
+  for (const modele of vuesOrdonnees) {
+    const parEx = totaux.map(t => t.vues.find(v => v.cle === modele.cle));
+    const tb = teinte(modele.bloc);
+    type Rang = { cells: string[]; jeu?: string; variation?: boolean; vals: number[] };
+    const rangs: Rang[] = [];
+    // Les postes généraux, variation de stock à la fin.
+    const libelles = [...new Set(parEx.flatMap(v => v?.lignes.map(l => l.libelle) ?? []))];
+    for (const lib of libelles) {
+      const vals = parEx.map(v => r2((v?.lignes ?? []).filter(l => l.libelle === lib)
+        .reduce((s, l) => s + l.total, 0)));
+      const variation = parEx.some(v => v?.lignes.some(l => l.libelle === lib && l.variation));
+      rangs.push({ cells: ligneDe(lib, vals), vals, variation });
+    }
+    // Les jeux, dans l'ordre du catalogue (puis ceux qui n'y sont plus).
+    const jeuxVus = [...new Set(parEx.flatMap(v => v?.groupes.map(g => g.jeu) ?? []))];
+    const catalogue = refs.jeux ?? [];
+    const jeuxOrdonnes = [...catalogue.filter(j => jeuxVus.includes(j)), ...jeuxVus.filter(j => !catalogue.includes(j))];
+    for (const jeu of jeuxOrdonnes) {
+      const groupes = parEx.map(v => v?.groupes.find(g => g.jeu === jeu));
+      const valsJeu = groupes.map(g => g?.total ?? 0);
+      rangs.push({ cells: ligneDe(`» ${jeu}`, valsJeu), jeu, vals: valsJeu });
+      const libs = [...new Set(groupes.flatMap(g => g?.lignes.map(l => l.libelle) ?? []))];
+      for (const lib of libs) {
+        const vals = groupes.map(g => r2((g?.lignes ?? []).filter(l => l.libelle === lib)
+          .reduce((s, l) => s + l.total, 0)));
+        rangs.push({ cells: ligneDe(`    ${lib}`, vals), vals });
+      }
+    }
+    if (!rangs.length) continue;
+    const pied = parEx.map(v => v?.piedTotal ?? 0);
+    if (y > 160) { doc.addPage(); y = 16; }
+    autoT(doc, {
+      startY: y,
+      head: [
+        [{ content: `${modele.titre} (${unite})`, colSpan: n + 2,
+          styles: { halign: 'left' as const, fillColor: rgb(tb.total), textColor: rgb(tb.fonce),
+            fontSize: 10.5, cellPadding: 2 } }],
+        enTeteColonnes(modele.jeux ? 'Jeu / ligne' : 'Ligne'),
+      ],
+      body: rangs.map(r => r.cells),
+      foot: [ligneDe(`TOTAL ${modele.titre.replace(' — jeux', '').toUpperCase()}${modele.jeux ? ' — JEUX' : ''}`, pied)],
+      showFoot: 'lastPage',
+      styles: { fontSize: 7, halign: 'right', cellPadding: 1.3 },
+      headStyles: { fillColor: rgb(tb.base), textColor: rgb(tb.fonce), fontSize: 7 },
+      footStyles: { fillColor: rgb(tb.total), textColor: rgb(tb.fonce), fontStyle: 'bold', fontSize: 7 },
+      alternateRowStyles: { fillColor: rgb(tb.tresClair) },
+      columnStyles: colonnes,
+      didParseCell: (d) => {
+        if (d.section === 'foot' && d.column.index === 0) d.cell.styles.halign = 'left';
+        if (d.section !== 'body') return;
+        const r = rangs[d.row.index];
+        if (r?.jeu) {
+          const c = couleurJeu(r.jeu, refs);
+          d.cell.styles.fillColor = rgb(c);
+          d.cell.styles.textColor = encreJeu(c);
+          d.cell.styles.fontStyle = 'bold';
+        } else if (r?.variation) {
+          d.cell.styles.fontStyle = 'italic';
+          // Comme à l'écran : la variation affichée en négatif allège les charges.
+          const v = d.column.index >= 1 && d.column.index <= n ? r.vals[d.column.index - 1] : 0;
+          if (v) d.cell.styles.textColor = v < 0 ? VERT : ROUGE;
+        }
+      },
+    });
+    y = finYDe(doc) + 6;
+  }
+
+  doc.setFontSize(7);
+  doc.setTextColor(120);
+  if (y > 186) { doc.addPage(); y = 16; }
+  texte(doc, "Chaque case est le total annuel de la ligne dans l'onglet Total de l'exercice : stock compris (ventes, tirages, droits d'auteur), variation de stock déduite des charges.", 14, y);
+  texte(doc, "Une ligne se retrouve d'un exercice à l'autre par son nom ; deux lignes du même nom dans un exercice sont additionnées (le PDF de l'année les détaille).", 14, y + 4);
+  texte(doc, "Les investissements ne passent pas au compte de résultat : ils n'y pèsent que par leur dotation. Le résultat est toujours calculé en HT.", 14, y + 8);
+  doc.setTextColor(0);
+
+  paginer(doc, `Big Budi Games — prévisionnel ${periode}, vue condensée (${unite})`);
+  return doc;
+}
+
+export function exportPDFPrevisionnelComplet(state: AppState, base: BaseMontant = 'ht') {
+  documentPDFPrevisionnelComplet(state, base)
+    .save(`BBG_Previsionnel_2025-2030${base === 'ttc' ? '_TTC' : ''}_${today()}.pdf`);
 }
 
 // ---------------------------------------------------------------- Sauvegarde -

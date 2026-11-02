@@ -5,20 +5,18 @@ import {
 } from 'recharts';
 import { TrendingUp } from 'lucide-react';
 import { useStore } from '../../store';
-import type { PrevLigne, PrevSection } from '../../types';
+import type { PrevSection } from '../../types';
 import { EXERCICES, moisExercice } from '../../utils/dates';
 import { euros, euros0, r2, pourcent } from '../../utils/money';
 import {
   compteResultat, dotationsParMois, immoInfos, produitsFinanciersParMois, syntheseExercice,
   type LigneResultat,
 } from '../../utils/calc';
-import { SECTIONS_DEPENSES, valeursDe } from '../../utils/previsionnel';
-import { resultatPrevisionnel, sommeMap } from '../../utils/prevCalc';
-import { apportStock } from '../../utils/stock';
+import { SECTIONS_DEPENSES } from '../../utils/previsionnel';
+import { totalPrevisionnel } from '../../utils/totalPrev';
 import { teinteBloc, type BlocCle } from '../../utils/blocs';
 import { PageHeader, Card, StatCard, TotalBloc, styleBloc } from '../ui';
 
-const AUCUN_JEU: string[] = [];
 const GRID = '#ddd6ef';
 const INK = '#6f6690';
 
@@ -54,28 +52,19 @@ export function CinqAnsPage() {
 
   const colonnes: ColonneExercice[] = useMemo(() => EXERCICES.map(exercice => {
     const moisList = moisExercice(exercice);
-    const lignes: PrevLigne[] = previsionnels[exercice] ?? [];
     const syn = syntheseExercice(entries, exercice, refs, 'ht');
 
-    const carte = (calc: (i: number) => number) =>
-      new Map(moisList.map((m, i) => [m, r2(calc(i))]));
-    const prevuMois = (sec: PrevSection) => carte(i =>
-      lignes.filter(l => l.section === sec && !l.unite)
-        .reduce((s, l) => s + (valeursDe(l, lignes)[i] ?? 0), 0));
     const somme = (m: Map<string, number>) => r2([...m.values()].reduce((s, v) => s + v, 0));
 
-    // Le stock nourrit le prévisionnel comme dans l'onglet Total : ses ventes
-    // s'ajoutent aux produits, ses tirages aux charges, corrigés de la
-    // variation de stock. Sans cela, deux pages annonceraient deux résultats.
-    const stock = apportStock(stocks, exercice, refs.jeux ?? AUCUN_JEU);
-    const prevu = new Map<PrevSection, number>();
-    for (const b of BLOCS_SUIVIS) {
-      const apport = b.section === 'produits' ? sommeMap(stock.caParMois)
-        : b.section === 'charges'
-          ? r2(sommeMap(stock.fabricationParMois) - sommeMap(stock.variationParMois))
-          : 0;
-      prevu.set(b.section, r2(somme(prevuMois(b.section)) + apport));
-    }
+    // Le prévu de chaque bloc est celui de l'onglet Total, calculé par la même
+    // fonction : stock compris (ventes en produits ; tirages et droits
+    // d'auteur en charges, nettes de la variation de stock). Sans cela, deux
+    // pages annonceraient deux chiffres — et le PDF du prévisionnel un troisième.
+    const total = totalPrevisionnel({
+      exercice, moisList, previsionnels, stocks, entries, finances, refs, base: 'ht',
+    });
+    const prevu = new Map<PrevSection, number>(
+      BLOCS_SUIVIS.map(b => [b.section, total.totaux.get(b.section) ?? 0]));
 
     const reel = new Map<PrevSection, number>([
       ['produits', somme(syn.totalProduitsParMois)],
@@ -85,7 +74,7 @@ export function CinqAnsPage() {
     ]);
 
     const dotationsReelles = dotationsParMois(immos, moisList);
-    const resultatPrevu = resultatPrevisionnel({ lignes, moisList, immos, finances, stock, refs });
+    const resultatPrevu = total.resultat;
 
     const resultatReel = compteResultat({
       moisList,

@@ -1,8 +1,10 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import {
   Plus, Trash2, AlertTriangle, AlertCircle, Info, Wand2, ArrowRightLeft, Gamepad2, Sigma, ListPlus, Clock, GripVertical, Percent, Calculator, Receipt, TrendingUp, Landmark, Boxes, Table2, CopyPlus,
+  FileDown, FileStack,
 } from 'lucide-react';
 import { useStore } from '../../store';
+import { exportPDFPrevisionnel, exportPDFPrevisionnelComplet } from '../../utils/export';
 import { BAREME_TNS, cotisationsTNS } from '../../utils/tns';
 import { useReorganisation } from '../../utils/glisser';
 import { couleurJeu, encreSur } from '../../utils/jeux';
@@ -309,6 +311,31 @@ export function PrevisionnelPage() {
     <div className="p-4 w-full">
       <PageHeader
         title={`Prévisionnel — ${VUES.find(v => v.cle === vue)!.titre}`}
+        aCoteDuTitre={
+          // Le prévisionnel sur papier : l'année regardée, ou les cinq d'un
+          // coup, condensés. Il suit l'écran : HT dans les onglets de saisie,
+          // le réglage HT / TTC dans le Total.
+          <>
+            <button
+              type="button"
+              onClick={() => exportPDFPrevisionnel(useStore.getState(), exercice, base)}
+              title={`Enregistrer le prévisionnel ${exercice} en PDF (${base === 'ttc' ? 'TTC' : 'HT'}) — chaque bloc mois par mois, jeux compris, et le résultat prévisionnel, comme l'onglet Total`}
+              className="px-2.5 py-1 rounded-md text-xs font-medium inline-flex items-center gap-1
+                bg-white border border-[#c9c0e4] text-[#3f3268] hover:bg-[#f4f1fb] transition-colors"
+            >
+              <FileDown size={13} /> PDF {exercice}
+            </button>
+            <button
+              type="button"
+              onClick={() => exportPDFPrevisionnelComplet(useStore.getState(), base)}
+              title={`Enregistrer le prévisionnel complet 2025-2030 en PDF (${base === 'ttc' ? 'TTC' : 'HT'}), condensé : un exercice par colonne, chaque ligne avec son total annuel, et le compte de résultat de chaque exercice`}
+              className="px-2.5 py-1 rounded-md text-xs font-medium inline-flex items-center gap-1
+                bg-white border border-[#c9c0e4] text-[#3f3268] hover:bg-[#f4f1fb] transition-colors"
+            >
+              <FileStack size={13} /> PDF 2025-30
+            </button>
+          </>
+        }
         subtitle={sousTitre[vue]}
         actions={
           <>
