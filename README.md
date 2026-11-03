@@ -61,6 +61,15 @@ sont recalculés en direct à partir des écritures.
   sont calculés par les mêmes fonctions que l'écran et le PDF (vérifié au
   centime). La bibliothèque Excel ne se charge qu'au clic. Le classeur complet
   de l'exercice (page Exports) reste tel quel
+- **Excel de l'exercice** (journal) — tous les mois en un seul classeur : un
+  onglet **Sommaire** (chaque mois avec ses lignes, dépenses, recettes et solde
+  en TTC et HT, soldes en vert ou rouge, un clic sur le mois ouvre son onglet ;
+  total de l'exercice sur les montants exacts, comme le PDF de l'exercice), puis
+  **un onglet par mois** portant des écritures — exactement la feuille d'« Excel
+  du mois », avec un lien « ↩ Sommaire » — et un **Récapitulatif de l'exercice**
+  par catégorie et par mot clé. En haut du journal, les exports sont regroupés en
+  deux blocs compacts, **PDF : mois · exercice** et **Excel : mois · exercice**,
+  pour que la barre tienne sur la ligne du titre
 - **PDF de l'exercice** — juste à côté : tous les mois de l'exercice affiché
   dans un seul fichier. Une page de **sommaire** d'abord — chaque mois avec ses
   lignes, ses dépenses, ses recettes et son solde (TTC et HT), sa page, et le

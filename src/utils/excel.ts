@@ -12,11 +12,11 @@ import type { Borders, Cell, Fill, Font, Row, Worksheet } from 'exceljs';
 import type { AppState } from '../store';
 import type { JournalEntry } from '../types';
 import {
-  exerciceDuMois, formatDateFR, labelMois, labelMoisLong, todayISO,
+  exerciceDuMois, formatDateFR, labelMois, labelMoisLong, moisExercice, todayISO, PRE_IMMAT,
 } from './dates';
 import { euros, r2, tvaDepuisTTC } from './money';
 import {
-  sectionsDuMois, sumParCategorie, sumParMotCle, sumTTH, type BaseMontant,
+  sectionsDuMois, sumParCategorie, sumParMotCle, sumTTH, type BaseMontant, type SectionsDuMois,
 } from './calc';
 import { teinteBloc, type BlocCle } from './blocs';
 import type { Teinte } from './couleurs';
@@ -218,19 +218,28 @@ function chronologique(rows: JournalEntry[], entries: JournalEntry[]): JournalEn
     (a.date < b.date ? -1 : a.date > b.date ? 1 : 0) || (rang.get(a.id) ?? 0) - (rang.get(b.id) ?? 0));
 }
 
+type Classeur = Awaited<ReturnType<typeof classeur>>;
+
 /**
- * Le Journal du mois en Excel : les trois tuiles du haut, puis les quatre
- * tableaux de l'écran (charges, immobilisations, jeux, produits) avec leurs
- * totaux, et un onglet de récapitulatif par catégorie et par mot clé.
+ * La feuille d'un mois : les trois tuiles du haut, puis les quatre tableaux de
+ * l'écran (charges, immobilisations, jeux, produits) avec leurs totaux. Dans
+ * le classeur de l'exercice, un lien en haut à droite ramène au sommaire.
  */
-export async function exportExcelMois(state: AppState, mois: string) {
+function feuilleMois(
+  wb: Classeur, state: AppState, mois: string, sections: SectionsDuMois,
+  nomFeuille: string, lienSommaire?: string,
+) {
   const { entries, referentiels: refs, blocCouleurs } = state;
   const teinte = (cle: BlocCle) => teinteBloc(cle, blocCouleurs ?? {});
-  const sections = sectionsDuMois(entries, mois, refs);
-  const wb = await classeur();
-  const ws = feuille(wb, `Journal ${labelMoisLong(mois)}`, COLONNES_JOURNAL.map(c => c.largeur));
+  const ws = feuille(wb, nomFeuille, COLONNES_JOURNAL.map(c => c.largeur));
   let y = enTete(ws, `Journal du mois — ${labelMoisLong(mois)}`,
     `Big Budi Games · exercice ${exerciceDuMois(mois)} · écritures réelles du journal`);
+  if (lienSommaire) {
+    const c = ws.getCell(1, NB_COLS_JOURNAL);
+    c.value = { text: '↩ Sommaire', hyperlink: `#'${lienSommaire}'!A1` };
+    c.font = police({ underline: true, couleur: C.violet });
+    c.alignment = { horizontal: 'right', vertical: 'middle' };
+  }
 
   // Les trois tuiles : dépenses, recettes, solde — le gros chiffre en TTC.
   const dep = sumTTH([...sections.charges, ...sections.immos]);
@@ -340,12 +349,20 @@ export async function exportExcelMois(state: AppState, mois: string) {
   section("Immobilisations (portées à l'actif, amorties)", sections.immos, 'immos', 'depenses');
   section('Dépenses Jeux (développement & droits)', sections.jeux, 'jeux', 'jeux');
   section('Produits (revenus)', sections.produits, 'produits', 'produits');
+}
 
-  // Le récapitulatif : les pastilles du bas de l'écran, en tableaux.
+/**
+ * Le récapitulatif : les pastilles du bas de l'écran, en tableaux — par
+ * catégorie puis par mot clé, en HT, sur un mois ou sur tout l'exercice.
+ */
+function feuilleRecap(
+  wb: Classeur, state: AppState, titre: string, sousTitre: string,
+  depenses: JournalEntry[], produits: JournalEntry[], vide: string,
+) {
+  const { referentiels: refs, blocCouleurs } = state;
+  const teinte = (cle: BlocCle) => teinteBloc(cle, blocCouleurs ?? {});
   const rec = feuille(wb, 'Récapitulatif', [34, 15, 11]);
-  let yr = enTete(rec, `Récapitulatif — ${labelMoisLong(mois)}`,
-    'Par catégorie puis par mot clé, montants HT, le mois seul');
-  const depenses = [...sections.charges, ...sections.immos, ...sections.jeux];
+  let yr = enTete(rec, titre, sousTitre);
   const recap = (titre: string, groupes: Map<string, number>, cle: BlocCle, parCategorie: boolean) => {
     if (!groupes.size) return;
     const t = teinte(cle);
@@ -374,16 +391,106 @@ export async function exportExcelMois(state: AppState, mois: string) {
     yr += 3;
   };
   recap('Dépenses par catégorie', sumParCategorie(depenses), 'charges', true);
-  recap('Produits par catégorie', sumParCategorie(sections.produits), 'produits', true);
+  recap('Produits par catégorie', sumParCategorie(produits), 'produits', true);
   // Les mots clés rattachent une écriture à un événement (un salon, un
   // festival) : « combien m'a coûté Cannes ». Les lignes sans mot clé n'y sont pas.
   recap('Dépenses par mot clé (lignes sans mot clé exclues)', sumParMotCle(depenses), 'personnel', false);
-  recap('Produits par mot clé (lignes sans mot clé exclues)', sumParMotCle(sections.produits), 'personnel', false);
+  recap('Produits par mot clé (lignes sans mot clé exclues)', sumParMotCle(produits), 'personnel', false);
   if (yr === 4) {
-    ecrire(rec.getCell(4, 1), 'Aucune écriture sur ce mois.', { font: police({ italic: true, couleur: C.grisClair }), border: {} });
+    ecrire(rec.getCell(4, 1), vide, { font: police({ italic: true, couleur: C.grisClair }), border: {} });
   }
+}
 
+/**
+ * Le Journal du mois en Excel : la feuille du mois, et un onglet de
+ * récapitulatif par catégorie et par mot clé.
+ */
+export async function exportExcelMois(state: AppState, mois: string) {
+  const sections = sectionsDuMois(state.entries, mois, state.referentiels);
+  const wb = await classeur();
+  feuilleMois(wb, state, mois, sections, `Journal ${labelMoisLong(mois)}`);
+  feuilleRecap(wb, state, `Récapitulatif — ${labelMoisLong(mois)}`,
+    'Par catégorie puis par mot clé, montants HT, le mois seul',
+    [...sections.charges, ...sections.immos, ...sections.jeux], sections.produits,
+    'Aucune écriture sur ce mois.');
   await telecharger(wb, `BBG_Journal_${mois}_${todayISO()}.xlsx`);
+}
+
+/** Un nom d'onglet court et lisible pour chaque mois. */
+const ongletDuMois = (mois: string) => mois === PRE_IMMAT ? 'Pré-immatriculation' : labelMoisLong(mois);
+
+/**
+ * Tout le journal d'un exercice dans un seul Excel : un sommaire (chaque mois,
+ * ses dépenses, recettes et solde, et un lien vers son onglet), puis un onglet
+ * par mois portant des écritures — exactement la feuille d'« Excel du mois » —
+ * et un récapitulatif de l'exercice par catégorie et par mot clé.
+ */
+export async function exportExcelJournalExercice(state: AppState, exercice: string) {
+  const { entries, referentiels: refs, blocCouleurs } = state;
+  const teinte = (cle: BlocCle) => teinteBloc(cle, blocCouleurs ?? {});
+  const tousLesMois = moisExercice(exercice).map(mois => ({ mois, sections: sectionsDuMois(entries, mois, refs) }));
+  const nbLignes = (x: SectionsDuMois) => x.charges.length + x.immos.length + x.jeux.length + x.produits.length;
+  const pleins = tousLesMois.filter(x => nbLignes(x.sections) > 0);
+  const wb = await classeur();
+
+  // Le sommaire, en premier onglet.
+  const SOMMAIRE = 'Sommaire';
+  const ws = feuille(wb, SOMMAIRE, [30, 9, 15, 15, 15, 15, 15, 15]);
+  let y = enTete(ws, `Journal comptable — exercice ${exercice}`,
+    `Big Budi Games · ${pleins.length} mois avec des écritures sur ${tousLesMois.length} · écritures réelles du journal`);
+  const tR = teinte('resultat');
+  bandeau(ws, y, 8, `Les mois de l'exercice ${exercice} — un clic sur un mois ouvre son onglet`, tR);
+  y++;
+  entetes(ws, y, ['Mois', 'Lignes', 'Dépenses TTC', 'Dépenses HT', 'Recettes TTC', 'Recettes HT', 'Solde TTC', 'Solde HT'],
+    tR, new Set([2, 3, 4, 5, 6, 7, 8]));
+  y++;
+  const solde = (v: number) => police({ bold: true, couleur: v > 0 ? C.vert : v < 0 ? C.rouge : undefined });
+  tousLesMois.forEach(({ mois, sections }, i) => {
+    const r = ws.getRow(y);
+    const f = i % 2 ? fond(tR.tresClair) : undefined;
+    const n = nbLignes(sections);
+    if (!n) {
+      ecrire(r.getCell(1), labelMoisLong(mois), { fill: f, font: police({ couleur: C.grisClair }) });
+      ecrire(r.getCell(2), 0, { fill: f, font: police({ couleur: C.grisClair }), align: 'right' });
+      ws.mergeCells(y, 3, y, 8);
+      ecrire(r.getCell(3), 'aucune écriture', { fill: f, font: police({ italic: true, couleur: C.grisClair }), align: 'center' });
+    } else {
+      const dep = sumTTH([...sections.charges, ...sections.immos, ...sections.jeux]);
+      const prod = sumTTH(sections.produits);
+      ecrire(r.getCell(1), { text: labelMoisLong(mois), hyperlink: `#'${ongletDuMois(mois)}'!A1` }, {
+        fill: f, font: police({ underline: true, bold: true, couleur: C.violet }),
+      });
+      ecrire(r.getCell(2), n, { fill: f, align: 'right' });
+      [dep.ttc, dep.ht, prod.ttc, prod.ht].forEach((v, j) => ecrire(r.getCell(j + 3), v, { fill: f, numFmt: EUROS }));
+      const sTTC = r2(prod.ttc - dep.ttc);
+      const sHT = r2(prod.ht - dep.ht);
+      ecrire(r.getCell(7), sTTC, { fill: f, numFmt: EUROS, font: solde(sTTC) });
+      ecrire(r.getCell(8), sHT, { fill: f, numFmt: EUROS, font: solde(sHT) });
+    }
+    y++;
+  });
+  // Le total se calcule sur les montants exacts de l'exercice, arrondis une
+  // seule fois — comme le PDF de l'exercice et la Synthèse.
+  const depEx = sumTTH(tousLesMois.flatMap(x => [...x.sections.charges, ...x.sections.immos, ...x.sections.jeux]));
+  const prodEx = sumTTH(tousLesMois.flatMap(x => x.sections.produits));
+  const st = { font: police({ bold: true, size: 11, couleur: tR.fonce }), fill: fond(tR.total),
+    border: { ...cadre(tR.bord), top: trait(tR.bord, 'medium') } };
+  const r = ws.getRow(y);
+  r.height = 20;
+  ecrire(r.getCell(1), "TOTAL DE L'EXERCICE", st);
+  ecrire(r.getCell(2), tousLesMois.reduce((s, x) => s + nbLignes(x.sections), 0), { ...st, align: 'right' });
+  [depEx.ttc, depEx.ht, prodEx.ttc, prodEx.ht, r2(prodEx.ttc - depEx.ttc), r2(prodEx.ht - depEx.ht)]
+    .forEach((v, j) => ecrire(r.getCell(j + 3), v, { ...st, numFmt: EUROS }));
+
+  // Un onglet par mois, puis le récapitulatif de l'exercice.
+  for (const x of pleins) feuilleMois(wb, state, x.mois, x.sections, ongletDuMois(x.mois), SOMMAIRE);
+  const toutes = tousLesMois.map(x => x.sections);
+  feuilleRecap(wb, state, `Récapitulatif — exercice ${exercice}`,
+    "Par catégorie puis par mot clé, montants HT, tout l'exercice",
+    toutes.flatMap(x => [...x.charges, ...x.immos, ...x.jeux]), toutes.flatMap(x => x.produits),
+    'Aucune écriture sur cet exercice.');
+
+  await telecharger(wb, `BBG_Journal_exercice_${exercice}_${todayISO()}.xlsx`);
 }
 
 // ----- Synthèse annuelle --------------------------------------------------

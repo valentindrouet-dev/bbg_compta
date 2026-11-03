@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState, type CSSProperties, type DragEvent } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties, type DragEvent, type ReactNode } from 'react';
 import {
-  Plus, Copy, Trash2, AlertTriangle, Search, ClipboardPaste, X, CopyPlus, FileDown, FileStack, Tag,
+  Plus, Copy, Trash2, AlertTriangle, Search, ClipboardPaste, X, CopyPlus, FileDown, Tag,
   CalendarCheck, Landmark, FileSpreadsheet,
 } from 'lucide-react';
 import { useStore } from '../../store';
@@ -23,7 +23,7 @@ import { saveFile, deleteFile } from '../../utils/files';
 import { fichiersDeposes, transporteDesFichiers, libelleDepuisNom, fournisseurDepuisNom } from '../../utils/depot';
 import { useCibleLigne, type Cible } from '../../utils/cible';
 import { exportPDFMois, exportPDFJournalExercice } from '../../utils/export';
-import { exportExcelMois } from '../../utils/excel';
+import { exportExcelMois, exportExcelJournalExercice } from '../../utils/excel';
 import { toast } from '../../utils/toast';
 import { BarreFlottante } from '../layout/DockBas';
 
@@ -269,42 +269,50 @@ export function JournalPage({ cible, onOuvrirTreso }: {
             >
               {EXERCICES.map(ex => <option key={ex} value={ex}>Exercice {ex}</option>)}
             </select>
-            {/* La trace papier du mois : les quatre tableaux tels qu'ils sont ici. */}
-            <Btn
-              onClick={() => exportPDFMois(useStore.getState(), mois)}
-              title={`Enregistrer le journal de ${labelMoisLong(mois)} en PDF — les quatre tableaux, leurs totaux et le récapitulatif par catégorie`}
-            >
-              <span className="inline-flex items-center gap-1">
-                <FileDown size={14} /> PDF du mois
-              </span>
-            </Btn>
-            {/* Le même mois dans Excel, mis en forme comme ici : couleurs des
-                blocs, colonnes taillées, montants et dates en vraies valeurs. */}
-            <Btn
-              onClick={() => {
-                exportExcelMois(useStore.getState(), mois).catch(err => {
-                  console.error(err);
-                  toast("L'export Excel n'a pas pu se faire — réessaie dans un instant.", 'info');
-                });
+            {/* Les exports, en deux blocs compacts — PDF et Excel, chacun pour le
+                mois affiché ou tout l'exercice — pour que la barre tienne sur la
+                ligne du titre. Le mois : les quatre tableaux tels qu'ils sont
+                ici. L'exercice : un sommaire, puis chaque mois. */}
+            <GroupeExport
+              titre="PDF" icone={<FileDown size={14} />}
+              mois={{
+                onClick: () => exportPDFMois(useStore.getState(), mois),
+                aide: `Enregistrer le journal de ${labelMoisLong(mois)} en PDF — les quatre tableaux, leurs totaux et le récapitulatif par catégorie`,
               }}
-              title={`Enregistrer le journal de ${labelMoisLong(mois)} en Excel — les quatre tableaux mis en forme comme ici, leurs totaux, et un onglet de récapitulatif par catégorie et par mot clé`}
-            >
-              <span className="inline-flex items-center gap-1">
-                <FileSpreadsheet size={14} /> Excel du mois
-              </span>
-            </Btn>
-            {/* Tous les mois de l'exercice dans un seul fichier, derrière un sommaire. */}
-            <Btn
-              onClick={() => exportPDFJournalExercice(useStore.getState(), exercice)}
-              disabled={!nbExercice}
-              title={nbExercice
-                ? `Enregistrer tout le journal ${exercice} en un seul PDF — un sommaire, puis chaque mois tel que le donne « PDF du mois »`
-                : `Aucune écriture sur l'exercice ${exercice}`}
-            >
-              <span className="inline-flex items-center gap-1">
-                <FileStack size={14} /> PDF de l'exercice
-              </span>
-            </Btn>
+              exercice={{
+                onClick: () => exportPDFJournalExercice(useStore.getState(), exercice),
+                aide: nbExercice
+                  ? `Enregistrer tout le journal ${exercice} en un seul PDF — un sommaire, puis chaque mois tel que le donne « PDF du mois »`
+                  : `Aucune écriture sur l'exercice ${exercice}`,
+                actif: !!nbExercice,
+              }}
+            />
+            {/* Le même contenu dans Excel, mis en forme comme ici : couleurs des
+                blocs, colonnes taillées, montants et dates en vraies valeurs. */}
+            <GroupeExport
+              titre="Excel" icone={<FileSpreadsheet size={14} />}
+              mois={{
+                onClick: () => {
+                  exportExcelMois(useStore.getState(), mois).catch(err => {
+                    console.error(err);
+                    toast("L'export Excel n'a pas pu se faire — réessaie dans un instant.", 'info');
+                  });
+                },
+                aide: `Enregistrer le journal de ${labelMoisLong(mois)} en Excel — les quatre tableaux mis en forme comme ici, leurs totaux, et un onglet de récapitulatif par catégorie et par mot clé`,
+              }}
+              exercice={{
+                onClick: () => {
+                  exportExcelJournalExercice(useStore.getState(), exercice).catch(err => {
+                    console.error(err);
+                    toast("L'export Excel n'a pas pu se faire — réessaie dans un instant.", 'info');
+                  });
+                },
+                aide: nbExercice
+                  ? `Tous les mois de l'exercice ${exercice} dans un seul Excel — un sommaire cliquable (dépenses, recettes, solde de chaque mois), un onglet par mois mis en forme comme « Excel du mois », et le récapitulatif de l'exercice`
+                  : `Aucune écriture sur l'exercice ${exercice}`,
+                actif: !!nbExercice,
+              }}
+            />
           </>
         }
         tabs={
@@ -795,6 +803,34 @@ function Section({
 // -------------------------------------------------------------------- Row ---
 
 const TAUX_CHOICES = [20, 10, 5.5, 0];
+
+/**
+ * Un bloc d'export compact : « PDF » ou « Excel », puis deux boutons — le mois
+ * affiché, ou tout l'exercice. Chaque bouton porte un nom complet (« PDF du
+ * mois »…) pour les lecteurs d'écran, et sa bulle d'aide détaille le contenu.
+ */
+function GroupeExport({ titre, icone, mois, exercice }: {
+  titre: string; icone: ReactNode;
+  mois: { onClick: () => void; aide: string };
+  exercice: { onClick: () => void; aide: string; actif: boolean };
+}) {
+  const bouton = 'px-2.5 py-1.5 transition-colors hover:bg-[#f4f1fb] disabled:opacity-40 disabled:cursor-not-allowed';
+  return (
+    <div className="inline-flex items-stretch rounded-md border border-[#c9c0e4] bg-white text-sm text-[#3f3268] overflow-hidden">
+      <span className="px-2 inline-flex items-center gap-1 font-medium bg-[#f4f1fb] border-r border-[#c9c0e4]">
+        {icone} {titre}
+      </span>
+      <button type="button" className={bouton} onClick={mois.onClick} title={mois.aide}
+        aria-label={`${titre} du mois`}>
+        mois
+      </button>
+      <button type="button" className={`${bouton} border-l border-[#c9c0e4]`} onClick={exercice.onClick}
+        title={exercice.aide} disabled={!exercice.actif} aria-label={`${titre} de l'exercice`}>
+        exercice
+      </button>
+    </div>
+  );
+}
 
 /** Déduit le taux affiché à partir des montants stockés. */
 function tauxImplique(e: JournalEntry): number | 'manuel' {
