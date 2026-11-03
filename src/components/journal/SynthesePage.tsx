@@ -1,6 +1,7 @@
 import { Fragment, useMemo, useState } from 'react';
 import {
   Eye, EyeOff, Gamepad2, Info, CheckCircle2, AlertTriangle, AlertCircle, Wrench, ArrowRight, GripVertical, CheckSquare, Square, FileDown,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { useStore } from '../../store';
 import { useReorganisation } from '../../utils/glisser';
@@ -27,6 +28,8 @@ import type { JournalEntry } from '../../types';
 import { useEtatVue } from '../../utils/etatVue';
 import { useBaseMontant, useSousTotaux, useVueSimplifiee } from '../../utils/reglagesVue';
 import { exportPDFSynthese } from '../../utils/export';
+import { exportExcelSynthese } from '../../utils/excel';
+import { toast } from '../../utils/toast';
 
 /** Référence stable : un `?? []` dans un sélecteur reboucle à l'infini. */
 const AUCUN_JEU: string[] = [];
@@ -257,6 +260,18 @@ export function SynthesePage({ onAllerA }: { onAllerA?: (page: Page, ligne: stri
               title={`Enregistrer la synthèse ${exercice} en PDF (${base === 'ttc' ? 'TTC' : 'HT'}) — compte de résultat, blocs mois par mois, TVA et récapitulatif`}
             >
               <span className="inline-flex items-center gap-1"><FileDown size={14} /> PDF</span>
+            </Btn>
+            {/* La même synthèse dans Excel, mise en forme comme ici ; elle suit aussi HT / TTC. */}
+            <Btn
+              onClick={() => {
+                exportExcelSynthese(useStore.getState(), exercice, base).catch(err => {
+                  console.error(err);
+                  toast("L'export Excel n'a pas pu se faire — réessaie dans un instant.", 'info');
+                });
+              }}
+              title={`Enregistrer la synthèse ${exercice} en Excel (${base === 'ttc' ? 'TTC' : 'HT'}) — compte de résultat, blocs mois par mois avec groupes et sous-totaux, jeux, TVA et récapitulatif, mis en forme comme ici`}
+            >
+              <span className="inline-flex items-center gap-1"><FileSpreadsheet size={14} /> Excel</span>
             </Btn>
             <Btn onClick={basculerApercu} title="Afficher le détail des opérations au survol d'une case">
               <span className="inline-flex items-center gap-1">

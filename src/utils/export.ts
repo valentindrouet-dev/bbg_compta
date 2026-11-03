@@ -1083,20 +1083,150 @@ function vuesDeBloc(
   return { cats, jeux, data };
 }
 
+/** Une carte de la synthèse : un bloc (ou sa part « jeux »), catégories × mois. */
+export interface CarteSynthese {
+  titre: string;
+  cle: BlocCle;
+  /** L'intitulé de la première colonne : « Catégorie », ou « Jeu / poste ». */
+  colonne: string;
+  lignes: {
+    label: string; parMois: Map<string, number>;
+    /** La catégorie de la ligne (sa couleur, son groupe). */
+    categorie?: string;
+    /** La ligne d'un jeu : son cumul, avant ses postes. */
+    jeu?: string;
+  }[];
+  totaux: Map<string, number>;
+  /** Le total de droite : pour le fonctionnement, « bloc moins jeux ». */
+  total: number;
+}
+
+/**
+ * Tout ce que contient la synthèse annuelle, calculé une fois : le compte de
+ * résultat (HT), chaque carte de bloc, la TVA et le récapitulatif. Le PDF et
+ * l'Excel de la synthèse l'impriment chacun à sa façon, sur les mêmes chiffres.
+ */
+export function donneesSynthese(state: AppState, exercice: string, base: BaseMontant) {
+  const { entries, referentiels: refs, finances } = state;
+  const unite = base === 'ttc' ? 'TTC' : 'HT';
+  const syn = syntheseExercice(entries, exercice, refs, base);
+  const mois = syn.moisList;
+  const immos = immoInfos(entries, refs);
+  const catalogue = refs.jeux ?? [];
+  const total = (m: Map<string, number>) => r2([...m.values()].reduce((s, v) => s + v, 0));
+
+  // Compte de résultat : toujours en HT, quoi qu'affiche le bouton de l'écran.
+  const synHT = base === 'ht' ? syn : syntheseExercice(entries, exercice, refs, 'ht');
+  const resultat = resultatDeSynthese(synHT, entries, finances, refs);
+
+  /** Ce qu'un jeu pèse mois par mois, tous ses postes confondus. */
+  const cumulJeux = (parJeu: Map<string, Map<string, Map<string, number>>>, jeu: string) => {
+    const out = new Map<string, number>();
+    for (const m of mois) {
+      out.set(m, r2([...(parJeu.get(jeu)?.values() ?? [])]
+        .reduce((s, pm) => s + (pm.get(m) ?? 0), 0)));
+    }
+    return out;
+  };
+  const catsDe = (source: Map<string, Map<string, number>>, ref: string[], exclues: Set<string>) =>
+    ref.filter(c => source.has(c) && !exclues.has(c))
+      .concat([...source.keys()].filter(c => !ref.includes(c) && !exclues.has(c)));
+
+  const cartes: CarteSynthese[] = [];
+  /** Un bloc complet : le fonctionnement, puis la carte des jeux s'il y en a. */
+  function bloc(
+    titre: string, cle: BlocCle, data: Map<string, Map<string, number>>, ref: string[],
+    totaux: Map<string, number>,
+    parJeu?: Map<string, Map<string, Map<string, number>>>,
+    titreJeux?: string,
+  ) {
+    const catsJeux = new Set([...(parJeu?.values() ?? [])].flatMap(m => [...m.keys()]));
+    const v = vuesDeBloc(catsDe(data, ref, catsJeux), data, parJeu, catalogue);
+    // Le total du fonctionnement est ce qui reste du bloc une fois les jeux
+    // retirés, comme à l'écran — pas la somme des lignes listées : une catégorie
+    // peut porter à la fois des dépenses de jeu et de structure. Ainsi les deux
+    // sous-totaux font exactement celui du bloc, au centime.
+    // Un seul arrondi par mois, tous jeux et tous postes confondus : c'est le
+    // chemin de calcul de la carte à l'écran, et deux arrondis en cascade
+    // feraient diverger l'écran et le papier d'un centime.
+    const totJeux = new Map(mois.map(m =>
+      [m, r2([...(parJeu?.values() ?? [])].reduce((x, postes) =>
+        x + [...postes.values()].reduce((y, pm) => y + (pm.get(m) ?? 0), 0), 0))]));
+    const totFonctionnement = new Map(mois.map(m =>
+      [m, r2((totaux.get(m) ?? 0) - (totJeux.get(m) ?? 0))]));
+    const grandTotal = total(totaux);
+    const totalJeux = total(totJeux);
+    if (v.cats.length) {
+      cartes.push({
+        titre: `${titre} (${unite})`, cle, colonne: 'Catégorie',
+        lignes: v.cats.map(c => ({ label: c, parMois: data.get(c) ?? new Map(), categorie: c })),
+        totaux: v.jeux.length ? totFonctionnement : totaux,
+        total: v.jeux.length ? r2(grandTotal - totalJeux) : grandTotal,
+      });
+    }
+    if (!parJeu || !v.jeux.length) return;
+    // Les jeux dans leur propre carte : même bloc comptable, lecture séparée.
+    cartes.push({
+      titre: `${titreJeux ?? `${titre} — jeux`} (${unite})`, cle: 'jeux', colonne: 'Jeu / poste',
+      lignes: v.jeux.flatMap(j => [
+        { label: `» ${j}`, parMois: cumulJeux(parJeu, j), jeu: j },
+        ...[...(parJeu.get(j)?.entries() ?? [])]
+          .map(([c, pm]) => ({ label: `    ${c}`, parMois: pm, categorie: c })),
+      ]),
+      totaux: totJeux, total: totalJeux,
+    });
+  }
+
+  bloc('Produits par catégorie', 'produits', syn.produits, refs.categoriesProduits,
+    syn.totalProduitsParMois);
+  bloc('Charges par catégorie', 'charges', syn.charges, refs.categoriesDepenses,
+    syn.totalChargesParMois, syn.jeuxParJeuEtCategorie);
+  bloc('Personnel & rémunérations', 'personnel', syn.personnel, refs.categoriesDepenses,
+    syn.totalPersonnelParMois);
+  bloc('Immobilisations — investissements', 'immos', syn.immos, refs.categoriesDepenses,
+    syn.immoParMois, syn.immosParJeuEtCategorie, 'Immobilisations — jeux');
+
+  // Dotations : l'usure de l'exercice, qui seule pèse sur le résultat.
+  const dotations = dotationsParMois(immos, mois);
+  cartes.push({
+    titre: 'Dotations aux amortissements (HT)', cle: 'immos', colonne: 'Catégorie',
+    lignes: [{ label: "Dotation de l'exercice", parMois: dotations }],
+    totaux: dotations, total: total(dotations),
+  });
+
+  // Récapitulatif : les masses, puis la cascade jusqu'au résultat net.
+  const de = (cle: string) => resultat.find(l => l.cle === cle)?.total ?? 0;
+  const recap: [string, number][] = [
+    ['PRODUITS', total(syn.totalProduitsParMois)],
+    ['CHARGES', -total(syn.totalChargesParMois)],
+    ['PERSONNEL', -total(syn.totalPersonnelParMois)],
+    ['dont dépenses jeux (comprises dans les charges)', total(syn.totalJeuxParMois)],
+    ['dont charges financières (reprises plus bas)', total(syn.chargesFinancieresParMois)],
+    ["EXCÉDENT BRUT D'EXPLOITATION", de('ebe')],
+    ['Dotations aux amortissements', -de('dotations')],
+    ["RÉSULTAT D'EXPLOITATION", de('rex')],
+    ['Produits financiers', de('pf')],
+    ['Charges financières', -de('cf')],
+    ['RÉSULTAT COURANT AVANT IMPÔT', de('rc')],
+    ['Impôt sur les sociétés', -de('is')],
+    ['RÉSULTAT NET', de('rn')],
+    ["Investi sur l'exercice (immobilisations)", total(syn.immoParMois)],
+  ];
+
+  return { unite, syn, mois, resultat, cartes, tva: tableauTVA(entries, mois), recap };
+}
+
 /**
  * La synthèse annuelle en PDF : compte de résultat, puis chaque bloc mois par
  * mois — fonctionnement d'un côté, jeux de l'autre —, les immobilisations et
  * la TVA. Ce que montre l'écran, figé sur le papier.
  */
 function documentPDFSynthese(state: AppState, exercice: string, base: BaseMontant): jsPDF {
-  const { entries, referentiels: refs, finances, blocCouleurs } = state;
+  const { blocCouleurs } = state;
   const doc = new jsPDF({ orientation: 'landscape' });
   const teinte = (cle: BlocCle) => teinteBloc(cle, blocCouleurs ?? {});
-  const unite = base === 'ttc' ? 'TTC' : 'HT';
-  const syn = syntheseExercice(entries, exercice, refs, base);
-  const mois = syn.moisList;
-  const immos = immoInfos(entries, refs);
-  const catalogue = refs.jeux ?? [];
+  const donnees = donneesSynthese(state, exercice, base);
+  const { unite, mois, resultat } = donnees;
 
   /** Le total annuel d'une carte « mois -> montant ». */
   const total = (m: Map<string, number>) => r2([...m.values()].reduce((s, v) => s + v, 0));
@@ -1105,8 +1235,6 @@ function documentPDFSynthese(state: AppState, exercice: string, base: BaseMontan
     `Big Budi Games · montants ${unite} · écritures réelles du journal`);
 
   // Compte de résultat : toujours en HT, quoi qu'affiche le bouton de l'écran.
-  const synHT = base === 'ht' ? syn : syntheseExercice(entries, exercice, refs, 'ht');
-  const resultat = resultatDeSynthese(synHT, entries, finances, refs);
   const tR = teinte('resultat');
   autoT(doc, {
     startY: y,
@@ -1172,69 +1300,8 @@ function documentPDFSynthese(state: AppState, exercice: string, base: BaseMontan
     y = finYDe(doc) + 6;
   }
 
-  /** Ce qu'un jeu pèse mois par mois, tous ses postes confondus. */
-  const cumulJeux = (parJeu: Map<string, Map<string, Map<string, number>>>, jeu: string) => {
-    const out = new Map<string, number>();
-    for (const m of mois) {
-      out.set(m, r2([...(parJeu.get(jeu)?.values() ?? [])]
-        .reduce((s, pm) => s + (pm.get(m) ?? 0), 0)));
-    }
-    return out;
-  };
-  const catsDe = (source: Map<string, Map<string, number>>, ref: string[], exclues: Set<string>) =>
-    ref.filter(c => source.has(c) && !exclues.has(c))
-      .concat([...source.keys()].filter(c => !ref.includes(c) && !exclues.has(c)));
-
-  /** Un bloc complet : le fonctionnement, puis la carte des jeux s'il y en a. */
-  function bloc(
-    titre: string, cle: BlocCle, data: Map<string, Map<string, number>>, ref: string[],
-    totaux: Map<string, number>,
-    parJeu?: Map<string, Map<string, Map<string, number>>>,
-    titreJeux?: string,
-  ) {
-    const catsJeux = new Set([...(parJeu?.values() ?? [])].flatMap(m => [...m.keys()]));
-    const v = vuesDeBloc(catsDe(data, ref, catsJeux), data, parJeu, catalogue);
-    // Le total du fonctionnement est ce qui reste du bloc une fois les jeux
-    // retirés, comme à l'écran — pas la somme des lignes listées : une catégorie
-    // peut porter à la fois des dépenses de jeu et de structure. Ainsi les deux
-    // sous-totaux font exactement celui du bloc, au centime.
-    // Un seul arrondi par mois, tous jeux et tous postes confondus : c'est le
-    // chemin de calcul de la carte à l'écran, et deux arrondis en cascade
-    // feraient diverger l'écran et le papier d'un centime.
-    const totJeux = new Map(mois.map(m =>
-      [m, r2([...(parJeu?.values() ?? [])].reduce((x, postes) =>
-        x + [...postes.values()].reduce((y, pm) => y + (pm.get(m) ?? 0), 0), 0))]));
-    const totFonctionnement = new Map(mois.map(m =>
-      [m, r2((totaux.get(m) ?? 0) - (totJeux.get(m) ?? 0))]));
-    const grandTotal = total(totaux);
-    const totalJeux = total(totJeux);
-    tableauBloc(`${titre} (${unite})`, cle,
-      v.cats.map(c => ({ label: c, parMois: data.get(c) ?? new Map() })),
-      v.jeux.length ? totFonctionnement : totaux,
-      v.jeux.length ? r2(grandTotal - totalJeux) : grandTotal);
-    if (!parJeu || !v.jeux.length) return;
-    // Les jeux dans leur propre tableau : même bloc comptable, lecture séparée.
-    const lignes = v.jeux.flatMap(j => [
-      { label: `» ${j}`, parMois: cumulJeux(parJeu, j) },
-      ...[...(parJeu.get(j)?.entries() ?? [])].map(([c, pm]) => ({ label: `    ${c}`, parMois: pm })),
-    ]);
-    tableauBloc(`${titreJeux ?? `${titre} — jeux`} (${unite})`, 'jeux', lignes,
-      totJeux, totalJeux, 'Jeu / poste');
-  }
-
-  bloc('Produits par catégorie', 'produits', syn.produits, refs.categoriesProduits,
-    syn.totalProduitsParMois);
-  bloc('Charges par catégorie', 'charges', syn.charges, refs.categoriesDepenses,
-    syn.totalChargesParMois, syn.jeuxParJeuEtCategorie);
-  bloc('Personnel & rémunérations', 'personnel', syn.personnel, refs.categoriesDepenses,
-    syn.totalPersonnelParMois);
-  bloc('Immobilisations — investissements', 'immos', syn.immos, refs.categoriesDepenses,
-    syn.immoParMois, syn.immosParJeuEtCategorie, 'Immobilisations — jeux');
-
-  // Dotations : l'usure de l'exercice, qui seule pèse sur le résultat.
-  const dotations = dotationsParMois(immos, mois);
-  tableauBloc('Dotations aux amortissements (HT)', 'immos',
-    [{ label: "Dotation de l'exercice", parMois: dotations }], dotations);
+  // Les blocs, mois par mois : les mêmes cartes que l'écran et que l'Excel.
+  for (const c of donnees.cartes) tableauBloc(c.titre, c.cle, c.lignes, c.totaux, c.total, c.colonne);
 
   // TVA
   doc.addPage();
@@ -1245,7 +1312,7 @@ function documentPDFSynthese(state: AppState, exercice: string, base: BaseMontan
     startY: y,
     head: [['Mois', 'CA TTC', 'TVA collectée', 'Dépenses TTC', 'TVA déductible',
       'Solde du mois', 'Cumul']],
-    body: tableauTVA(entries, mois).map(x => [
+    body: donnees.tva.map(x => [
       labelMois(x.mois), eurosPDF(x.caTTC), eurosPDF(x.tvaCollectee),
       eurosPDF(x.depTTC), eurosPDF(x.tvaDeductible), eurosPDF(x.solde), eurosPDF(x.cumul),
     ]),
@@ -1257,26 +1324,10 @@ function documentPDFSynthese(state: AppState, exercice: string, base: BaseMontan
   y = finYDe(doc) + 8;
 
   // Récapitulatif : les masses, puis la cascade jusqu'au résultat net.
-  const de = (cle: string) => resultat.find(l => l.cle === cle)?.total ?? 0;
   autoT(doc, {
     startY: y,
     head: [[`Récapitulatif de l'exercice ${exercice} (${unite})`, 'Montant']],
-    body: [
-      ['PRODUITS', eurosPDF(total(syn.totalProduitsParMois))],
-      ['CHARGES', eurosPDF(-total(syn.totalChargesParMois))],
-      ['PERSONNEL', eurosPDF(-total(syn.totalPersonnelParMois))],
-      ['dont dépenses jeux (comprises dans les charges)', eurosPDF(total(syn.totalJeuxParMois))],
-      ['dont charges financières (reprises plus bas)', eurosPDF(total(syn.chargesFinancieresParMois))],
-      ["EXCÉDENT BRUT D'EXPLOITATION", eurosPDF(de('ebe'))],
-      ['Dotations aux amortissements', eurosPDF(-de('dotations'))],
-      ["RÉSULTAT D'EXPLOITATION", eurosPDF(de('rex'))],
-      ['Produits financiers', eurosPDF(de('pf'))],
-      ['Charges financières', eurosPDF(-de('cf'))],
-      ['RÉSULTAT COURANT AVANT IMPÔT', eurosPDF(de('rc'))],
-      ['Impôt sur les sociétés', eurosPDF(-de('is'))],
-      ['RÉSULTAT NET', eurosPDF(de('rn'))],
-      ["Investi sur l'exercice (immobilisations)", eurosPDF(total(syn.immoParMois))],
-    ],
+    body: donnees.recap.map(([label, v]) => [label, eurosPDF(v)]),
     styles: { fontSize: 9 },
     headStyles: { fillColor: rgb(tR.base), textColor: rgb(tR.fonce) },
     columnStyles: { 0: { cellWidth: 110 }, 1: { halign: 'right', cellWidth: 36 } },

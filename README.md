@@ -43,6 +43,24 @@ sont recalculés en direct à partir des écritures.
   qu'il est à l'écran : le résumé, les quatre tableaux ligne à ligne avec leurs
   totaux et leurs couleurs, puis le récapitulatif **par catégorie et par mot
   clé**. C'est la trace d'un mois clos, sans envoyer tout l'exercice
+- **Excel du mois** (journal) et **Excel** (synthèse annuelle) — le même contenu
+  que le PDF, dans un classeur **mis en forme comme l'app** : bandeaux et
+  en-têtes aux couleurs des blocs, lignes alternées, séparateurs, colonnes
+  taillées, sans quadrillage, imprimable à l'italienne sur une page de large.
+  Les montants sont de vrais nombres (format « 1 234,56 € », qu'on peut
+  additionner dans Excel) et les dates de vraies dates. *Journal* : les trois
+  tuiles Dépenses / Recettes / Solde, puis les quatre tableaux (catégorie à sa
+  couleur, type « charges » ou « immo · 5 ans », jeu à sa couleur) avec leurs
+  totaux, et un onglet *Récapitulatif* par catégorie et par mot clé, en % ;
+  l'ordre est celui du jour puis de la saisie. *Synthèse* : le compte de
+  résultat (HT, soldes en vert ou rouge), chaque bloc mois par mois avec ses
+  **groupes de catégories et sous-totaux** comme à l'écran, les jeux dans leur
+  carte avec un bandeau à la couleur de chaque jeu, les dotations, la TVA (rouge
+  = dû, vert = crédit) et le récapitulatif ; la colonne des libellés reste figée
+  quand on fait défiler les mois, et le fichier suit HT / TTC. Les chiffres
+  sont calculés par les mêmes fonctions que l'écran et le PDF (vérifié au
+  centime). La bibliothèque Excel ne se charge qu'au clic. Le classeur complet
+  de l'exercice (page Exports) reste tel quel
 - **PDF de l'exercice** — juste à côté : tous les mois de l'exercice affiché
   dans un seul fichier. Une page de **sommaire** d'abord — chaque mois avec ses
   lignes, ses dépenses, ses recettes et son solde (TTC et HT), sa page, et le

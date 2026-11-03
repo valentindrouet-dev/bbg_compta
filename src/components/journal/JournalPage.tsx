@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties, type DragEvent } from 'react';
 import {
   Plus, Copy, Trash2, AlertTriangle, Search, ClipboardPaste, X, CopyPlus, FileDown, FileStack, Tag,
-  CalendarCheck, Landmark,
+  CalendarCheck, Landmark, FileSpreadsheet,
 } from 'lucide-react';
 import { useStore } from '../../store';
 import { useEtatVue } from '../../utils/etatVue';
@@ -23,6 +23,7 @@ import { saveFile, deleteFile } from '../../utils/files';
 import { fichiersDeposes, transporteDesFichiers, libelleDepuisNom, fournisseurDepuisNom } from '../../utils/depot';
 import { useCibleLigne, type Cible } from '../../utils/cible';
 import { exportPDFMois, exportPDFJournalExercice } from '../../utils/export';
+import { exportExcelMois } from '../../utils/excel';
 import { toast } from '../../utils/toast';
 import { BarreFlottante } from '../layout/DockBas';
 
@@ -275,6 +276,21 @@ export function JournalPage({ cible, onOuvrirTreso }: {
             >
               <span className="inline-flex items-center gap-1">
                 <FileDown size={14} /> PDF du mois
+              </span>
+            </Btn>
+            {/* Le même mois dans Excel, mis en forme comme ici : couleurs des
+                blocs, colonnes taillées, montants et dates en vraies valeurs. */}
+            <Btn
+              onClick={() => {
+                exportExcelMois(useStore.getState(), mois).catch(err => {
+                  console.error(err);
+                  toast("L'export Excel n'a pas pu se faire — réessaie dans un instant.", 'info');
+                });
+              }}
+              title={`Enregistrer le journal de ${labelMoisLong(mois)} en Excel — les quatre tableaux mis en forme comme ici, leurs totaux, et un onglet de récapitulatif par catégorie et par mot clé`}
+            >
+              <span className="inline-flex items-center gap-1">
+                <FileSpreadsheet size={14} /> Excel du mois
               </span>
             </Btn>
             {/* Tous les mois de l'exercice dans un seul fichier, derrière un sommaire. */}
