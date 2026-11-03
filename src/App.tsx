@@ -19,6 +19,7 @@ import { RemboursPage } from './components/journal/RemboursPage';
 import { FournisseursPage } from './components/journal/FournisseursPage';
 import { JeuxPage } from './components/journal/JeuxPage';
 import { FacturesPage } from './components/journal/FacturesPage';
+import { DocumentsPage } from './components/journal/DocumentsPage';
 import { PrevisionnelPage } from './components/prev/PrevisionnelPage';
 import { ReelVsPrevuPage } from './components/prev/ReelVsPrevuPage';
 import { CinqAnsPage } from './components/prev/CinqAnsPage';
@@ -32,14 +33,14 @@ import { useEtatVue } from './utils/etatVue';
 
 export type Page =
   | 'dashboard'
-  | 'journal' | 'synthese' | 'totale' | 'immos' | 'stocks' | 'treso' | 'placements' | 'tva' | 'rembours' | 'fournisseurs' | 'jeux' | 'factures'
+  | 'journal' | 'synthese' | 'totale' | 'immos' | 'stocks' | 'treso' | 'placements' | 'tva' | 'rembours' | 'fournisseurs' | 'jeux' | 'factures' | 'documents'
   | 'budgets' | 'cinqans' | 'reelprevu' | 'tresoprev' | 'chrono'
   | 'exports' | 'categories' | 'settings' | 'wiki';
 
 /** Les pages existantes : une valeur mémorisée qui n'en fait plus partie est ignorée. */
 const PAGES: readonly Page[] = [
   'dashboard',
-  'journal', 'synthese', 'totale', 'immos', 'stocks', 'treso', 'placements', 'tva', 'rembours', 'fournisseurs', 'jeux', 'factures',
+  'journal', 'synthese', 'totale', 'immos', 'stocks', 'treso', 'placements', 'tva', 'rembours', 'fournisseurs', 'jeux', 'factures', 'documents',
   'budgets', 'cinqans', 'reelprevu', 'tresoprev', 'chrono',
   'exports', 'categories', 'settings', 'wiki',
 ];
@@ -136,6 +137,7 @@ export default function App() {
         {page === 'fournisseurs' && <FournisseursPage />}
         {page === 'jeux' && <JeuxPage />}
         {page === 'factures' && <FacturesPage />}
+        {page === 'documents' && <DocumentsPage />}
         {page === 'budgets' && <PrevisionnelPage />}
         {page === 'cinqans' && <CinqAnsPage />}
         {page === 'reelprevu' && <ReelVsPrevuPage />}

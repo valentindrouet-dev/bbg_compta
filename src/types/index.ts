@@ -110,6 +110,37 @@ export interface Placement {
   contrat?: string;
 }
 
+// ----- Documents de l'entreprise ----------------------------------------
+
+/** Le classement des documents officiels de la société. */
+export type CategorieDocument = 'impots' | 'juridique' | 'banque' | 'social' | 'autre';
+
+/**
+ * Un document officiel de la société : avis d'impôt, Kbis, statuts,
+ * attestation d'assurance, courrier de l'URSSAF… Le fichier vit dans la même
+ * base que les factures du journal ; ce registre dit ce que c'est, de quand il
+ * date, et ce qu'il demande (un montant, une échéance).
+ */
+export interface DocumentSociete {
+  id: string;
+  /** Identifiant du fichier dans la base des fichiers. */
+  fileId: string;
+  /** Nom du fichier tel qu'il a été déposé. */
+  nom: string;
+  categorie: CategorieDocument;
+  /** Libellé libre : « Avis de CFE 2026 », « Kbis »… */
+  libelle: string;
+  /** Date du document (ISO) ; elle range le document dans son exercice. */
+  date: string;
+  /** Montant à payer ou reçu, s'il y en a un. */
+  montant?: number | null;
+  /** Date limite (paiement, réponse), s'il y en a une (ISO). */
+  echeance?: string;
+  note?: string;
+  /** Date d'ajout dans l'app (ISO). */
+  ajouteLe: string;
+}
+
 // ----- Prévisionnel ------------------------------------------------------
 
 export type BudgetSection = 'ca' | 'couts_dev' | 'charges_externes' | 'personnel' | 'resultat' | 'tva' | 'autres';

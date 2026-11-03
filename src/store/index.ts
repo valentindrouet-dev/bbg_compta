@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import type {
   JournalEntry, FinanceEntry, BudgetExercice, ChronoEvent, TresoPrevLine, Referentiels, CategorieMeta,
-  Placement, DocumentJeu,
+  Placement, DocumentJeu, DocumentSociete,
   CanalVente, FormulePrev, JeuMeta, LigneDroits, LigneStock, MouvementStock, PrevLigne,
   PrevSection,
   TresoManuel,
@@ -167,7 +167,7 @@ export type CatKind = 'categoriesDepenses' | 'categoriesJeux' | 'categoriesProdu
 export type ColWidths = Record<string, number[]>;
 
 /** Clés dont la modification est enregistrée dans l'historique d'annulation. */
-const DATA_KEYS = ['entries', 'finances', 'mouvementsPrev', 'placements', 'referentiels', 'budgets', 'previsionnels', 'stocks', 'mouvementsStock', 'chronologie', 'tresoPrev', 'tresoManuel', 'journalFormats', 'blocCouleurs'] as const;
+const DATA_KEYS = ['entries', 'finances', 'mouvementsPrev', 'placements', 'documentsSociete', 'referentiels', 'budgets', 'previsionnels', 'stocks', 'mouvementsStock', 'chronologie', 'tresoPrev', 'tresoManuel', 'journalFormats', 'blocCouleurs'] as const;
 type DataKey = typeof DATA_KEYS[number];
 type Snapshot = Pick<AppState, DataKey>;
 
@@ -187,6 +187,12 @@ export interface AppState {
    * l'état initial le fournit vide, sans migration ni réécriture des données.
    */
   placements: Placement[];
+  /**
+   * Les documents officiels de la société (avis d'impôt, Kbis, statuts…).
+   * Absents des données enregistrées avant eux : l'état initial les fournit
+   * vides, sans migration ni réécriture des données.
+   */
+  documentsSociete: DocumentSociete[];
   referentiels: Referentiels;
   budgets: Record<string, BudgetExercice>;
   /** Prévisionnel par exercice, aligné sur les catégories de la synthèse. */
@@ -253,6 +259,11 @@ export interface AppState {
    * nouveau placement, qui aura son propre contrat et son propre retour.
    */
   duplicatePlacement: (id: string) => void;
+
+  addDocumentSociete: (doc: Omit<DocumentSociete, 'id'>) => void;
+  updateDocumentSociete: (id: string, patch: Partial<Omit<DocumentSociete, 'id' | 'fileId'>>) => void;
+  /** Retire le document du registre ; le fichier lui-même s'efface à part. */
+  removeDocumentSociete: (id: string) => void;
 
   updateBudgetCell: (exercice: string, ligneId: string, moisIdx: number, value: number | null) => void;
   updateBudgetLine: (exercice: string, ligneId: string, patch: Partial<BudgetExercice['lignes'][number]>) => void;
@@ -376,7 +387,7 @@ export interface AppState {
   updateMouvementStock: (id: string, patch: Partial<MouvementStock>) => void;
   removeMouvementStock: (id: string) => void;
 
-  restoreAll: (data: Partial<Pick<AppState, 'entries' | 'finances' | 'mouvementsPrev' | 'placements' | 'referentiels' | 'budgets' | 'previsionnels' | 'stocks' | 'mouvementsStock' | 'chronologie' | 'tresoPrev' | 'journalFormats' | 'colWidths' | 'blocCouleurs'>>) => void;
+  restoreAll: (data: Partial<Pick<AppState, 'entries' | 'finances' | 'mouvementsPrev' | 'placements' | 'documentsSociete' | 'referentiels' | 'budgets' | 'previsionnels' | 'stocks' | 'mouvementsStock' | 'chronologie' | 'tresoPrev' | 'journalFormats' | 'colWidths' | 'blocCouleurs'>>) => void;
   resetToSeed: () => void;
 }
 
@@ -435,6 +446,7 @@ function seedState() {
     finances: structuredClone(seedTresorerie.mouvementsFinanciers) as FinanceEntry[],
     mouvementsPrev: [],
     placements: [] as Placement[],
+    documentsSociete: [] as DocumentSociete[],
     referentiels: refs,
     budgets: structuredClone(seedBudgets) as unknown as Record<string, BudgetExercice>,
     // Seul l'exercice en cours est repris du tableur ; les quatre suivants
@@ -541,6 +553,7 @@ function snapshot(s: AppState): Snapshot {
   return {
     entries: s.entries, finances: s.finances, mouvementsPrev: s.mouvementsPrev,
     placements: s.placements,
+    documentsSociete: s.documentsSociete,
     referentiels: s.referentiels,
     budgets: s.budgets, previsionnels: s.previsionnels,
     chronologie: s.chronologie, tresoPrev: s.tresoPrev, tresoManuel: s.tresoManuel,
@@ -713,6 +726,15 @@ export const useStore = create<AppState>()(
         };
         return { placements: [...(s.placements ?? []), copie] };
       }),
+      addDocumentSociete: (doc) => set(s => ({
+        documentsSociete: [...(s.documentsSociete ?? []), { ...doc, id: uid() }],
+      })),
+      updateDocumentSociete: (id, patch) => set(s => ({
+        documentsSociete: (s.documentsSociete ?? []).map(d => d.id === id ? { ...d, ...patch } : d),
+      })),
+      removeDocumentSociete: (id) => set(s => ({
+        documentsSociete: (s.documentsSociete ?? []).filter(d => d.id !== id),
+      })),
       passerMouvementEnReel: (id) => set(s => {
         const m = (s.mouvementsPrev ?? []).find(f => f.id === id);
         if (!m) return s;
@@ -1433,6 +1455,7 @@ export const useStore = create<AppState>()(
       partialize: (s) => ({
         entries: s.entries, finances: s.finances, mouvementsPrev: s.mouvementsPrev,
         placements: s.placements,
+        documentsSociete: s.documentsSociete,
         referentiels: s.referentiels,
         budgets: s.budgets, previsionnels: s.previsionnels,
         chronologie: s.chronologie, tresoPrev: s.tresoPrev, tresoManuel: s.tresoManuel,

@@ -2,7 +2,9 @@ import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import autoTable, { type UserOptions, type HAlignType as Halign } from 'jspdf-autotable';
 import type { AppState } from '../store';
-import type { JeuMeta, JournalEntry, Placement, PrevLigne, PrevSection, Referentiels } from '../types';
+import type {
+  DocumentSociete, JeuMeta, JournalEntry, Placement, PrevLigne, PrevSection, Referentiels,
+} from '../types';
 import {
   labelMois, labelMoisLong, formatDateFR, compareMois, moisCourant, moisExercice,
   exerciceDuMois, EXERCICES,
@@ -24,6 +26,9 @@ import { totalPrevisionnel, type TotalPrevisionnel, type VueTotalPrev } from './
 import {
   documentsDuJeu, fichiersDesJeux, LIBELLE_TYPE_DOCUMENT, nomDeRangement,
 } from './documentsJeux';
+import {
+  exerciceDuDocument, fichiersDesDocuments, LIBELLE_CATEGORIE,
+} from './documentsSociete';
 import { APP_VERSION } from '../version';
 import {
   GARANTIES_PLACEMENT, LIBELLE_STATUT, PRODUITS_PLACEMENT, echeancePlacement, gainReel,
@@ -215,6 +220,21 @@ export function blobExcel(state: AppState, exercice: string): Blob {
       'Gain réel': gainReel(p) ?? '',
       'Contrat joint': p.contratFileId ? (p.contrat || 'oui') : '',
       'Notes': p.notes ?? '',
+    })));
+
+  // Les documents de l'entreprise (avis d'impôt, Kbis…) : les fichiers sont
+  // dans l'archive complète, dossier Documents/.
+  feuille('Documents', [...(state.documentsSociete ?? [])]
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map(d => ({
+      'Exercice': exerciceDuDocument(d),
+      'Date': d.date,
+      'Catégorie': LIBELLE_CATEGORIE[d.categorie],
+      'Libellé': d.libelle,
+      'Montant': d.montant ?? '',
+      'Échéance': d.echeance ?? '',
+      'Fichier': d.nom,
+      'Note': d.note ?? '',
     })));
 
   // TVA
@@ -1839,17 +1859,19 @@ export async function blobBackup(state: AppState, avecFichiers = true): Promise<
   const fichiers = avecFichiers ? await exporterFichiers() : [];
   const data = {
     format: 'bbg-compta-backup',
+    // v7 : les documents de l'entreprise rejoignent la sauvegarde.
     // v6 : le registre des placements rejoint la sauvegarde.
     // v5 : les mouvements financiers seulement prévus rejoignent la sauvegarde.
     // v4 y avait fait entrer le stock — prévisionnel et mouvements réels — et
     // v3 les corrections manuelles de trésorerie et les couleurs des blocs,
     // qu'une restauration perdait.
-    version: 6,
+    version: 7,
     exportedAt: new Date().toISOString(),
     entries: state.entries,
     finances: state.finances,
     mouvementsPrev: state.mouvementsPrev,
     placements: state.placements ?? [],
+    documentsSociete: state.documentsSociete ?? [],
     referentiels: state.referentiels,
     budgets: state.budgets,
     previsionnels: state.previsionnels,
@@ -1916,23 +1938,26 @@ export async function exportTout(state: AppState, exercice: string,
   let nbFactures = 0;
   let nbContrats = 0;
   let nbDocumentsJeux = 0;
+  let nbDocuments = 0;
   if (options.avecFactures) {
     // La sauvegarde de l'archive n'embarque alors pas les fichiers : les
     // contrats de placement et les documents des jeux doivent y être aussi,
     // chacun dans son propre dossier.
     const fichiers = await fichiersFactures(
-      state.entries, state.placements ?? [], true, state.referentiels.jeuxMeta);
+      state.entries, state.placements ?? [], true, state.referentiels.jeuxMeta,
+      state.documentsSociete ?? []);
     for (const f of fichiers) {
       pieces.push(f);
       if (f.nom.startsWith('Placements/')) nbContrats++;
       else if (f.nom.startsWith('Jeux/')) nbDocumentsJeux++;
+      else if (f.nom.startsWith('Documents/')) nbDocuments++;
       else nbFactures++;
     }
   }
 
   pieces.push({
     nom: 'Lisez-moi.txt',
-    data: lisezMoi(exercice, jour, nbFactures, nbContrats, nbDocumentsJeux),
+    data: lisezMoi(exercice, jour, nbFactures, nbContrats, nbDocumentsJeux, nbDocuments),
   });
 
   const zip = await creerZip(pieces);
@@ -1943,6 +1968,7 @@ export async function exportTout(state: AppState, exercice: string,
 
 function lisezMoi(
   exercice: string, jour: string, nbFactures: number, nbContrats = 0, nbDocumentsJeux = 0,
+  nbDocuments = 0,
 ): string {
   const pieces: [string, string[]][] = [
     [`BBG_Compta_${exercice}.xlsx`, [
@@ -1973,6 +1999,10 @@ function lisezMoi(
       '(Paramètres > Restaurer une sauvegarde).',
     ]],
   ];
+  if (nbDocuments) {
+    pieces.push(['Documents/', [`${nbDocuments} document(s) de l'entreprise (avis d'impôt, Kbis…),`,
+      'rangés par catégorie.']]);
+  }
   if (nbDocumentsJeux) {
     pieces.push(['Jeux/', [`${nbDocumentsJeux} document(s) des jeux (contrats signés, devis…),`,
       'un dossier par jeu.']]);
@@ -2006,12 +2036,13 @@ function lisezMoi(
  */
 export async function fichiersFactures(
   entries: JournalEntry[], placements: Placement[] = [], avecContrats = false,
-  jeuxMeta: Record<string, JeuMeta> = {},
+  jeuxMeta: Record<string, JeuMeta> = {}, documentsSociete: DocumentSociete[] = [],
 ): Promise<FichierZip[]> {
   const stockes = await listFiles();
   const parId = new Map(entries.filter(e => e.factureFileId).map(e => [e.factureFileId!, e]));
   const contratDe = new Map(placements.filter(p => p.contratFileId).map(p => [p.contratFileId!, p]));
   const documentDe = fichiersDesJeux(jeuxMeta);
+  const officielDe = fichiersDesDocuments(documentsSociete);
   const utilises = new Set<string>();
   const unique = (dossier: string, base: string, ext: string) => {
     // Deux fichiers du même nom dans un dossier : on suffixe pour ne pas
@@ -2024,7 +2055,8 @@ export async function fichiersFactures(
   };
   const contrats = stockes.filter(f => contratDe.has(f.id));
   const documents = stockes.filter(f => !contratDe.has(f.id) && documentDe.has(f.id));
-  const pieces = stockes.filter(f => !contratDe.has(f.id) && !documentDe.has(f.id)).map(f => {
+  const officiels = stockes.filter(f => !contratDe.has(f.id) && !documentDe.has(f.id) && officielDe.has(f.id));
+  const pieces = stockes.filter(f => !contratDe.has(f.id) && !documentDe.has(f.id) && !officielDe.has(f.id)).map(f => {
     const e = parId.get(f.id);
     const ext = (f.name.match(/\.[a-z0-9]+$/i)?.[0] ?? '').toLowerCase();
     const base = e
@@ -2044,16 +2076,27 @@ export async function fichiersFactures(
     const { jeu, doc } = documentDe.get(f.id)!;
     const ext = (f.name.match(/\.[a-z0-9]+$/i)?.[0] ?? '').toLowerCase();
     return { nom: unique(`Jeux/${nomSur(jeu)}`, nomSur(nomDeRangement(doc)), ext), data: f.blob };
+  }), ...officiels.map(f => {
+    // « Documents/Impôts & taxes/2026-10-09 - Avis de CFE 2026.pdf » : la date
+    // en tête, pour que le dossier se lise dans l'ordre du temps.
+    const d = officielDe.get(f.id)!;
+    const ext = (f.name.match(/\.[a-z0-9]+$/i)?.[0] ?? '').toLowerCase();
+    const libelle = d.libelle.trim() || f.name.replace(/\.[a-z0-9]+$/i, '');
+    return {
+      nom: unique(`Documents/${nomSur(LIBELLE_CATEGORIE[d.categorie])}`, nomSur(`${d.date} - ${libelle}`), ext),
+      data: f.blob,
+    };
   })];
 }
 
 /** Toutes les factures dans une archive, pour la page Factures. */
 export async function exportFactures(
   entries: JournalEntry[], placements: Placement[] = [], jeuxMeta: Record<string, JeuMeta> = {},
+  documentsSociete: DocumentSociete[] = [],
 ): Promise<ResultatZip> {
-  // Les factures seules : les contrats de placement et les documents des jeux
-  // n'y ont pas leur place.
-  const pieces = await fichiersFactures(entries, placements, false, jeuxMeta);
+  // Les factures seules : les contrats de placement, les documents des jeux et
+  // ceux de l'entreprise n'y ont pas leur place.
+  const pieces = await fichiersFactures(entries, placements, false, jeuxMeta, documentsSociete);
   const zip = await creerZip(pieces);
   const nom = `BBG_Factures_${today()}.zip`;
   download(nom, zip);
@@ -2080,6 +2123,7 @@ export async function importBackup(file: File): Promise<{
       // Absents des sauvegardes plus anciennes : on ne remplace alors rien.
       ...(data.mouvementsPrev ? { mouvementsPrev: data.mouvementsPrev } : {}),
       ...(data.placements ? { placements: data.placements } : {}),
+      ...(data.documentsSociete ? { documentsSociete: data.documentsSociete } : {}),
       ...(data.tresoManuel ? { tresoManuel: data.tresoManuel } : {}),
       ...(data.stocks ? { stocks: data.stocks } : {}),
       ...(data.mouvementsStock ? { mouvementsStock: data.mouvementsStock } : {}),

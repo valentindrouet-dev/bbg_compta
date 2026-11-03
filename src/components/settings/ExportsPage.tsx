@@ -74,7 +74,8 @@ export function ExportsPage() {
             />
             <span>
               Ajouter un dossier <b>Factures/</b> avec les justificatifs, rangés par mois
-              — et les documents des jeux (<b>Jeux/</b>) et contrats de placement (<b>Placements/</b>)
+              — et les documents de l'entreprise (<b>Documents/</b>), des jeux (<b>Jeux/</b>)
+              et les contrats de placement (<b>Placements/</b>)
             </span>
           </label>
           <div className="flex items-center gap-3">

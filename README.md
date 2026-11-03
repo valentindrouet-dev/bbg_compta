@@ -151,6 +151,21 @@ sont recalculés en direct à partir des écritures.
 - **Factures** — tous les justificatifs déposés, groupés par mois comptable,
   en liste ou en vignettes, avec rattachement des pièces orphelines et
   téléchargement groupé (.zip)
+- **Documents** — les **papiers officiels de l'entreprise** : avis d'impôt (CFE…),
+  Kbis, statuts, attestations d'assurance, courriers de l'URSSAF ou de la banque.
+  On les glisse n'importe où sur la page (PDF ou image), ou « Ajouter un
+  document ». La **catégorie** (*Impôts & taxes*, *Juridique*, *Banque &
+  assurances*, *Social*, *Autre*) et le **libellé** se devinent d'après le nom du
+  fichier — un avis de CFE d'impots.gouv devient « Avis de CFE 2026 » — et se
+  corrigent. La **date** du document le range dans son exercice (un document
+  d'avant l'immatriculation va dans 2025-26) ; un **montant**, une **échéance**
+  (pastille « bientôt » à moins d'un mois) et une note sont facultatifs. Les
+  cartes du haut donnent le nombre de documents, la prochaine échéance et les
+  montants à venir ; filtres par catégorie, par exercice, et recherche. Les
+  fichiers vivent avec les factures sur cet ordinateur mais **ne sont pas listés
+  sur la page Factures** ; l'archive complète les range dans
+  **Documents/<catégorie>/<date> - <libellé>.pdf**, la sauvegarde JSON (v7) les
+  embarque, la feuille *Documents* du classeur les énumère
 - **Remboursements Val** — dépenses avancées sur carte personnelle
 
 **Prévisionnel 2025-30**

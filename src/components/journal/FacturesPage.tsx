@@ -13,6 +13,7 @@ import {
 } from '../../utils/files';
 import { exportFactures } from '../../utils/export';
 import { fichiersDesJeux } from '../../utils/documentsJeux';
+import { fichiersDesDocuments } from '../../utils/documentsSociete';
 import { fichiersDeposes, transporteDesFichiers } from '../../utils/depot';
 import { PageHeader, Card, StatCard, Btn, useSort, sortBy, ThSort } from '../ui';
 
@@ -34,6 +35,7 @@ export function FacturesPage() {
   const placements = useStore(s => s.placements) ?? AUCUN_PLACEMENT;
   const updateEntry = useStore(s => s.updateEntry);
   const jeuxMeta = useStore(s => s.referentiels.jeuxMeta);
+  const documentsSociete = useStore(s => s.documentsSociete);
 
   const [fichiers, setFichiers] = useState<StoredFile[]>([]);
   const [recherche, setRecherche] = useState('');
@@ -55,15 +57,17 @@ export function FacturesPage() {
     return surChangementFichiers(charger);
   }, []);
 
-  // Les contrats de placement et les documents des jeux (contrats signés,
-  // devis) vivent dans la même base de fichiers, mais ce ne sont pas des
-  // factures : ils restent sur les pages Placements et Jeux. Sans ce tri, ils
+  // Les contrats de placement, les documents des jeux (contrats signés,
+  // devis) et ceux de l'entreprise (avis d'impôt, Kbis…) vivent dans la même
+  // base de fichiers, mais ce ne sont pas des factures : ils restent sur les
+  // pages Placements, Jeux et Documents. Sans ce tri, ils
   // s'afficheraient ici comme des factures « non rattachées » — et on les
   // supprimerait en croyant faire le ménage.
   const contrats = useMemo(() => new Set([
     ...placements.map(p => p.contratFileId).filter((id): id is string => !!id),
     ...fichiersDesJeux(jeuxMeta).keys(),
-  ]), [placements, jeuxMeta]);
+    ...fichiersDesDocuments(documentsSociete).keys(),
+  ]), [placements, jeuxMeta, documentsSociete]);
   const justificatifs = useMemo(() => fichiers.filter(f => !contrats.has(f.id)), [fichiers, contrats]);
 
   const parFileId = useMemo(() => {
@@ -155,7 +159,7 @@ export function FacturesPage() {
 
   async function toutTelecharger() {
     setZipEnCours(true);
-    try { await exportFactures(entries, placements, jeuxMeta); } finally { setZipEnCours(false); }
+    try { await exportFactures(entries, placements, jeuxMeta, documentsSociete); } finally { setZipEnCours(false); }
   }
 
   return (

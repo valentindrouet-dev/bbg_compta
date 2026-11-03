@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   Coins, LayoutDashboard, NotebookPen, Table2, Building2, Wallet, Percent,
   UserRound, Target, GitCompareArrows, Landmark, CalendarRange, FileDown, Settings, Store, Tags, Gamepad2,
-  ReceiptText, TrendingUp, Boxes, BookOpen, PiggyBank,
+  ReceiptText, TrendingUp, Boxes, BookOpen, PiggyBank, FolderOpen,
 } from 'lucide-react';
 import type { Page } from '../../App';
 import { APP_VERSION } from '../../version';
@@ -33,6 +33,7 @@ const NAV: { section: string; items: { page: Page; label: string; icon: typeof C
       { page: 'jeux', label: 'Jeux', icon: Gamepad2 },
       { page: 'fournisseurs', label: 'Fournisseurs', icon: Store },
       { page: 'factures', label: 'Factures', icon: ReceiptText },
+      { page: 'documents', label: 'Documents', icon: FolderOpen },
     ],
   },
   {
