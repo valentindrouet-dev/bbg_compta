@@ -6,6 +6,11 @@ avec les mêmes onglets et la même organisation, mais des calculs justes par co
 tous les totaux, la TVA, les amortissements, la trésorerie et les comparaisons réel/prévu
 sont recalculés en direct à partir des écritures.
 
+L'icône du site — dans l'onglet du navigateur, et dans le Dock si on l'installe comme
+application — reprend le style des autres apps Big Budi Games : un ticket de caisse et son
+euro, au trait bleu, orange et vert, sur un fond pêche `#FCD9A8` (`public/favicon.svg`, avec
+ses versions PNG pour Safari).
+
 ## Onglets
 
 **Journal comptable**
