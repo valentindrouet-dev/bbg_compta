@@ -7,9 +7,9 @@ tous les totaux, la TVA, les amortissements, la trésorerie et les comparaisons 
 sont recalculés en direct à partir des écritures.
 
 L'icône du site — dans l'onglet du navigateur, et dans le Dock si on l'installe comme
-application — reprend le style des autres apps Big Budi Games : un ticket de caisse et son
-euro, au trait bleu, orange et vert, sur un fond pêche `#FCD9A8` (`public/favicon.svg`, avec
-ses versions PNG pour Safari).
+application — reprend le logo de l'app (les pièces de la barre latérale), en violet
+`#674EA7`, sur le fond pêche `#FCD9A8` des autres apps Big Budi Games (`public/favicon.svg`,
+avec ses versions PNG pour Safari).
 
 ## Onglets
 
