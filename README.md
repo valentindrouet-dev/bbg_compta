@@ -85,6 +85,30 @@ avec ses versions PNG pour Safari).
   calculé sur les montants exacts, comme la Synthèse annuelle : il tombe sur le
   même chiffre au centime (les écritures importées portent jusqu'à quatre
   décimales de HT)
+- **Indemnités km** — le relevé des **trajets professionnels faits avec la voiture
+  personnelle du gérant**, et ce qu'ils valent au **barème fiscal** des voitures
+  (en place à partir du 01/01/2027, à la place des factures d'essence). En haut,
+  le **véhicule** : nom, immatriculation, **puissance fiscale** (case P.6 de la
+  carte grise, de 3 à 7 CV et plus) et **électrique** (barème majoré de 20 %).
+  Puis les chiffres de l'année civile (km, IK, taux moyen, tranche et km restants
+  avant la suivante), les **douze mois** côte à côte, et le **relevé** lui-même,
+  mois par mois : date, départ, arrivée, motif, jeu, km, aller-retour, km
+  retenus et **indemnité de chaque trajet**. Le barème s'applique au cumul de
+  l'année, véhicule par véhicule : chaque trajet reçoit le barème du cumul après
+  lui moins celui d'avant, si bien que le total de décembre tombe juste sans
+  régularisation, même au passage de la tranche des 5 000 km. Saisie comme le
+  journal (complétion des lieux et motifs déjà saisis, **Reprendre un trajet**,
+  dupliquer, lien d'itinéraire pour vérifier la distance, Cmd+Z). Chaque mois
+  se **passe au journal** d'un clic : une écriture *Déplacements*, compte 6251,
+  **sans TVA**, payée par BBG, avec le **relevé PDF du mois joint** comme
+  justificatif ; si les trajets changent ensuite, le mois passe en « màj » et un
+  clic remet l'écriture et son relevé à jour (même justificatif, un seul Cmd+Z
+  défait le tout). Relevé PDF par mois ou pour l'année (avec la mention
+  « certifié exact » à signer) et Excel de l'année. Les trajets suivent la
+  sauvegarde (v8), sa restauration et le classeur complet (feuille
+  *Indemnités km*). Barème en vigueur : celui publié en 2024, dernier connu —
+  à remplacer quand le suivant paraît. Péages et parkings restent à part, sur
+  justificatifs
 - **Synthèse totale** — la même lecture, mais **une colonne par exercice** au
   lieu d'une par mois : catégories, blocs, ventilation par jeu, compte de
   résultat et cumul sur les cinq ans. Le bouton **Prévisionnels** complète les

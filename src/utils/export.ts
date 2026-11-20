@@ -35,6 +35,9 @@ import {
   remunerationAttendue, statutPlacement,
 } from './placements';
 import { positionsStock, stocksExercice } from './stock';
+import {
+  baremeDe, calculerAnnee, formuleTranche, moisDe, PUISSANCES, trancheDe,
+} from './ik';
 
 function download(name: string, blob: Blob) {
   const url = URL.createObjectURL(blob);
@@ -236,6 +239,28 @@ export function blobExcel(state: AppState, exercice: string): Blob {
       'Fichier': d.nom,
       'Note': d.note ?? '',
     })));
+
+  // Indemnités kilométriques : le relevé de toutes les années, trajet par
+  // trajet, avec l'indemnité que le barème donne à chacun.
+  {
+    const ik = state.ik ?? { vehicules: [], trajets: [], passages: {} };
+    const annees = [...new Set(ik.trajets.map(t => Number(t.date.slice(0, 4))))].sort();
+    feuille('Indemnités km', annees.flatMap(a => calculerAnnee(ik, a)).map(c => ({
+      'Date': c.trajet.date,
+      'Véhicule': c.vehicule?.nom ?? '',
+      'Puissance': c.vehicule ? `${c.vehicule.cv} CV${c.vehicule.electrique ? ' électrique' : ''}` : '',
+      'Départ': c.trajet.depart,
+      'Arrivée': c.trajet.arrivee,
+      'Motif': c.trajet.motif,
+      'Jeu': c.trajet.jeu ?? '',
+      'Km': c.trajet.km,
+      'Aller-retour': c.trajet.allerRetour ? 'oui' : 'non',
+      'Km retenus': c.km,
+      'Cumul km (année)': c.cumulKm,
+      'Indemnité': c.indemnite,
+      'Note': c.trajet.note ?? '',
+    })));
+  }
 
   // TVA
   feuille('TVA', tableauTVA(entries, moisExercice(exercice)).map(x => ({
@@ -810,6 +835,120 @@ function documentPDFMois(state: AppState, mois: string): jsPDF {
   ecrireMois(doc, state, mois, sectionsDuMois(state.entries, mois, state.referentiels));
   paginer(doc, `Big Budi Games — journal de ${labelMoisLong(mois)}`);
   return doc;
+}
+
+// ------------------------------------------------- Indemnités kilométriques -
+
+/** Bénéficiaire des indemnités : le gérant, qui roule avec sa voiture. */
+export const BENEFICIAIRE_IK = 'Valentin Drouet';
+
+/**
+ * Le relevé d'indemnités kilométriques d'un mois (ou de toute l'année) : les
+ * véhicules et leur barème, chaque trajet avec sa distance et son indemnité,
+ * le cumul de l'année, puis la mention « certifié exact » à signer. C'est le
+ * justificatif de l'écriture du journal.
+ */
+export function documentPDFReleveIK(state: AppState, annee: number, mois?: string): jsPDF {
+  const ik = state.ik ?? { vehicules: [], trajets: [], passages: {} };
+  const tous = calculerAnnee(ik, annee);
+  const lignes = mois ? tous.filter(c => moisDe(c.trajet.date) === mois) : tous;
+  const bareme = baremeDe(annee);
+  const doc = new jsPDF({ orientation: 'landscape' });
+  const periode = mois ? labelMoisLong(mois) : `année ${annee}`;
+  let y = enTetePDF(doc, `Relevé d'indemnités kilométriques — ${periode}`,
+    `Big Budi Games · bénéficiaire : ${BENEFICIAIRE_IK}, gérant · véhicule personnel · barème fiscal ${bareme.annee}`
+      + (bareme.publie ? '' : ' (dernier publié)'));
+
+  const totalKm = r2(lignes.reduce((x, c) => x + c.km, 0));
+  const totalIK = r2(lignes.reduce((x, c) => x + c.indemnite, 0));
+  const cumulKm = r2(tous.filter(c => !mois || moisDe(c.trajet.date) <= mois).reduce((x, c) => x + c.km, 0));
+  const cumulIK = r2(tous.filter(c => !mois || moisDe(c.trajet.date) <= mois).reduce((x, c) => x + c.indemnite, 0));
+
+  // Le résumé, puis les véhicules et la formule du barème qui s'applique.
+  autoT(doc, {
+    startY: y,
+    head: [['Trajets', 'Distance', 'Indemnités', mois ? `Cumul ${annee} (km)` : 'Taux moyen', mois ? `Cumul ${annee} (€)` : '']],
+    body: [[
+      String(lignes.length), `${totalKm.toLocaleString('fr-FR')} km`, eurosPDF(totalIK),
+      mois ? `${cumulKm.toLocaleString('fr-FR')} km` : totalKm ? `${(totalIK / totalKm).toFixed(3).replace('.', ',')} €/km` : '—',
+      mois ? eurosPDF(cumulIK) : '',
+    ]],
+    theme: 'grid', styles: { fontSize: 10, halign: 'center' },
+    headStyles: { fillColor: [217, 210, 233], textColor: [63, 50, 104] },
+    bodyStyles: { fontStyle: 'bold' },
+    margin: { left: 14, right: 14 },
+  });
+  y = finYDe(doc) + 5;
+
+  const vehicules = ik.vehicules.filter(v => lignes.some(c => c.trajet.vehiculeId === v.id));
+  if (vehicules.length) {
+    autoT(doc, {
+      startY: y,
+      head: [['Véhicule', 'Immatriculation', 'Puissance fiscale', 'Énergie', `Km ${annee} (cumul)`, 'Formule du barème']],
+      body: vehicules.map(v => {
+        const km = r2(tous.filter(c => c.trajet.vehiculeId === v.id && (!mois || moisDe(c.trajet.date) <= mois))
+          .reduce((x, c) => x + c.km, 0));
+        const t = trancheDe(bareme.bareme[v.cv], Math.max(km, 1));
+        return [
+          v.nom || '—', v.immatriculation || '—', PUISSANCES.find(p => p.value === v.cv)?.label ?? `${v.cv} CV`,
+          v.electrique ? 'Électrique (+20 %)' : 'Thermique / hybride', `${km.toLocaleString('fr-FR')} km`,
+          formuleTranche(t) + (v.electrique ? ' × 1,2' : ''),
+        ];
+      }),
+      theme: 'grid', styles: { fontSize: 8.5 },
+      headStyles: { fillColor: [142, 124, 195] },
+      margin: { left: 14, right: 14 },
+    });
+    y = finYDe(doc) + 5;
+  }
+
+  const plusieurs = vehicules.length > 1;
+  autoT(doc, {
+    startY: y,
+    head: [['Date', ...(plusieurs ? ['Véhicule'] : []), 'Départ', 'Arrivée', 'Motif du déplacement', 'Jeu',
+      'Km', 'A/R', 'Km retenus', 'Cumul km', 'Indemnité']],
+    body: lignes.length ? lignes.map(c => [
+      formatDateFR(c.trajet.date), ...(plusieurs ? [c.vehicule?.nom ?? '—'] : []),
+      c.trajet.depart, c.trajet.arrivee, c.trajet.motif, c.trajet.jeu ?? '',
+      c.trajet.km.toLocaleString('fr-FR'), c.trajet.allerRetour ? 'oui' : '',
+      c.km.toLocaleString('fr-FR'), c.cumulKm.toLocaleString('fr-FR'), eurosPDF(c.indemnite),
+    ]) : [[{ content: 'Aucun trajet sur la période.', colSpan: plusieurs ? 11 : 10 }]],
+    foot: lignes.length ? [[
+      { content: 'Total', colSpan: plusieurs ? 7 : 6 }, '', totalKm.toLocaleString('fr-FR'), '', eurosPDF(totalIK),
+    ]] : undefined,
+    theme: 'grid', styles: { fontSize: 8.5, cellPadding: 1.4 },
+    headStyles: { fillColor: [142, 124, 195] },
+    footStyles: { fillColor: [217, 210, 233], textColor: [63, 50, 104], fontStyle: 'bold' },
+    columnStyles: plusieurs
+      ? { 0: { cellWidth: 20 }, 6: { halign: 'right' }, 7: { halign: 'center' }, 8: { halign: 'right' }, 9: { halign: 'right' }, 10: { halign: 'right', cellWidth: 26 } }
+      : { 0: { cellWidth: 20 }, 5: { halign: 'right' }, 6: { halign: 'center' }, 7: { halign: 'right' }, 8: { halign: 'right' }, 9: { halign: 'right', cellWidth: 26 } },
+    margin: { left: 14, right: 14 },
+  });
+  y = finYDe(doc) + 8;
+
+  if (y > doc.internal.pageSize.height - 40) { doc.addPage(); y = 20; }
+  doc.setFontSize(9);
+  doc.setTextColor(90);
+  texte(doc, 'Indemnités calculées au barème fiscal des voitures, sur la distance professionnelle de l\'année civile : '
+    + 'chaque trajet reçoit le barème du cumul après lui, moins celui d\'avant.', 14, y);
+  texte(doc, 'Péages et stationnement ne sont pas compris : ils se remboursent à part, sur justificatifs.', 14, y + 5);
+  doc.setTextColor(0);
+  doc.setFontSize(10);
+  texte(doc, `Certifié exact, le ____ / ____ / ________`, 14, y + 16);
+  texte(doc, `${BENEFICIAIRE_IK}, gérant — signature :`, 160, y + 16);
+  paginer(doc, `Big Budi Games — relevé d'indemnités kilométriques, ${periode}`);
+  return doc;
+}
+
+export function exportPDFReleveIK(state: AppState, annee: number, mois?: string) {
+  documentPDFReleveIK(state, annee, mois)
+    .save(`BBG_Releve_IK_${mois ?? annee}_${today()}.pdf`);
+}
+
+/** Le relevé d'un mois en fichier, pour le joindre à l'écriture du journal. */
+export function fichierReleveIK(state: AppState, annee: number, mois: string): File {
+  const blob = documentPDFReleveIK(state, annee, mois).output('blob');
+  return new File([blob], `Releve_IK_${mois}.pdf`, { type: 'application/pdf' });
 }
 
 /**
@@ -1910,19 +2049,21 @@ export async function blobBackup(state: AppState, avecFichiers = true): Promise<
   const fichiers = avecFichiers ? await exporterFichiers() : [];
   const data = {
     format: 'bbg-compta-backup',
+    // v8 : les indemnités kilométriques (véhicules, trajets) rejoignent la sauvegarde.
     // v7 : les documents de l'entreprise rejoignent la sauvegarde.
     // v6 : le registre des placements rejoint la sauvegarde.
     // v5 : les mouvements financiers seulement prévus rejoignent la sauvegarde.
     // v4 y avait fait entrer le stock — prévisionnel et mouvements réels — et
     // v3 les corrections manuelles de trésorerie et les couleurs des blocs,
     // qu'une restauration perdait.
-    version: 7,
+    version: 8,
     exportedAt: new Date().toISOString(),
     entries: state.entries,
     finances: state.finances,
     mouvementsPrev: state.mouvementsPrev,
     placements: state.placements ?? [],
     documentsSociete: state.documentsSociete ?? [],
+    ik: state.ik ?? { vehicules: [], trajets: [], passages: {} },
     referentiels: state.referentiels,
     budgets: state.budgets,
     previsionnels: state.previsionnels,
@@ -2175,6 +2316,7 @@ export async function importBackup(file: File): Promise<{
       ...(data.mouvementsPrev ? { mouvementsPrev: data.mouvementsPrev } : {}),
       ...(data.placements ? { placements: data.placements } : {}),
       ...(data.documentsSociete ? { documentsSociete: data.documentsSociete } : {}),
+      ...(data.ik ? { ik: data.ik } : {}),
       ...(data.tresoManuel ? { tresoManuel: data.tresoManuel } : {}),
       ...(data.stocks ? { stocks: data.stocks } : {}),
       ...(data.mouvementsStock ? { mouvementsStock: data.mouvementsStock } : {}),

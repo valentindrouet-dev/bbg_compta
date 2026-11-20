@@ -141,6 +141,62 @@ export interface DocumentSociete {
   ajouteLe: string;
 }
 
+// ----- Indemnités kilométriques -----------------------------------------
+
+/**
+ * Puissance fiscale retenue par le barème (case P.6 de la carte grise) :
+ * 3 = « 3 CV et moins », 7 = « 7 CV et plus ».
+ */
+export type PuissanceFiscale = 3 | 4 | 5 | 6 | 7;
+
+/** Une voiture personnelle utilisée pour les trajets de la société. */
+export interface VehiculeIK {
+  id: string;
+  /** « Peugeot 208 », « Clio »… */
+  nom: string;
+  immatriculation?: string;
+  cv: PuissanceFiscale;
+  /** Véhicule 100 % électrique : le barème est majoré de 20 %. */
+  electrique: boolean;
+}
+
+/**
+ * Un trajet professionnel, tel qu'il doit figurer au relevé : date, départ,
+ * arrivée, motif et distance. C'est ce relevé qui justifie les indemnités.
+ */
+export interface TrajetIK {
+  id: string;
+  /** Date du trajet (ISO). */
+  date: string;
+  vehiculeId: string;
+  depart: string;
+  arrivee: string;
+  /** Objet du déplacement : festival, éditeur, imprimeur, client… */
+  motif: string;
+  /** Distance d'un trajet simple, en km. */
+  km: number;
+  /** Aller-retour : la distance compte deux fois. */
+  allerRetour: boolean;
+  /** Jeu ou projet concerné, s'il y en a un. */
+  jeu?: string;
+  note?: string;
+}
+
+/** Le mois d'IK passé au journal : l'écriture créée et ce qu'elle portait. */
+export interface PassageIK {
+  entryId: string;
+  montant: number;
+  km: number;
+  le: string;
+}
+
+export interface DonneesIK {
+  vehicules: VehiculeIK[];
+  trajets: TrajetIK[];
+  /** Par mois « yyyy-mm » : l'écriture du journal qui porte ses indemnités. */
+  passages: Record<string, PassageIK>;
+}
+
 // ----- Prévisionnel ------------------------------------------------------
 
 export type BudgetSection = 'ca' | 'couts_dev' | 'charges_externes' | 'personnel' | 'resultat' | 'tva' | 'autres';

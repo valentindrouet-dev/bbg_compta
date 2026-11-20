@@ -75,6 +75,23 @@ export async function saveFile(file: File): Promise<StoredFile> {
   return entry;
 }
 
+/**
+ * Remplace le contenu d'un fichier déjà stocké, sous le même identifiant :
+ * l'écriture qui le référence n'a pas à changer (un relevé régénéré, par
+ * exemple). Rend false si le fichier n'existe plus.
+ */
+export async function remplacerFichier(id: string, file: File): Promise<boolean> {
+  const ancien = await getFile(id);
+  if (!ancien) return false;
+  const entry: StoredFile = {
+    ...ancien, name: file.name, type: file.type || ancien.type, size: file.size,
+    addedAt: new Date().toISOString(), blob: file,
+  };
+  await tx('readwrite', s => s.put(entry));
+  prevenir();
+  return true;
+}
+
 export async function getFile(id: string): Promise<StoredFile | null> {
   const res = await tx<StoredFile | undefined>('readonly', s => s.get(id));
   return res ?? null;

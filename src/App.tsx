@@ -20,6 +20,7 @@ import { FournisseursPage } from './components/journal/FournisseursPage';
 import { JeuxPage } from './components/journal/JeuxPage';
 import { FacturesPage } from './components/journal/FacturesPage';
 import { DocumentsPage } from './components/journal/DocumentsPage';
+import { IKPage } from './components/journal/IKPage';
 import { PrevisionnelPage } from './components/prev/PrevisionnelPage';
 import { ReelVsPrevuPage } from './components/prev/ReelVsPrevuPage';
 import { CinqAnsPage } from './components/prev/CinqAnsPage';
@@ -34,14 +35,14 @@ import { useEtatVue } from './utils/etatVue';
 
 export type Page =
   | 'dashboard'
-  | 'journal' | 'synthese' | 'totale' | 'immos' | 'stocks' | 'treso' | 'placements' | 'tva' | 'rembours' | 'fournisseurs' | 'jeux' | 'factures' | 'documents'
+  | 'journal' | 'ik' | 'synthese' | 'totale' | 'immos' | 'stocks' | 'treso' | 'placements' | 'tva' | 'rembours' | 'fournisseurs' | 'jeux' | 'factures' | 'documents'
   | 'budgets' | 'cinqans' | 'reelprevu' | 'tresoprev' | 'chrono'
   | 'bilan' | 'exports' | 'categories' | 'settings' | 'wiki';
 
 /** Les pages existantes : une valeur mémorisée qui n'en fait plus partie est ignorée. */
 const PAGES: readonly Page[] = [
   'dashboard',
-  'journal', 'synthese', 'totale', 'immos', 'stocks', 'treso', 'placements', 'tva', 'rembours', 'fournisseurs', 'jeux', 'factures', 'documents',
+  'journal', 'ik', 'synthese', 'totale', 'immos', 'stocks', 'treso', 'placements', 'tva', 'rembours', 'fournisseurs', 'jeux', 'factures', 'documents',
   'budgets', 'cinqans', 'reelprevu', 'tresoprev', 'chrono',
   'bilan', 'exports', 'categories', 'settings', 'wiki',
 ];
@@ -127,6 +128,7 @@ export default function App() {
         <UndoBar />
         {page === 'dashboard' && <Dashboard onNavigate={setPage} />}
         {page === 'journal' && <JournalPage cible={cibleDe('journal')} onOuvrirTreso={() => setPage('treso')} />}
+        {page === 'ik' && <IKPage onAllerA={allerA} />}
         {page === 'synthese' && <SynthesePage onAllerA={allerA} />}
         {page === 'totale' && <SyntheseTotalePage />}
         {page === 'immos' && <ImmosPage cible={cibleDe('immos')} onAllerA={allerA} />}

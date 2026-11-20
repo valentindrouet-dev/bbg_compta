@@ -21,7 +21,10 @@ import {
 import { teinteBloc, type BlocCle } from './blocs';
 import type { Teinte } from './couleurs';
 import { couleurJeu } from './jeux';
-import { donneesSynthese } from './export';
+import { donneesSynthese, BENEFICIAIRE_IK } from './export';
+import {
+  baremeDe, calculerAnnee, formuleTranche, moisDe, moisDeLAnnee, PUISSANCES, trancheDe,
+} from './ik';
 import { APP_VERSION } from '../version';
 
 // ----- Palette et formats -------------------------------------------------
@@ -674,4 +677,105 @@ export async function exportExcelSynthese(state: AppState, exercice: string, bas
   }
 
   await telecharger(wb, `BBG_Synthese_${exercice}${base === 'ttc' ? '_TTC' : ''}_${todayISO()}.xlsx`);
+}
+
+// ----- Indemnités kilométriques -------------------------------------------
+
+/**
+ * Le relevé des indemnités kilométriques d'une année civile : un onglet par
+ * mois récapitulé, puis le relevé complet des trajets, chacun avec sa distance,
+ * le cumul de l'année et son indemnité au barème.
+ */
+export async function exportExcelIK(state: AppState, annee: number) {
+  const ik = state.ik ?? { vehicules: [], trajets: [], passages: {} };
+  const calcules = calculerAnnee(ik, annee);
+  const mois = moisDeLAnnee(calcules, annee);
+  const bareme = baremeDe(annee);
+  const t = teinteBloc('charges', state.blocCouleurs ?? {});
+  const wb = await classeur();
+
+  // Récapitulatif mois par mois.
+  const rec = feuille(wb, `IK ${annee}`, [18, 10, 13, 15, 14, 15, 30]);
+  let y = enTete(rec, `Indemnités kilométriques ${annee}`,
+    `Big Budi Games · bénéficiaire : ${BENEFICIAIRE_IK}, gérant · barème fiscal ${bareme.annee}${bareme.publie ? '' : ' (dernier publié)'}`);
+  entetes(rec, y, ['Mois', 'Trajets', 'Km', 'Indemnités', 'Cumul km', 'Cumul €', 'Journal'], t, new Set([2, 3, 4, 5, 6]));
+  y++;
+  let cumKm = 0;
+  let cumIK = 0;
+  for (const m of mois) {
+    cumKm = r2(cumKm + m.km);
+    cumIK = r2(cumIK + m.indemnite);
+    const passage = ik.passages[m.mois];
+    const r = rec.getRow(y);
+    ecrire(r.getCell(1), labelMoisLong(m.mois));
+    ecrire(r.getCell(2), m.trajets || null);
+    ecrire(r.getCell(3), m.km || null, { numFmt: '#,##0.0' });
+    ecrire(r.getCell(4), m.indemnite || null, { numFmt: EUROS, font: police({ bold: true }) });
+    ecrire(r.getCell(5), m.trajets ? cumKm : null, { numFmt: '#,##0.0' });
+    ecrire(r.getCell(6), m.trajets ? cumIK : null, { numFmt: EUROS });
+    ecrire(r.getCell(7), passage
+      ? (Math.abs(passage.montant - m.indemnite) <= 0.005 ? `Passé au journal le ${formatDateFR(passage.le)}` : `Journal : ${euros(passage.montant)} — à mettre à jour`)
+      : '', { font: police({ size: 9, couleur: C.gris }) });
+    y++;
+  }
+  const tot = rec.getRow(y);
+  ecrire(tot.getCell(1), 'Total', { font: police({ bold: true, couleur: t.fonce }), fill: fond(t.total) });
+  ecrire(tot.getCell(2), calcules.length, { font: police({ bold: true, couleur: t.fonce }), fill: fond(t.total) });
+  ecrire(tot.getCell(3), cumKm, { numFmt: '#,##0.0', font: police({ bold: true, couleur: t.fonce }), fill: fond(t.total) });
+  ecrire(tot.getCell(4), cumIK, { numFmt: EUROS, font: police({ bold: true, couleur: t.fonce }), fill: fond(t.total) });
+  for (const c of [5, 6, 7]) ecrire(tot.getCell(c), null, { fill: fond(t.total) });
+  y += 2;
+
+  // Les véhicules et la formule du barème.
+  entetes(rec, y, ['Véhicule', 'Immat.', 'Puissance', 'Énergie', `Km ${annee}`, 'Indemnités', 'Formule du barème'], t, new Set([5, 6]));
+  y++;
+  for (const v of ik.vehicules) {
+    const du = calcules.filter(c => c.trajet.vehiculeId === v.id);
+    const km = r2(du.reduce((x, c) => x + c.km, 0));
+    const r = rec.getRow(y);
+    ecrire(r.getCell(1), v.nom || '—');
+    ecrire(r.getCell(2), v.immatriculation || '');
+    ecrire(r.getCell(3), PUISSANCES.find(p => p.value === v.cv)?.label ?? `${v.cv} CV`);
+    ecrire(r.getCell(4), v.electrique ? 'Électrique (+20 %)' : 'Thermique');
+    ecrire(r.getCell(5), km, { numFmt: '#,##0.0' });
+    ecrire(r.getCell(6), r2(du.reduce((x, c) => x + c.indemnite, 0)), { numFmt: EUROS });
+    ecrire(r.getCell(7), formuleTranche(trancheDe(bareme.bareme[v.cv], Math.max(km, 1))) + (v.electrique ? ' × 1,2' : ''));
+    y++;
+  }
+
+  // Le relevé des trajets.
+  const ws = feuille(wb, `Trajets ${annee}`, [12, 16, 22, 22, 34, 14, 9, 6, 11, 11, 13, 26]);
+  let z = enTete(ws, `Relevé des trajets professionnels ${annee}`,
+    `Big Budi Games · ${BENEFICIAIRE_IK}, gérant · véhicule personnel`);
+  const cols = ['Date', 'Véhicule', 'Départ', 'Arrivée', 'Motif', 'Jeu', 'Km', 'A/R', 'Km retenus', 'Cumul km', 'Indemnité', 'Note'];
+  let moisCourant = '';
+  for (const c of calcules) {
+    const m = moisDe(c.trajet.date);
+    if (m !== moisCourant) {
+      if (moisCourant) z++;
+      moisCourant = m;
+      const du = mois.find(x => x.mois === m)!;
+      bandeau(ws, z, cols.length, `${labelMoisLong(m)} — ${du.km.toLocaleString('fr-FR')} km`, t, du.indemnite);
+      z++;
+      entetes(ws, z, cols, t, new Set([7, 9, 10, 11]));
+      z++;
+    }
+    const r = ws.getRow(z);
+    ecrire(r.getCell(1), dateExcel(c.trajet.date), { numFmt: 'dd/mm/yyyy', align: 'left' });
+    ecrire(r.getCell(2), c.vehicule?.nom ?? '—');
+    ecrire(r.getCell(3), c.trajet.depart);
+    ecrire(r.getCell(4), c.trajet.arrivee);
+    ecrire(r.getCell(5), c.trajet.motif, { wrap: true });
+    ecrire(r.getCell(6), c.trajet.jeu ?? '');
+    ecrire(r.getCell(7), c.trajet.km, { numFmt: '#,##0.0' });
+    ecrire(r.getCell(8), c.trajet.allerRetour ? 'oui' : '', { align: 'center' });
+    ecrire(r.getCell(9), c.km, { numFmt: '#,##0.0' });
+    ecrire(r.getCell(10), c.cumulKm, { numFmt: '#,##0.0', font: police({ couleur: C.gris }) });
+    ecrire(r.getCell(11), c.indemnite, { numFmt: EUROS, font: police({ bold: true }) });
+    ecrire(r.getCell(12), c.trajet.note ?? '', { wrap: true, font: police({ size: 9, couleur: C.gris }) });
+    z++;
+  }
+  if (!calcules.length) ecrire(ws.getCell(z, 1), `Aucun trajet en ${annee}.`, { border: {} });
+
+  await telecharger(wb, `BBG_IK_${annee}_${todayISO()}.xlsx`);
 }

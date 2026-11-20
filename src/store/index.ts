@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import type {
   JournalEntry, FinanceEntry, BudgetExercice, ChronoEvent, TresoPrevLine, Referentiels, CategorieMeta,
-  Placement, DocumentJeu, DocumentSociete,
+  Placement, DocumentJeu, DocumentSociete, DonneesIK, VehiculeIK, TrajetIK, PassageIK,
   CanalVente, FormulePrev, JeuMeta, LigneDroits, LigneStock, MouvementStock, PrevLigne,
   PrevSection,
   TresoManuel,
@@ -167,7 +167,7 @@ export type CatKind = 'categoriesDepenses' | 'categoriesJeux' | 'categoriesProdu
 export type ColWidths = Record<string, number[]>;
 
 /** Clés dont la modification est enregistrée dans l'historique d'annulation. */
-const DATA_KEYS = ['entries', 'finances', 'mouvementsPrev', 'placements', 'documentsSociete', 'referentiels', 'budgets', 'previsionnels', 'stocks', 'mouvementsStock', 'chronologie', 'tresoPrev', 'tresoManuel', 'journalFormats', 'blocCouleurs'] as const;
+const DATA_KEYS = ['entries', 'finances', 'mouvementsPrev', 'placements', 'documentsSociete', 'ik', 'referentiels', 'budgets', 'previsionnels', 'stocks', 'mouvementsStock', 'chronologie', 'tresoPrev', 'tresoManuel', 'journalFormats', 'blocCouleurs'] as const;
 type DataKey = typeof DATA_KEYS[number];
 type Snapshot = Pick<AppState, DataKey>;
 
@@ -193,6 +193,12 @@ export interface AppState {
    * vides, sans migration ni réécriture des données.
    */
   documentsSociete: DocumentSociete[];
+  /**
+   * Les indemnités kilométriques : véhicules, relevé des trajets, et les mois
+   * déjà passés au journal. Absentes des données enregistrées avant elles :
+   * l'état initial les fournit vides, sans migration ni réécriture.
+   */
+  ik: DonneesIK;
   referentiels: Referentiels;
   budgets: Record<string, BudgetExercice>;
   /** Prévisionnel par exercice, aligné sur les catégories de la synthèse. */
@@ -259,6 +265,21 @@ export interface AppState {
    * nouveau placement, qui aura son propre contrat et son propre retour.
    */
   duplicatePlacement: (id: string) => void;
+
+  addVehiculeIK: (v: Omit<VehiculeIK, 'id'>) => string;
+  updateVehiculeIK: (id: string, patch: Partial<Omit<VehiculeIK, 'id'>>) => void;
+  /** Retire un véhicule — seulement s'il ne porte aucun trajet. */
+  removeVehiculeIK: (id: string) => void;
+  addTrajetIK: (t: Omit<TrajetIK, 'id'>) => string;
+  updateTrajetIK: (id: string, patch: Partial<Omit<TrajetIK, 'id'>>) => void;
+  removeTrajetIK: (id: string) => void;
+  duplicateTrajetIK: (id: string) => void;
+  /**
+   * Passe (ou remet à jour) les indemnités d'un mois au journal : l'écriture
+   * et la trace du passage changent ensemble, un seul Cmd+Z défait les deux.
+   * Rend l'identifiant de l'écriture.
+   */
+  passerIKAuJournal: (mois: string, ecriture: Omit<JournalEntry, 'id'>, passage: Omit<PassageIK, 'entryId'>) => string;
 
   addDocumentSociete: (doc: Omit<DocumentSociete, 'id'>) => void;
   updateDocumentSociete: (id: string, patch: Partial<Omit<DocumentSociete, 'id' | 'fileId'>>) => void;
@@ -387,7 +408,7 @@ export interface AppState {
   updateMouvementStock: (id: string, patch: Partial<MouvementStock>) => void;
   removeMouvementStock: (id: string) => void;
 
-  restoreAll: (data: Partial<Pick<AppState, 'entries' | 'finances' | 'mouvementsPrev' | 'placements' | 'documentsSociete' | 'referentiels' | 'budgets' | 'previsionnels' | 'stocks' | 'mouvementsStock' | 'chronologie' | 'tresoPrev' | 'journalFormats' | 'colWidths' | 'blocCouleurs'>>) => void;
+  restoreAll: (data: Partial<Pick<AppState, 'entries' | 'finances' | 'mouvementsPrev' | 'placements' | 'documentsSociete' | 'ik' | 'referentiels' | 'budgets' | 'previsionnels' | 'stocks' | 'mouvementsStock' | 'chronologie' | 'tresoPrev' | 'journalFormats' | 'colWidths' | 'blocCouleurs'>>) => void;
   resetToSeed: () => void;
 }
 
@@ -447,6 +468,7 @@ function seedState() {
     mouvementsPrev: [],
     placements: [] as Placement[],
     documentsSociete: [] as DocumentSociete[],
+    ik: { vehicules: [], trajets: [], passages: {} } as DonneesIK,
     referentiels: refs,
     budgets: structuredClone(seedBudgets) as unknown as Record<string, BudgetExercice>,
     // Seul l'exercice en cours est repris du tableur ; les quatre suivants
@@ -554,6 +576,7 @@ function snapshot(s: AppState): Snapshot {
     entries: s.entries, finances: s.finances, mouvementsPrev: s.mouvementsPrev,
     placements: s.placements,
     documentsSociete: s.documentsSociete,
+    ik: s.ik,
     referentiels: s.referentiels,
     budgets: s.budgets, previsionnels: s.previsionnels,
     chronologie: s.chronologie, tresoPrev: s.tresoPrev, tresoManuel: s.tresoManuel,
@@ -726,6 +749,62 @@ export const useStore = create<AppState>()(
         };
         return { placements: [...(s.placements ?? []), copie] };
       }),
+
+      addVehiculeIK: (v) => {
+        const id = uid();
+        set(s => {
+          const ik = s.ik ?? { vehicules: [], trajets: [], passages: {} };
+          return { ik: { ...ik, vehicules: [...ik.vehicules, { ...v, id }] } };
+        });
+        return id;
+      },
+      updateVehiculeIK: (id, patch) => set(s => {
+        const ik = s.ik ?? { vehicules: [], trajets: [], passages: {} };
+        return { ik: { ...ik, vehicules: ik.vehicules.map(v => v.id === id ? { ...v, ...patch } : v) } };
+      }),
+      removeVehiculeIK: (id) => set(s => {
+        const ik = s.ik ?? { vehicules: [], trajets: [], passages: {} };
+        if (ik.trajets.some(t => t.vehiculeId === id)) return s;
+        return { ik: { ...ik, vehicules: ik.vehicules.filter(v => v.id !== id) } };
+      }),
+      addTrajetIK: (t) => {
+        const id = uid();
+        set(s => {
+          const ik = s.ik ?? { vehicules: [], trajets: [], passages: {} };
+          return { ik: { ...ik, trajets: [...ik.trajets, { ...t, id }] } };
+        });
+        return id;
+      },
+      updateTrajetIK: (id, patch) => set(s => {
+        const ik = s.ik ?? { vehicules: [], trajets: [], passages: {} };
+        return { ik: { ...ik, trajets: ik.trajets.map(t => t.id === id ? { ...t, ...patch } : t) } };
+      }),
+      removeTrajetIK: (id) => set(s => {
+        const ik = s.ik ?? { vehicules: [], trajets: [], passages: {} };
+        return { ik: { ...ik, trajets: ik.trajets.filter(t => t.id !== id) } };
+      }),
+      duplicateTrajetIK: (id) => set(s => {
+        const ik = s.ik ?? { vehicules: [], trajets: [], passages: {} };
+        const i = ik.trajets.findIndex(t => t.id === id);
+        if (i < 0) return s;
+        const trajets = [...ik.trajets];
+        trajets.splice(i + 1, 0, { ...ik.trajets[i], id: uid() });
+        return { ik: { ...ik, trajets } };
+      }),
+      passerIKAuJournal: (mois, ecriture, passage) => {
+        const etat = get();
+        const ik = etat.ik ?? { vehicules: [], trajets: [], passages: {} };
+        const deja = ik.passages[mois];
+        const existe = deja && etat.entries.some(e => e.id === deja.entryId);
+        const entryId = existe ? deja.entryId : uid();
+        set(s => ({
+          entries: existe
+            ? s.entries.map(e => e.id === entryId ? { ...e, ...ecriture } : e)
+            : [...s.entries, { ...ecriture, id: entryId }],
+          ik: { ...ik, passages: { ...ik.passages, [mois]: { ...passage, entryId } } },
+        }));
+        return entryId;
+      },
       addDocumentSociete: (doc) => set(s => ({
         documentsSociete: [...(s.documentsSociete ?? []), { ...doc, id: uid() }],
       })),
@@ -1456,6 +1535,7 @@ export const useStore = create<AppState>()(
         entries: s.entries, finances: s.finances, mouvementsPrev: s.mouvementsPrev,
         placements: s.placements,
         documentsSociete: s.documentsSociete,
+        ik: s.ik,
         referentiels: s.referentiels,
         budgets: s.budgets, previsionnels: s.previsionnels,
         chronologie: s.chronologie, tresoPrev: s.tresoPrev, tresoManuel: s.tresoManuel,
