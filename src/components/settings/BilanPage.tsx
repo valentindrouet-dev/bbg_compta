@@ -1,8 +1,8 @@
 import { useMemo, type ReactNode } from 'react';
-import { AlertTriangle, Check, FileText, Lock } from 'lucide-react';
+import { AlertTriangle, Check, CheckCircle2, FileText, Lock } from 'lucide-react';
 import { useStore } from '../../store';
 import { PageHeader } from '../ui';
-import { donneesBilan, PROJET, type LigneBilan, type Verdict } from '../../utils/bilan';
+import { donneesBilan, PROJET, RDV_EXPONENS, type LigneBilan, type Verdict } from '../../utils/bilan';
 import { euros } from '../../utils/money';
 import { openFile } from '../../utils/files';
 import { toast } from '../../utils/toast';
@@ -53,7 +53,8 @@ export function BilanPage() {
     { id: 'cc-val', texte: <>CC Valentin <b>{n2(PROJET.ccValentin)} €</b>, BNP <b>{n2(PROJET.bnp)} €</b> : détail ? e-facture BNP ?</> },
     { id: 'suite', texte: <>Suite : liasse, AG, greffe — qui fait quoi ? honoraires ?</> },
   ];
-  const faites = questions.filter(q => coches.includes(q.id)).length;
+  const repondue = (id: string) => RDV_EXPONENS.reponses[id];
+  const faites = questions.filter(q => coches.includes(q.id) || repondue(q.id)).length;
   const basculer = (id: string) =>
     setCoches(prec => prec.includes(id) ? prec.filter(x => x !== id) : [...prec, id]);
 
@@ -65,7 +66,7 @@ export function BilanPage() {
     <div className="p-4 w-full">
       <PageHeader
         title="Bilan 2025-26"
-        subtitle="Projet Exponens du 17/11/2026, rapproché en direct de ton journal"
+        subtitle="Projet Exponens du 17/11/2026, revu le 20/11 · rapproché en direct de ton journal"
         aCoteDuTitre={
           <span
             className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold"
@@ -89,12 +90,31 @@ export function BilanPage() {
         ))}
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 mb-3">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 mb-2">
         <Chiffre label="Résultat" valeur={PROJET.resultat} sous="pas d'IS · perte reportable" ton="bad" />
         <Chiffre label="Chiffre d'affaires" valeur={PROJET.ca} sous="prestations HT (706)" />
         <Chiffre label="Capitaux propres" valeur={PROJET.capitauxPropres} sous="> ½ capital : rien à faire" ton="good" />
         <Chiffre label="Disponibilités" valeur={PROJET.disponibilites} sous="Qonto, BNP, CAT, intérêts" />
         <Chiffre label="Total bilan" valeur={PROJET.totalBilan} sous="actif = passif" />
+      </div>
+
+      <div className="mb-2.5 flex items-stretch rounded-lg border bg-white shadow-sm overflow-hidden"
+        style={{ borderColor: 'var(--bbg-border-soft)' }}>
+        <div className="shrink-0 px-3 py-1 flex flex-col justify-center"
+          style={{ backgroundColor: 'var(--bbg-green-light)', color: 'var(--bbg-green-dark)' }}>
+          <div className="inline-flex items-center gap-1 text-[11px] uppercase tracking-wide font-bold">
+            <CheckCircle2 size={13} /> Décidé
+          </div>
+          <div className="text-[11px]">RDV Exponens du 20/11/2026</div>
+        </div>
+        <div className="flex-1 grid grid-cols-1 md:grid-cols-3">
+          {RDV_EXPONENS.decisions.map((dec, i) => (
+            <div key={dec.titre} className={`px-3 py-1 ${i > 0 ? 'md:border-l' : ''}`} style={{ borderColor: 'var(--bbg-border-soft)' }}>
+              <div className="text-[13px] font-semibold text-[#3f3268]">{dec.titre}</div>
+              <div className="text-[12px] text-[#6f6690]">{dec.detail}</div>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 min-[1400px]:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] gap-3 items-start">
@@ -149,7 +169,7 @@ export function BilanPage() {
 
         <div className="space-y-3">
           <Bloc titre="Réponses prêtes">
-            <ul className="space-y-2 text-[13px] text-[#3f3268]">
+            <ul className="space-y-1.5 text-[13px] text-[#3f3268]">
               <Reponse titre="467100 ne s'équilibre pas">
                 Manque l'<b>Airbnb du 21/05/2026 : 467,80 €</b>. Avec lui : {n2(PROJET.fraisEnghien)} − {n2(PROJET.remboursEnghien)}
                 {' '}= <b>{n2(PROJET.fraisEnghien - PROJET.remboursEnghien)} €</b> restent à BBG.
@@ -177,7 +197,7 @@ export function BilanPage() {
             droite={
               <span className="flex items-center gap-2 text-xs text-[#6f6690]">
                 {faites}/{questions.length}
-                {faites > 0 && (
+                {coches.length > 0 && (
                   <button className="underline hover:text-[#3f3268]" onClick={() => setCoches([])}>décocher</button>
                 )}
               </span>
@@ -185,12 +205,24 @@ export function BilanPage() {
           >
             <ol className="space-y-1 text-[13px]">
               {questions.map((q, i) => {
-                const fait = coches.includes(q.id);
+                const reponse = repondue(q.id);
+                const fait = coches.includes(q.id) || !!reponse;
                 return (
                   <li key={q.id}>
-                    <label className={`flex items-start gap-2 cursor-pointer ${fait ? 'text-[#9a92b5] line-through' : 'text-[#3f3268]'}`}>
-                      <input type="checkbox" className="mt-[3px] accent-[#674ea7]" checked={fait} onChange={() => basculer(q.id)} />
-                      <span><span className="text-[#9a92b5] tabular-nums">{i + 1}.</span> {q.texte}</span>
+                    <label className={`flex items-start gap-2 ${reponse ? '' : 'cursor-pointer'} ${fait ? 'text-[#9a92b5]' : 'text-[#3f3268]'}`}>
+                      <input type="checkbox" className="mt-[3px] accent-[#674ea7]" checked={fait} disabled={!!reponse}
+                        onChange={() => basculer(q.id)} />
+                      <span>
+                        <span className={fait ? 'line-through' : ''}>
+                          <span className="text-[#9a92b5] tabular-nums">{i + 1}.</span> {q.texte}
+                        </span>
+                        {reponse && (
+                          <span className="ml-1.5 px-1.5 rounded text-[11px] font-semibold no-underline"
+                            style={{ backgroundColor: 'var(--bbg-green-light)', color: 'var(--bbg-green-dark)' }}>
+                            {reponse}
+                          </span>
+                        )}
+                      </span>
                     </label>
                   </li>
                 );
@@ -210,7 +242,7 @@ function Chiffre({ label, valeur, sous, ton }: {
   const couleur = ton === 'good' ? 'var(--bbg-green-dark)' : ton === 'bad' ? '#b7332e' : 'var(--bbg-purple-darker)';
   const rail = ton === 'good' ? 'var(--bbg-green)' : ton === 'bad' ? '#e8a9a5' : 'var(--bbg-purple)';
   return (
-    <div className="bg-white rounded-lg shadow-sm border px-3 py-2"
+    <div className="bg-white rounded-lg shadow-sm border px-3 py-1.5"
       style={{ borderColor: 'var(--bbg-border-soft)', borderLeft: `4px solid ${rail}` }}>
       <div className="text-[11px] uppercase tracking-wide" style={{ color: '#6f6690' }}>{label}</div>
       <div className="text-lg font-bold tabular-nums leading-tight" style={{ color: couleur }}>{euros(valeur)}</div>

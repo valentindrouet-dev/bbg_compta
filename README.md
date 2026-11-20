@@ -421,7 +421,12 @@ avec ses versions PNG pour Safari).
   ouvrent le projet de comptes, la convention de compte courant et le
   justificatif Airbnb quand ils sont dans l'app (page Documents, journal).
   **Lecture seule** : la page ne modifie aucune donnée ; seules les cases
-  cochées sont retenues, comme un réglage d'affichage
+  cochées sont retenues, comme un réglage d'affichage. Sous les grands chiffres,
+  le bandeau **Décidé** garde la trace du rendez-vous du 20/11/2026 :
+  indemnités kilométriques au barème à partir du 01/01/2027 (à la place des
+  factures d'essence, avec un relevé des trajets), de vraies factures pour
+  Gamefound et Kickstarter, et le crédit de TVA de 1 262 € reporté — la
+  question correspondante est cochée d'office, avec sa réponse
 - **Exports** — les cinq exports d'un coup dans une archive `.zip`
   (Excel, PDF, CSV, HTML, JSON + un « Lisez-moi », et si tu veux un dossier
   `Factures/` rangé par mois), ou chacun séparément. **Tout ce qui est à

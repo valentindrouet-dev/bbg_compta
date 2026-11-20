@@ -55,6 +55,30 @@ export const PROJET = {
   remboursEnghien: 1978.57,
 } as const;
 
+/**
+ * Ce qui a été décidé au rendez-vous avec Exponens le 20/11/2026 : la trace
+ * définitive du point sur le projet de comptes.
+ */
+export const RDV_EXPONENS = {
+  date: '2026-11-20',
+  decisions: [
+    {
+      titre: 'Indemnités kilométriques au 01/01/2027',
+      detail: 'au lieu des factures d\'essence · relevé des trajets',
+    },
+    {
+      titre: 'Factures Gamefound et Kickstarter',
+      detail: 'de vraies factures, plus de captures d\'écran',
+    },
+    {
+      titre: 'Crédit de TVA de 1 262 € reporté',
+      detail: 'pas de remboursement demandé',
+    },
+  ],
+  /** Questions tranchées pendant le rendez-vous, et leur réponse. */
+  reponses: { 'credit-tva': 'reporté' } as Record<string, string>,
+} as const;
+
 /** Taux et base de la convention de compte courant MDR Conseil. */
 export const TAUX_CCA = 0.02;
 export const BASE_JOURS_CCA = 360;
