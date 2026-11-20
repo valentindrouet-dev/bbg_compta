@@ -405,6 +405,23 @@ avec ses versions PNG pour Safari).
   on voit tout de suite dans quel exercice tombe une étape ou un paiement
 
 **Outils**
+- **Bilan 2025-26** — la page du rendez-vous avec l'expert-comptable, sur un
+  seul écran. En haut, les grands chiffres du **projet de comptes Exponens** du
+  17/11/2026 (résultat, chiffre d'affaires, capitaux propres, disponibilités,
+  total du bilan). Au centre, **Exponens ↔ BBG Compta** : chaque poste du projet
+  (frais de développement jeu par jeu, immobilisations, amortissements, créance
+  client, Qonto au 30/09, compte à terme et intérêts courus, capital, compte
+  courant et ses intérêts à 2 %, chiffre d'affaires, cotisations) face au même
+  montant **recalculé en direct** depuis le journal, la trésorerie et les
+  placements, avec l'écart et un constat : ✓ identique, ≈ écart expliqué,
+  ⚠ écart à poser. À droite, les **réponses prêtes** (le 467100 et l'Airbnb
+  oublié, le calcul des intérêts du CCA, le passage des cotisations de l'app à
+  celles d'Exponens) et les **questions à poser**, à cocher pendant l'appel ;
+  en bas, le calendrier qui suit (liasse, IS, AG, greffe). Les boutons du haut
+  ouvrent le projet de comptes, la convention de compte courant et le
+  justificatif Airbnb quand ils sont dans l'app (page Documents, journal).
+  **Lecture seule** : la page ne modifie aucune donnée ; seules les cases
+  cochées sont retenues, comme un réglage d'affichage
 - **Exports** — les cinq exports d'un coup dans une archive `.zip`
   (Excel, PDF, CSV, HTML, JSON + un « Lisez-moi », et si tu veux un dossier
   `Factures/` rangé par mois), ou chacun séparément. **Tout ce qui est à
