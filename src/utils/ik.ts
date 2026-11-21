@@ -21,9 +21,9 @@ export interface TrancheIK {
 }
 
 /**
- * Barème des voitures, publié en 2024 (revenus 2023) et reconduit à
- * l'identique pour les revenus 2024 : c'est le dernier connu. Quand un nouveau
- * barème paraît, il s'ajoute ici sous son année.
+ * Barème des voitures (thermiques, hybrides, hydrogène), publié en 2024 et
+ * reconduit à l'identique en 2025 et en 2026. Les barèmes sont rangés par
+ * année de publication ; quand un nouveau paraît, il s'ajoute sous son année.
  */
 const BAREME_2024: Record<PuissanceFiscale, TrancheIK[]> = {
   3: [{ jusqua: 5000, taux: 0.529, fixe: 0 }, { jusqua: 20000, taux: 0.316, fixe: 1065 }, { jusqua: null, taux: 0.370, fixe: 0 }],
@@ -35,6 +35,9 @@ const BAREME_2024: Record<PuissanceFiscale, TrancheIK[]> = {
 
 export const BAREMES_IK: Record<number, Record<PuissanceFiscale, TrancheIK[]>> = {
   2024: BAREME_2024,
+  2025: BAREME_2024,
+  // Vérifié sur le barème 2026 publié : les quinze coefficients sont inchangés.
+  2026: BAREME_2024,
 };
 
 /** Majoration du barème pour un véhicule 100 % électrique. */

@@ -106,8 +106,8 @@ avec ses versions PNG pour Safari).
   défait le tout). Relevé PDF par mois ou pour l'année (avec la mention
   « certifié exact » à signer) et Excel de l'année. Les trajets suivent la
   sauvegarde (v8), sa restauration et le classeur complet (feuille
-  *Indemnités km*). Barème en vigueur : celui publié en 2024, dernier connu —
-  à remplacer quand le suivant paraît. Péages et parkings restent à part, sur
+  *Indemnités km*). Barème en vigueur : celui publié en 2026 (identique
+  depuis 2024) — le suivant s'ajoute quand il paraît. Péages et parkings restent à part, sur
   justificatifs
 - **Synthèse totale** — la même lecture, mais **une colonne par exercice** au
   lieu d'une par mois : catégories, blocs, ventilation par jeu, compte de
