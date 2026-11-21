@@ -17,6 +17,7 @@ import { euros } from '../../utils/money';
 import { toast } from '../../utils/toast';
 import { useEtatVue } from '../../utils/etatVue';
 import { PageHeader, Card, StatCard, Btn, MoneyInput } from '../ui';
+import { ChampDate } from '../ui/ChampDate';
 
 /** Référence stable : un `?? []` dans un sélecteur reboucle à l'infini. */
 const AUCUN: DocumentSociete[] = [];
@@ -283,11 +284,11 @@ export function DocumentsPage() {
                         />
                       </td>
                       <td>
-                        <input
-                          type="date" className={CHAMP} style={{ borderColor: 'var(--bbg-border-soft)' }}
+                        <ChampDate
+                          className={`${CHAMP} w-[8.5rem]`} style={{ borderColor: 'var(--bbg-border-soft)' }}
                           value={d.date}
                           title="La date du document : elle le range dans son exercice"
-                          onChange={ev => { if (ev.target.value) updateDocumentSociete(d.id, { date: ev.target.value }); }}
+                          onChange={v => { if (v) updateDocumentSociete(d.id, { date: v }); }}
                         />
                       </td>
                       <td className="text-right">
@@ -299,11 +300,12 @@ export function DocumentsPage() {
                       </td>
                       <td>
                         <div className="flex items-center gap-1">
-                          <input
-                            type="date" className={CHAMP} style={{ borderColor: 'var(--bbg-border-soft)' }}
+                          <ChampDate
+                            vide placeholder="—"
+                            className={`${CHAMP} w-[8.5rem]`} style={{ borderColor: 'var(--bbg-border-soft)' }}
                             value={d.echeance ?? ''}
                             title="Date limite : paiement, réponse… (facultatif)"
-                            onChange={ev => updateDocumentSociete(d.id, { echeance: ev.target.value || undefined })}
+                            onChange={v => updateDocumentSociete(d.id, { echeance: v || undefined })}
                           />
                           {etat === 'proche' && (
                             <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded"

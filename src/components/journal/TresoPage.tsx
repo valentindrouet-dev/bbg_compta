@@ -7,6 +7,7 @@ import { euros, r2 } from '../../utils/money';
 import { soldeTresorerie } from '../../utils/calc';
 import { FINANCE_TYPES } from '../../utils/finance';
 import { PageHeader, Card, Btn, MoneyInput, StatCard } from '../ui';
+import { ChampDate } from '../ui/ChampDate';
 
 export function TresoPage() {
   const entries = useStore(s => s.entries);
@@ -76,8 +77,8 @@ export function TresoPage() {
               {[...finances].sort((a, b) => a.date.localeCompare(b.date)).map(f => (
                 <tr key={f.id} className="group">
                   <td>
-                    <input type="date" className="border border-[#ddd6ef] rounded px-1 py-0.5 text-sm"
-                      value={f.date} onChange={ev => ev.target.value && updateFinance(f.id, { date: ev.target.value })} />
+                    <ChampDate className="border border-[#ddd6ef] rounded px-1 py-0.5 text-sm bg-white w-[8.5rem]"
+                      value={f.date} onChange={v => v && updateFinance(f.id, { date: v })} />
                   </td>
                   <td>
                     <input className="border border-[#ddd6ef] rounded px-1.5 py-1 text-sm w-72"

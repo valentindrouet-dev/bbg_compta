@@ -23,6 +23,7 @@ import {
 import { useEtatVue } from '../../utils/etatVue';
 import { PageHeader, Card, Btn, StatCard, MoneyInput, ExerciceTabs, styleBloc } from '../ui';
 import { teinteBloc } from '../../utils/blocs';
+import { ChampDate } from '../ui/ChampDate';
 
 const AUCUN_JEU: string[] = [];
 
@@ -242,10 +243,10 @@ export function StocksPage() {
                   return (
                     <tr key={m.id}>
                       <td>
-                        <input type="date" value={m.date}
-                          className="border border-transparent hover:border-[#ddd6ef] rounded px-1 py-0.5 bg-transparent"
-                          onChange={e => updateMouvementStock(m.id, {
-                            date: e.target.value, mois: moisDeDate(e.target.value),
+                        <ChampDate value={m.date}
+                          className="border border-transparent hover:border-[#ddd6ef] rounded px-1 py-0.5 bg-transparent w-[8.5rem]"
+                          onChange={v => v && updateMouvementStock(m.id, {
+                            date: v, mois: moisDeDate(v),
                           })} />
                       </td>
                       <td style={{ color: '#6f6690' }}>{labelMois(m.mois)}</td>
@@ -345,8 +346,8 @@ function NouveauMouvement({ jeux, exercice, onAjouter }: {
       <div className="flex flex-wrap items-end gap-2">
         <label className="text-sm" style={{ color: '#5c5280' }}>
           <div className="mb-0.5">Date</div>
-          <input type="date" value={date} onChange={e => setDate(e.target.value)}
-            className="border rounded px-2 py-1.5 bg-white" style={{ borderColor: 'var(--bbg-border)' }} />
+          <ChampDate value={date} onChange={v => v && setDate(v)}
+            className="border rounded px-2 py-1.5 bg-white w-[8.5rem]" style={{ borderColor: 'var(--bbg-border)' }} />
         </label>
         <label className="text-sm" style={{ color: '#5c5280' }}>
           <div className="mb-0.5">Jeu</div>

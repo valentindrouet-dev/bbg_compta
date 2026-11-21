@@ -537,6 +537,15 @@ de sous-total à masquer, ses bandeaux de jeu portant toujours leur chiffre.
 
 ## Gestes utiles
 
+- **Le calendrier** — partout où l'on saisit une date (journal, indemnités km,
+  trésorerie, placements, documents, stocks, chronologie), c'est le même
+  calendrier, propre à l'app : on feuillette les mois (‹ ›) et les années
+  (« ») sans rien enregistrer ; la date ne change qu'au clic sur un jour, sur
+  « Aujourd'hui », ou en la tapant (« 12/04/2027 », « 12/4/27 », « 12/04 »)
+  puis Entrée. ↑ ↓ avancent d'une semaine, Page ↑ / Page ↓ d'un mois ; Échap
+  ou un clic à côté referme sans rien changer. Il remplace le sélecteur du
+  navigateur, qui se refermait au premier clic sur ses flèches
+
 - **L'en-tête reste en haut** : le titre, les bascules HT/TTC et
   détaillée/simplifiée, et les **onglets** (mois du journal, exercices ailleurs)
   restent visibles quand on descend dans un long tableau.

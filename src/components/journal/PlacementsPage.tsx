@@ -13,6 +13,7 @@ import {
 } from '../../utils/placements';
 import { PageHeader, Card, Btn, MoneyInput, StatCard } from '../ui';
 import { FactureCell } from './cells';
+import { ChampDate } from '../ui/ChampDate';
 
 /**
  * Saisie d'un taux. Le champ des montants arrondit l'affichage au centime :
@@ -294,8 +295,8 @@ function LignePlacement({ p, aujourdhui, onDepot }: {
         />
       </td>
       <td>
-        <input type="date" className={CHAMP} value={p.debut}
-          onChange={ev => ev.target.value && maj({ debut: ev.target.value })} />
+        <ChampDate className={`${CHAMP} w-[8.5rem]`} value={p.debut}
+          onChange={v => v && maj({ debut: v })} />
       </td>
       <td className="text-right">
         <MoneyInput value={p.montant} className="w-28"
@@ -344,8 +345,8 @@ function LignePlacement({ p, aujourdhui, onDepot }: {
         </span>
       </td>
       <td>
-        <input type="date" className={CHAMP} value={p.recupereLe ?? ''}
-          onChange={ev => maj({ recupereLe: ev.target.value || undefined })} />
+        <ChampDate vide placeholder="—" className={`${CHAMP} w-[8.5rem]`} value={p.recupereLe ?? ''}
+          onChange={v => maj({ recupereLe: v || undefined })} />
       </td>
       <td className="text-right whitespace-nowrap">
         <MoneyInput value={p.montantRecupere ?? null} className="w-28"

@@ -4,6 +4,7 @@ import type { ColFormat } from '../../store';
 import { euros, r2, parseMontant } from '../../utils/money';
 import { MOIS_NOMS } from '../../utils/dates';
 import { saveFile, openFile, deleteFile } from '../../utils/files';
+import { ChampDate } from '../ui/ChampDate';
 
 /** Style CSS d'une colonne à partir de sa mise en forme enregistrée. */
 export function colStyle(f?: ColFormat): CSSProperties {
@@ -28,36 +29,18 @@ export function labelDateCourt(iso: string, anneeRef?: number): string {
 export function DateCell({ value, anneeRef, onCommit, style }: {
   value: string; anneeRef?: number; onCommit: (v: string) => void; style?: CSSProperties;
 }) {
-  const [editing, setEditing] = useState(false);
-  const ref = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (editing && ref.current) {
-      ref.current.focus();
-      try { (ref.current as HTMLInputElement & { showPicker?: () => void }).showPicker?.(); } catch { /* picker indisponible */ }
-    }
-  }, [editing]);
-
-  if (editing) {
-    return (
-      <input
-        ref={ref} type="date" value={value} style={style}
-        onChange={ev => ev.target.value && onCommit(ev.target.value)}
-        onBlur={() => setEditing(false)}
-        onKeyDown={ev => { if (ev.key === 'Enter' || ev.key === 'Escape') setEditing(false); }}
-      />
-    );
-  }
+  // Le calendrier de l'app : on y feuillette les mois librement, la date
+  // n'est enregistrée qu'au clic sur un jour (ou Entrée après l'avoir tapée).
   return (
-    <button
-      type="button"
-      className="w-full text-left px-1 py-[3px] rounded border border-transparent hover:border-[#c9c0e4] hover:bg-white"
+    <ChampDate
+      value={value}
+      onChange={v => v && onCommit(v)}
+      libelle={v => labelDateCourt(v, anneeRef)}
+      icone={false}
+      className="w-full px-1 py-[3px] rounded border border-transparent hover:border-[#c9c0e4] hover:bg-white"
       style={style}
       title={value}
-      onClick={() => setEditing(true)}
-    >
-      {labelDateCourt(value, anneeRef)}
-    </button>
+    />
   );
 }
 

@@ -19,6 +19,7 @@ import { toast } from '../../utils/toast';
 import { ordreAffichage } from '../../utils/previsionnel';
 import { fluxTresorerie, moisEcoules, sommeMap } from '../../utils/prevCalc';
 import { PageHeader, Card, Btn, MoneyInput, StatCard } from '../ui';
+import { ChampDate } from '../ui/ChampDate';
 
 const AUCUNE_LIGNE: never[] = [];
 
@@ -426,9 +427,9 @@ export function TresoPrevPage() {
                 return (
                 <tr key={f.id} className="group">
                   <td>
-                    <input type="date" className="border border-[#ddd6ef] rounded px-1 py-0.5 text-sm"
+                    <ChampDate className="border border-[#ddd6ef] rounded px-1 py-0.5 text-sm bg-white w-[8.5rem]"
                       value={f.date}
-                      onChange={ev => ev.target.value && updateMouvementPrev(f.id, { date: ev.target.value })} />
+                      onChange={v => v && updateMouvementPrev(f.id, { date: v })} />
                     {passe && (
                       <div className="text-[10px] font-semibold mt-0.5" style={{ color: '#b45f06' }}
                         title="Sa date est passée : il ne compte plus dans la trésorerie prévisionnelle. S'il a eu lieu, passe-le en réel ; sinon, décale sa date.">

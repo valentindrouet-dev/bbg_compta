@@ -10,6 +10,7 @@ import { memeJeu } from '../../utils/previsionnel';
 import type { ChronoEvent } from '../../types';
 import { EXERCICES, formatDateFR, todayISO } from '../../utils/dates';
 import { PageHeader, Card, Btn, useSort, sortBy, ThSort } from '../ui';
+import { ChampDate } from '../ui/ChampDate';
 
 /**
  * Couleur par défaut d'un projet, tirée de son NOM et non de son rang : ajouter
@@ -957,12 +958,12 @@ function RowC({ c, onUpdate, onRemove, verrou, onRefus }: {
           defaultValue={c.action} onBlur={ev => onUpdate(c.id, { action: ev.target.value })} />
       </td>
       <td>
-        <input {...fige} type="date" className="border border-[#ddd6ef] rounded px-1 py-0.5 text-sm"
-          value={c.debut} onChange={ev => ev.target.value && onUpdate(c.id, { debut: ev.target.value })} />
+        <ChampDate disabled={fige.disabled} className="border border-[#ddd6ef] rounded px-1 py-0.5 text-sm bg-white w-[8.5rem]"
+          value={c.debut} onChange={v => v && onUpdate(c.id, { debut: v })} />
       </td>
       <td>
-        <input {...fige} type="date" className="border border-[#ddd6ef] rounded px-1 py-0.5 text-sm"
-          value={c.fin} onChange={ev => ev.target.value && onUpdate(c.id, { fin: ev.target.value })} />
+        <ChampDate disabled={fige.disabled} className="border border-[#ddd6ef] rounded px-1 py-0.5 text-sm bg-white w-[8.5rem]"
+          value={c.fin} onChange={v => v && onUpdate(c.id, { fin: v })} />
       </td>
       <td className="text-right tabular-nums" style={{ color: '#6f6690' }}>
         {estDate(c.debut) ? libelleDuree(duree(c.debut, fin)) : '—'}
